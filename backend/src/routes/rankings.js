@@ -9,6 +9,7 @@ const router = express.Router();
 
 // GET /rankings — top locations by comfort score
 router.get("/", async (req, res) => {
+    console.log("Received GET /rankings");
     try {
         const rankings = await prisma.sensoryScore.findMany({
             orderBy: { comfortScore: "desc" },
