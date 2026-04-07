@@ -43,6 +43,12 @@ function SliderRow({ label, value, onChange, aiActive }) {
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
+/**
+ * SubmitReview Component
+ * Allows users to rate a location across different sensory dimensions (Noise, Lighting, Crowds).
+ * Includes an option to upload an image to Cloudinary and an AI feature that analyzes
+ * the review text to automatically suggest sensory scores.
+ */
 function SubmitReview({ location, onClose, onSubmitted }) {
     const [formData, setFormData] = useState({
         noiseLevel: 5,

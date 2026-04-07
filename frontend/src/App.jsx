@@ -5,6 +5,12 @@ import LaunchScreen from './components/LaunchScreen';
 import NonLoginMapView from './components/NonLoginMapView';
 import LoggedInMapView from './components/LoggedInMapView';
 
+/**
+ * Main Application Component
+ * Handles top-level routing and authentication state management.
+ * Depending on the Auth0 login status, it directs the user to either the Full (LoggedIn) Map
+ * or the Public (NonLogin) Map.
+ */
 function App() {
   const { isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0();
   const [showMap, setShowMap] = useState(false);

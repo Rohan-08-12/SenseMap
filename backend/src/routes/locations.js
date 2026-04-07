@@ -7,8 +7,11 @@ import { syncUser } from "../middleware/syncUser.js";
 
 const router = express.Router()
 
-// GET /locations
-// Returns all locations in GeoJSON format
+/**
+ * GET /locations
+ * Returns all locations formatted as a GeoJSON FeatureCollection.
+ * Used for rendering global map pins.
+ */
 router.get("/", async (req, res) => {
     try {
         const locations = await prisma.location.findMany({
@@ -24,7 +27,11 @@ router.get("/", async (req, res) => {
 })
 
 
-// GET /locations/heatmap — all locations with optional sensory scores for deck.gl
+/**
+ * GET /locations/heatmap
+ * Fetches a lightweight subset of location data to render the Deck.gl map overlay.
+ * Filters out invalid coordinates and formats the data for efficient map rendering.
+ */
 router.get("/heatmap", async (req, res) => {
     try {
         const locations = await prisma.location.findMany({
@@ -72,7 +79,12 @@ router.get("/heatmap", async (req, res) => {
     }
 })
 
-// GET /locations/match — personalized match scores (protected)
+/**
+ * GET /locations/match
+ * Protected route: Calculates a personalized "Match Score" for the logged-in user.
+ * Compares the user's stored sensory tolerances (noise, lighting, crowds) 
+ * against the aggregated community scores for each location.
+ */
 router.get("/match", requireAuth, syncUser, async (req, res) => {
     try {
         const auth0Id = req.auth.payload.sub;
@@ -125,7 +137,11 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
     }
 });
 
-// GET /locations/search?q= — search by name/category/tag (public)
+/**
+ * GET /locations/search?q=
+ * Public search endpoint. Searches location names, categories, addresses, and descriptions.
+ * Returns results in GeoJSON format for direct map integration.
+ */
 router.get("/search", async (req, res) => {
     try {
         const { q } = req.query;
@@ -151,7 +167,11 @@ router.get("/search", async (req, res) => {
 });
 
 
-// GET /locations/:id — single location detail (public)
+/**
+ * GET /locations/:id
+ * Fetches full details for a specific location including its sensory scores
+ * and the 10 most recent community reviews.
+ */
 router.get("/:id", async (req, res) => {
     try {
         const location = await prisma.location.findUnique({

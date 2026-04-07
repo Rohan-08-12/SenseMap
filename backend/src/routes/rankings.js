@@ -7,7 +7,11 @@ const router = express.Router();
 //     res.json({ message: "rankings route live" });
 // });
 
-// GET /rankings — top locations by comfort score
+/**
+ * GET /rankings
+ * Fetches the highest-ranked locations across the platform based on community `comfortScore`.
+ * Used to populate the "Top ranked sensory-friendly places" sidebar in the UI.
+ */
 router.get("/", async (req, res) => {
     console.log("Received GET /rankings");
     try {

@@ -1,3 +1,8 @@
+/**
+ * Global Axios Instance & API Services
+ * Configures base URL, request timeouts, and Auth0 JWT interceptors.
+ * All backend API calls go through this file.
+ */
 import axios from 'axios';
 
 const api = axios.create({

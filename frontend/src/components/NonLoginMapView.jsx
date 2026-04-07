@@ -34,6 +34,12 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return km < 1 ? `${(km * 1000).toFixed(0)}m away` : `${km.toFixed(1)}km away`;
 };
 
+/**
+ * NonLoginMapView Component
+ * The main public-facing map interface of SenseMap.
+ * It renders the Deck.gl map, fetches the location heatmap, displays top-ranked
+ * sensory-friendly places, and allows users to explore locations without an account.
+ */
 function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initialFilter }) {
   const { loginWithRedirect } = useAuth0();
   const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);

@@ -1,5 +1,10 @@
 import prisma from "./prisma.js";
 
+/**
+ * Recalculates the aggregated sensory scores for a specific location.
+ * This is called automatically whenever a new review is submitted.
+ * It averages the noise, lighting, crowd, and overall comfort ratings.
+ */
 export const recalculateScores = async (locationId) => {
     const reviews = await prisma.review.findMany({
         where: { locationId }
