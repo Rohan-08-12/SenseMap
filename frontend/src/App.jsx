@@ -12,7 +12,11 @@ import LoggedInMapView from './components/LoggedInMapView';
  * or the Public (NonLogin) Map.
  */
 function App() {
-  const { isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0();
+  // 🔓 DEV BYPASS: Use state to allow starting at landing page
+  // const { isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const isLoading = false;
+  const getAccessTokenSilently = async () => "demo-token";
   const [showMap, setShowMap] = useState(false);
   const [exploreParams, setExploreParams] = useState(null);
 
@@ -42,7 +46,14 @@ function App() {
   }
 
   if (isAuthenticated) {
-    return <LoggedInMapView onBackToHome={handleBackToHome} initialSearchQuery={exploreParams?.searchQuery} initialFilter={exploreParams?.filter} />;
+    return (
+      <LoggedInMapView 
+        onBackToHome={handleBackToHome} 
+        initialSearchQuery={exploreParams?.searchQuery} 
+        initialFilter={exploreParams?.filter} 
+        onLogout={() => setIsAuthenticated(false)}
+      />
+    );
   }
 
   if (showMap) {
@@ -52,11 +63,18 @@ function App() {
         onBackToHome={handleBackToHome}
         initialSearchQuery={exploreParams?.searchQuery}
         initialFilter={exploreParams?.filter}
+        onLogin={() => setIsAuthenticated(true)}
       />
     );
   }
 
-  return <LaunchScreen onExploreMap={handleExploreMap} />;
+  return (
+    <LaunchScreen 
+      onExploreMap={handleExploreMap} 
+      onLogin={() => setIsAuthenticated(true)} 
+      onLogout={() => setIsAuthenticated(false)} 
+    />
+  );
 }
 
 export default App;

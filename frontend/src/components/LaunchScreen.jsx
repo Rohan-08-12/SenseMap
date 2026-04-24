@@ -86,8 +86,12 @@ const categoryCardVariants = (reducedMotion) => ({
     },
 });
 
-function LaunchScreen({ onExploreMap }) {
-    const { loginWithRedirect, isAuthenticated, user } = useAuth0();
+function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
+    // 🔓 DEV BYPASS
+    // const { loginWithRedirect, isAuthenticated, user } = useAuth0();
+    const isAuthenticated = false; 
+    const user = { name: "Dev Mode", email: "dev@sensemap.app" };
+    const loginWithRedirect = () => onLogin(); 
     const [searchQuery, setSearchQuery] = useState('');
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const prefersReducedMotion = useReducedMotion();
@@ -138,10 +142,10 @@ function LaunchScreen({ onExploreMap }) {
                 <div className="launch-auth">
                     {!isAuthenticated ? (
                         <>
-                            <button className="btn-login" onClick={() => loginWithRedirect()}>
+                            <button className="btn-login" onClick={() => onLogin()}>
                                 Log in
                             </button>
-                            <button className="btn-signup" onClick={() => loginWithRedirect({ authorizationParams: { screen_hint: 'signup' } })}>
+                            <button className="btn-signup" onClick={() => onLogin()}>
                                 Sign up
                             </button>
                         </>
@@ -324,7 +328,10 @@ function LaunchScreen({ onExploreMap }) {
             </div>
 
             {showLogoutModal && (
-                <LogoutConfirmation onCancel={() => setShowLogoutModal(false)} />
+                <LogoutConfirmation 
+                  onCancel={() => setShowLogoutModal(false)} 
+                  onLogout={onLogout} 
+                />
             )}
         </div>
     );

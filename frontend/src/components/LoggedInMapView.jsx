@@ -48,8 +48,11 @@ function SkeletonBlock({ width = '100%', height = 16 }) {
   return <div className="animate-pulse" style={{ width, height, background: '#e5e7eb', borderRadius: 6 }} />;
 }
 
-function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter }) {
-  const { user, getAccessTokenSilently } = useAuth0();
+function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLogout }) {
+  // 🔓 DEV BYPASS
+  // const { user, getAccessTokenSilently } = useAuth0();
+  const user = { name: "Dev Mode", email: "dev@sensemap.app", picture: null };
+  const getAccessTokenSilently = async () => "demo-token";
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
 
@@ -1303,7 +1306,10 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter }) {
       )}
 
       {showLogoutModal && (
-        <LogoutConfirmation onCancel={() => setShowLogoutModal(false)} />
+        <LogoutConfirmation 
+          onCancel={() => setShowLogoutModal(false)} 
+          onLogout={onLogout} 
+        />
       )}
     </div>
   );

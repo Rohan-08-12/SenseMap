@@ -2,8 +2,9 @@ import { useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import './LogoutConfirmation.css';
 
-function LogoutConfirmation({ onCancel }) {
-  const { logout } = useAuth0();
+function LogoutConfirmation({ onCancel, onLogout }) {
+  // 🔓 DEV BYPASS
+  // const { logout } = useAuth0();
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -14,7 +15,7 @@ function LogoutConfirmation({ onCancel }) {
   }, [onCancel]);
 
   const handleLogout = () => {
-    logout({ logoutParams: { returnTo: window.location.origin } });
+    if (onLogout) onLogout();
   };
 
   const handleOverlayClick = (e) => {

@@ -1,6 +1,14 @@
 const AUTH0_DOMAIN = process.env.AUTH0_ISSUER_BASE_URL;
 
 export const requireAuth = async (req, res, next) => {
+    // 🔓 DEV BYPASS: Enable while working on platform
+    req.auth = {
+        payload: {
+            sub: "dev-user-local",
+            email: "dev@sensemap.app",
+        },
+    };
+    return next();
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {

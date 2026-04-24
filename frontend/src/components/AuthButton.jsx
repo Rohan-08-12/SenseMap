@@ -1,7 +1,11 @@
 import { useAuth0 } from '@auth0/auth0-react';
 
 function AuthButton() {
-    const { isAuthenticated, isLoading, user, loginWithRedirect, logout } = useAuth0();
+    // 🔓 DEV BYPASS
+    // const { isAuthenticated, isLoading, user, loginWithRedirect, logout } = useAuth0();
+    const isAuthenticated = true;
+    const isLoading = false;
+    const user = { name: "Dev Mode" };
 
     if (isLoading) {
         console.log('[AuthButton] Auth0 is loading...');
@@ -15,8 +19,8 @@ function AuthButton() {
                 <span>{user?.name || user?.email}</span>
                 <button
                     onClick={() => {
-                        console.log('[AuthButton] Logging out...');
-                        logout({ logoutParams: { returnTo: window.location.origin } });
+                        console.log('[AuthButton] Logout clicked (disabled for demo)');
+                        window.location.reload(); // Simple refresh for demo logout
                     }}
                 >
                     Log Out

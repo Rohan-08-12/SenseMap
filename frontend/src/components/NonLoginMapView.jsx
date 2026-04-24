@@ -40,8 +40,10 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
  * It renders the Deck.gl map, fetches the location heatmap, displays top-ranked
  * sensory-friendly places, and allows users to explore locations without an account.
  */
-function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initialFilter }) {
-  const { loginWithRedirect } = useAuth0();
+function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initialFilter, onLogin }) {
+  // 🔓 DEV BYPASS
+  // const { loginWithRedirect } = useAuth0();
+  const loginWithRedirect = () => onLogin();
   const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);
   const [heatmapOn, setHeatmapOn] = useState(true);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery ?? '');

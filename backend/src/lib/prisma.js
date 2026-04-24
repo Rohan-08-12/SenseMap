@@ -8,7 +8,13 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 
 // Initialize a PostgreSQL connection pool using the DATABASE_URL from .env
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000,
+  ssl: { rejectUnauthorized: false },
+});
 
 // Create a Prisma adapter to use the connection pool instead of Prisma's default engine
 // This improves connection handling in serverless/cloud environments like Supabase

@@ -252,7 +252,8 @@ async function main() {
 
         const places = elements
             .map((el) => parseOSMElement(el, category.label))
-            .filter(Boolean);
+            .filter(Boolean)
+            .slice(0, 500); // Limit to 500 places per category
 
         console.log(`  ${elements.length} raw elements → ${places.length} valid named places`);
 
