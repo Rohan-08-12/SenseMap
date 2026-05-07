@@ -10,7 +10,7 @@ import pg from "pg";
 // Initialize a PostgreSQL connection pool using the DATABASE_URL from .env
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20,
+  max: 10,
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,
   ssl: { rejectUnauthorized: false },

@@ -26,6 +26,10 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
         const auth0Id = req.auth.payload.sub;
         const { locationId, bodyText, rating, noiseLevel, lightingLevel, crowdLevel, imageUrl } = req.body;
 
+        if (!locationId || rating == null || noiseLevel == null || lightingLevel == null || crowdLevel == null) {
+            return res.status(400).json({ error: "locationId, rating, noiseLevel, lightingLevel, and crowdLevel are required" });
+        }
+
         const user = await prisma.user.findUnique({ where: { auth0Id } });
         if (!user) return res.status(404).json({ error: "User not found" });
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeContext.jsx';
+import { scoreToLabel, haversineDistance } from '../utils.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import MapView from './MapView';
 import Dashboard from './Dashboard';
@@ -14,23 +14,12 @@ import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, u
 import './LoggedInMapView.css';
 
 const NAV_ITEMS = [
-  { id: 'explore', label: 'Explore map', icon: 'map', route: null },
-  { id: 'dashboard', label: 'Dashboard', icon: 'grid', route: null },
-  { id: 'saved', label: 'Saved places', icon: 'bookmark', route: null },
-  { id: 'profile', label: 'Sensory profile', icon: 'sliders', route: null },
-  { id: 'settings', label: 'Settings', icon: 'settings', route: null },
+  { id: 'explore', label: 'Explore map', icon: 'map' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
+  { id: 'saved', label: 'Saved places', icon: 'bookmark' },
+  { id: 'profile', label: 'Sensory profile', icon: 'sliders' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
-
-const scoreToLabel = (s) => s < 2 ? 'Low' : s < 3.5 ? 'Medium' : 'High';
-
-const haversineDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return km < 1 ? `${(km * 1000).toFixed(0)}m away` : `${km.toFixed(1)}km away`;
-};
 
 function NavIcon({ type, active }) {
   const color = active ? 'var(--theme-accent)' : 'var(--theme-text)';
@@ -49,11 +38,7 @@ function SkeletonBlock({ width = '100%', height = 16 }) {
 }
 
 function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLogout }) {
-  // 🔓 DEV BYPASS
-  // const { user, getAccessTokenSilently } = useAuth0();
-  const user = { name: "Dev Mode", email: "dev@sensemap.app", picture: null };
-  const getAccessTokenSilently = async () => "demo-token";
-  const navigate = useNavigate();
+  const { user, getAccessTokenSilently } = useAuth0();
   const { theme, setTheme } = useTheme();
 
   const [activeNav, setActiveNav] = useState('explore');
@@ -67,7 +52,6 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [showReviewForm, setShowReviewForm] = useState(false); // NEW
 
   const [heatmapData, setHeatmapData] = useState([]);
-  const [rankings, setRankings] = useState([]);
   const [matchScores, setMatchScores] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [locationDetail, setLocationDetail] = useState(null);
@@ -130,7 +114,6 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
       .then((res) => {
         const data = res.data;
         if (Array.isArray(data) && data.length > 0) {
-          setRankings(data);
           setNearbyPlaces(data.slice(0, 6).map((loc) => ({
             name: loc.name,
             score: loc.comfortScore ?? 0,
@@ -175,8 +158,8 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
             })
             .catch(() => { });
         }
-      } catch (err) {
-        console.log('Not authenticated or token error:', err.message);
+      } catch {
+        // no token available — protected data will be unavailable
       }
     };
 
@@ -216,16 +199,20 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
     finally { setAiLoading(false); }
   }, [getAccessTokenSilently]);
 
-  // --- When selected location changes: fetch detail + AI ---
+  // Reset UI state only when the selected location actually changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!selectedLocation) return;
-
     setAiInsights(null);
     setLocationDetail(null);
     setAvgRating(null);
     setShowReviewForm(false);
     setCheckedIn(false);
+  }, [selectedLocation?.id]);
 
+  // Fetch detail + AI (also re-runs when refreshLocationData stabilizes after auth)
+  useEffect(() => {
+    if (!selectedLocation) return;
     refreshLocationData(selectedLocation.id);
   }, [selectedLocation, refreshLocationData]);
 
@@ -234,11 +221,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   };
 
   const handleNavClick = (item) => {
-    if (item.route) {
-      navigate(item.route);
-    } else {
-      setActiveNav(item.id);
-    }
+    setActiveNav(item.id);
   };
 
   const handleSearchSubmit = async (e) => {
@@ -554,7 +537,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
             )}
           </div>
           <div className="lmv-nav-user-info">
-            <h4>{user?.name?.substring(0, 14) || 'User'}…</h4>
+            <h4>{user?.name ? (user.name.length > 14 ? user.name.substring(0, 14) + '…' : user.name) : 'User'}</h4>
             <p>{userProfile ? `Noise tol: ${userProfile.noiseTolerance ?? '—'}` : 'Loading profile…'}</p>
           </div>
           <div className="lmv-nav-user-chevron">
@@ -1101,8 +1084,8 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   <h3 className="lmv-section-title">Noise through the day</h3>
                   <p className="lmv-section-desc">Based on sensory scores for this location.</p>
                 </div>
-                <div style={{ width: '100%', height: 120 }}>
-                  <ResponsiveContainer width="100%" height="100%">
+                <div style={{ width: '100%', height: 120, minWidth: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <LineChart data={noiseChartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#edf3f8" />
                       <XAxis dataKey="time" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
@@ -1192,8 +1175,8 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               </div>
 
               <div className="lmv-radar-container">
-                <div style={{ width: 250, height: 200 }}>
-                  <ResponsiveContainer width="100%" height="100%">
+                <div style={{ width: 250, height: 200, minWidth: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
                     <RadarChart data={radarData} outerRadius={70}>
                       <PolarGrid stroke="#e5e7eb" />
                       <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />

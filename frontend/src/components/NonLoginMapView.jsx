@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
+import { scoreToLabel } from '../utils.js';
 import MapView from './MapView';
 import SubmitReview from './SubmitReview';
 import { getRankings, getLocationHeatmap, getLocationById, searchLocations } from '../services/api';
@@ -23,16 +23,6 @@ const CATEGORY_CHIPS = [
   { emoji: '🔍', title: 'Explore all', desc: 'See every place', filter: null },
 ];
 
-const scoreToLabel = (s) => s < 2 ? 'Low' : s < 3.5 ? 'Medium' : 'High';
-
-const haversineDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return km < 1 ? `${(km * 1000).toFixed(0)}m away` : `${km.toFixed(1)}km away`;
-};
 
 /**
  * NonLoginMapView Component
@@ -41,8 +31,6 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
  * sensory-friendly places, and allows users to explore locations without an account.
  */
 function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initialFilter, onLogin }) {
-  // 🔓 DEV BYPASS
-  // const { loginWithRedirect } = useAuth0();
   const loginWithRedirect = () => onLogin();
   const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);
   const [heatmapOn, setHeatmapOn] = useState(true);
@@ -55,7 +43,6 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
   const [snapshot, setSnapshot] = useState(null);
   const [locationDetail, setLocationDetail] = useState(null);
   const [avgRating, setAvgRating] = useState(null);
-  const [userCoords, setUserCoords] = useState(null);
   const [searchNoResults, setSearchNoResults] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const [showSigninDetail, setShowSigninDetail] = useState(false);
@@ -128,10 +115,6 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
       })
       .catch(() => { });
 
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setUserCoords(null)
-    );
   }, []);
 
   // --- On mount: run search if opened from launch with a query ---
@@ -240,11 +223,6 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
     if (crowdScore < 2) tags.push('Low-crowd spot');
     return tags;
   })();
-
-  const getDistance = useCallback((loc) => {
-    if (!userCoords || !loc.latitude || !loc.longitude) return '— km away';
-    return haversineDistance(userCoords.lat, userCoords.lng, loc.latitude, loc.longitude);
-  }, [userCoords]);
 
   // Map filter conversion for MapView
   const mapFilter = (() => {

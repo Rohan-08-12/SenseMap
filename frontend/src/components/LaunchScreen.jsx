@@ -89,9 +89,9 @@ const categoryCardVariants = (reducedMotion) => ({
 function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
     // 🔓 DEV BYPASS
     // const { loginWithRedirect, isAuthenticated, user } = useAuth0();
-    const isAuthenticated = false; 
+    const isAuthenticated = false;
     const user = { name: "Dev Mode", email: "dev@sensemap.app" };
-    const loginWithRedirect = () => onLogin(); 
+    const loginWithRedirect = () => onLogin();
     const [searchQuery, setSearchQuery] = useState('');
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const prefersReducedMotion = useReducedMotion();
@@ -125,19 +125,19 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
                     </div>
                 </div>
                 <div className="launch-theme-switcher" role="group" aria-label="Theme">
-                  {['nature', 'calm'].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      className={`launch-theme-btn launch-theme-btn--text ${theme === t ? 'active' : ''}`}
-                      onClick={() => setTheme(t)}
-                      aria-pressed={theme === t}
-                      aria-label={`${t.charAt(0).toUpperCase() + t.slice(1)} theme`}
-                      title={t === 'calm' ? 'Calm (blue/teal)' : 'Nature (green/beige)'}
-                    >
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
-                    </button>
-                  ))}
+                    {['nature', 'calm'].map((t) => (
+                        <button
+                            key={t}
+                            type="button"
+                            className={`launch-theme-btn launch-theme-btn--text ${theme === t ? 'active' : ''}`}
+                            onClick={() => setTheme(t)}
+                            aria-pressed={theme === t}
+                            aria-label={`${t.charAt(0).toUpperCase() + t.slice(1)} theme`}
+                            title={t === 'calm' ? 'Calm (blue/teal)' : 'Nature (green/beige)'}
+                        >
+                            {t.charAt(0).toUpperCase() + t.slice(1)}
+                        </button>
+                    ))}
                 </div>
                 <div className="launch-auth">
                     {!isAuthenticated ? (
@@ -192,6 +192,7 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
                         Discover public spaces with sensory comfort insights before you go.
                     </motion.p>
 
+
                     <motion.div
                         className="launch-map-card"
                         onClick={() => handleNavigate()}
@@ -226,7 +227,7 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
 
                             <form className="map-search" onSubmit={handleSearch} onClick={(e) => e.stopPropagation()}>
                                 <div className="map-search-input">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                                     <input
                                         type="text"
                                         placeholder="Search places, needs, or triggers"
@@ -288,7 +289,7 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
                         animate="visible"
                         custom={!!prefersReducedMotion}
                     >
-                        {CATEGORIES.map((cat, index) => (
+                        {CATEGORIES.map((cat) => (
                             <motion.div
                                 key={cat.title}
                                 className={`cat-card${cat.highlight ? ' cat-card--highlight' : ''}`}
@@ -328,9 +329,9 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
             </div>
 
             {showLogoutModal && (
-                <LogoutConfirmation 
-                  onCancel={() => setShowLogoutModal(false)} 
-                  onLogout={onLogout} 
+                <LogoutConfirmation
+                    onCancel={() => setShowLogoutModal(false)}
+                    onLogout={onLogout}
                 />
             )}
         </div>

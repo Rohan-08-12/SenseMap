@@ -1,42 +1,9 @@
-const AUTH0_DOMAIN = process.env.AUTH0_ISSUER_BASE_URL;
+import { auth } from 'express-oauth2-jwt-bearer';
 
-export const requireAuth = async (req, res, next) => {
-    // 🔓 DEV BYPASS: Enable while working on platform
-    req.auth = {
-        payload: {
-            sub: "dev-user-local",
-            email: "dev@sensemap.app",
-        },
-    };
-    return next();
-    try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({ error: "No token provided" });
-        }
+const jwtCheck = auth({
+    audience: process.env.AUTH0_AUDIENCE,
+    issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
+    tokenSigningAlg: 'RS256',
+});
 
-        const token = authHeader.split(" ")[1];
-
-        const response = await fetch(`${AUTH0_DOMAIN}/userinfo`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!response.ok) {
-            return res.status(401).json({ error: "Invalid token" });
-        }
-
-        const userInfo = await response.json();
-
-        req.auth = {
-            payload: {
-                sub: userInfo.sub,
-                email: userInfo.email,
-            },
-        };
-
-        next();
-    } catch (error) {
-        console.error("Auth error:", error);
-        return res.status(401).json({ error: "Authentication failed" });
-    }
-};
+export const requireAuth = jwtCheck;

@@ -3,6 +3,7 @@ import { toGeoJSON } from "../lib/geojson.js";
 import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
+import { cosineSimilarity } from "../lib/embeddings.js";
 
 
 const router = express.Router()
@@ -95,9 +96,8 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
         });
 
         if (!user) return res.status(404).json({ error: "User not found" });
-        if (!user.sensoryProfile) return res.status(404).json({ error: "Sensory profile not found" });
 
-        const { noiseTolerance, lightingTolerance, crowdTolerance } = user.sensoryProfile;
+        const { noiseTolerance = 3, lightingTolerance = 3, crowdTolerance = 3 } = user.sensoryProfile ?? {};
 
         const locations = await prisma.location.findMany({
             include: { sensoryScores: true }
@@ -166,6 +166,54 @@ router.get("/search", async (req, res) => {
     }
 });
 
+
+/**
+ * GET /locations/similar/:id
+ * Returns the top 5 locations most sensorially similar to the given location,
+ * ranked by cosine similarity of their sensory embeddings.
+ * Must be registered before /:id so Express doesn't consume "similar" as an id.
+ */
+router.get("/similar/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const target = await prisma.location.findUnique({ where: { id } });
+        if (!target) return res.status(404).json({ error: "Location not found" });
+        if (!target.embedding || target.embedding.length === 0) {
+            return res.json([]);
+        }
+
+        const candidates = await prisma.location.findMany({
+            where: { id: { not: id } },
+            select: {
+                id: true, name: true, category: true, address: true,
+                latitude: true, longitude: true, imageUrl: true,
+                embedding: true, sensoryScores: true,
+            },
+        });
+
+        const results = candidates
+            .filter((loc) => loc.embedding && loc.embedding.length > 0)
+            .map((loc) => ({
+                id: loc.id,
+                name: loc.name,
+                category: loc.category,
+                address: loc.address,
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+                imageUrl: loc.imageUrl,
+                sensoryScores: loc.sensoryScores,
+                similarity: Math.round(cosineSimilarity(target.embedding, loc.embedding) * 100),
+            }))
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, 5);
+
+        res.json(results);
+    } catch (error) {
+        console.error("Error fetching similar locations:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 /**
  * GET /locations/:id

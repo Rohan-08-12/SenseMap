@@ -1,30 +1,12 @@
-const AUTH0_DOMAIN = process.env.AUTH0_ISSUER_BASE_URL;
+import { auth } from 'express-oauth2-jwt-bearer';
 
-export const optionalAuth = async (req, res, next) => {
-    try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return next();
-        }
+const jwtCheck = auth({
+    audience: process.env.AUTH0_AUDIENCE,
+    issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
+    tokenSigningAlg: 'RS256',
+});
 
-        const token = authHeader.split(" ")[1];
-
-        const response = await fetch(`${AUTH0_DOMAIN}/userinfo`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (response.ok) {
-            const userInfo = await response.json();
-            req.auth = {
-                payload: {
-                    sub: userInfo.sub,
-                    email: userInfo.email,
-                },
-            };
-        }
-
-        next();
-    } catch {
-        next();
-    }
+export const optionalAuth = (req, res, next) => {
+    if (!req.headers.authorization) return next();
+    jwtCheck(req, res, () => next()); // swallow JWT errors — treat invalid token as unauthenticated
 };

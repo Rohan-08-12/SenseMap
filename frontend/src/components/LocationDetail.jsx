@@ -11,7 +11,6 @@ function LocationDetail({ location, onClose }) {
     useEffect(() => {
         if (!location) return;
 
-        console.log('[LocationDetail] Opened for:', location.name);
         setLoading(true);
         setError(null);
 
@@ -24,7 +23,6 @@ function LocationDetail({ location, onClose }) {
         ])
             .then(([reviewsResult, insightsResult]) => {
                 if (reviewsResult.status === 'fulfilled') {
-                    console.log('[LocationDetail] Reviews loaded:', reviewsResult.value.data);
                     const data = reviewsResult.value.data;
                     setReviews(Array.isArray(data) ? data : data?.reviews || []);
                 } else {
@@ -32,7 +30,6 @@ function LocationDetail({ location, onClose }) {
                 }
 
                 if (insightsResult.status === 'fulfilled') {
-                    console.log('[LocationDetail] AI Insights loaded:', insightsResult.value.data);
                     setAiInsight(insightsResult.value.data);
                 } else {
                     console.warn('[LocationDetail] AI Insights fetch failed:', insightsResult.reason?.message);
@@ -48,15 +45,6 @@ function LocationDetail({ location, onClose }) {
     }, [location]);
 
     if (!location) return null;
-
-    console.log('[LocationDetail] DEBUG:', {
-        locationId: location.id || location.locationId,
-        resolvedLocationId: location.id || location.locationId || location.name,
-        loading,
-        reviewsLength: reviews.length,
-        showUnverified: !loading && reviews.length === 0,
-        rawLocationObject: location
-    });
 
     // Mock data for the "Noise through the day" line chart to match mockup visually
     const mockChartData = [

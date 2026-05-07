@@ -13,11 +13,16 @@ router.get("/me", requireAuth, syncUser, async (req, res) => {
         const user = await prisma.user.findUnique({ where: { auth0Id } });
         if (!user) return res.status(404).json({ error: "User not found" });
 
-        const profile = await prisma.sensoryProfile.findUnique({
-            where: { userId: user.id }
+        const profile = await prisma.sensoryProfile.upsert({
+            where: { userId: user.id },
+            update: {},
+            create: {
+                userId: user.id,
+                noiseTolerance: 3,
+                lightingTolerance: 3,
+                crowdTolerance: 3,
+            }
         });
-
-        if (!profile) return res.status(404).json({ error: "Profile not found" });
 
         res.json(profile);
     } catch (error) {

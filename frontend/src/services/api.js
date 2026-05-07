@@ -37,7 +37,6 @@ api.interceptors.request.use(
                 // No token available (not logged in) — public endpoints still work
             }
         }
-        console.log(`[API] ${config.method.toUpperCase()} ${config.url}`, config.params || '');
         return config;
     },
     (error) => {
@@ -46,16 +45,10 @@ api.interceptors.request.use(
     }
 );
 
-// ─── Response Interceptor (logging) ──────────────────────────
+// ─── Response Interceptor ────────────────────────────────────
 api.interceptors.response.use(
-    (response) => {
-        console.log(`[API] Response ${response.status}:`, response.data);
-        return response;
-    },
-    (error) => {
-        console.error('[API] Response error:', error.response?.status, error.response?.data || error.message);
-        return Promise.reject(error);
-    }
+    (response) => response,
+    (error) => Promise.reject(error)
 );
 
 // ═════════════════════════════════════════════════════════════

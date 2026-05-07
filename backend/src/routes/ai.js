@@ -3,11 +3,25 @@ import { model } from "../lib/gemini.js";
 import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
+import { generateLocationEmbedding } from "../lib/embeddings.js";
 const router = express.Router();
 
 router.get("/", (req, res) => {
   res.json({ message: "ai route live" });
 });
+
+const analyzeSchema = {
+  type: "object",
+  properties: {
+    noise_score:     { type: "number",  description: "Noise level 1-10, where 1=silent and 10=extremely loud" },
+    lighting_score:  { type: "number",  description: "Lighting intensity 1-10, where 1=dim and 10=harsh/bright" },
+    crowd_score:     { type: "number",  description: "Crowd density 1-10, where 1=empty and 10=packed" },
+    sentiment:       { type: "string",  enum: ["positive", "neutral", "negative"] },
+    tags:            { type: "array",   items: { type: "string" }, description: "Short sensory descriptor tags" },
+    summary:         { type: "string",  description: "One-sentence sensory summary of the space" },
+  },
+  required: ["noise_score", "lighting_score", "crowd_score", "sentiment", "tags", "summary"],
+};
 
 // POST /ai/analyze — analyze review text for sensory signals
 router.post("/analyze", async (req, res) => {
@@ -15,26 +29,18 @@ router.post("/analyze", async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: "Text is required" });
 
-    const prompt = `You are an AI assistant helping analyze a review of a public space for sensory sensitivity.
+    const prompt = `You are a sensory analysis assistant helping autistic and sensory-sensitive people evaluate public spaces.
 
-Analyze this review and return ONLY a JSON object with this exact structure:
-{
-  "noise_score": <number 1-10>,
-  "lighting_score": <number 1-10>,
-  "crowd_score": <number 1-10>,
-  "sentiment": "<positive|neutral|negative>",
-  "tags": ["<tag1>", "<tag2>"],
-  "summary": "<brief one-sentence sensory analysis>"
-}
+Analyze this review and extract structured sensory scores (1-10 scales), sentiment, tags, and a brief summary.
 
 Review:
-${text}
+${text}`;
 
-Return ONLY the JSON. No explanation, no markdown, no backticks.`;
-
-    const result = await model.generateContent(prompt);
-    const parsed = JSON.parse(result.response.text().trim());
-    res.json(parsed);
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
+    });
+    res.json(JSON.parse(result.response.text()));
   } catch (error) {
     console.error("AI analyze error:", error);
     res.status(500).json({ error: error.message });
@@ -64,39 +70,59 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
       return `${timeTag}${r.bodyText}`;
     }).join("\n");
 
-    const prompt = `
-You are an AI assistant helping sensory-sensitive and autistic people find comfortable public spaces.
+    const insightsSchema = {
+      type: "object",
+      properties: {
+        confidence: { type: "number", description: "0-100 confidence in analysis based on review quantity and quality" },
+        noise: {
+          type: "object",
+          properties: {
+            score:   { type: "number", description: "Noise level 1-5, where 1=silent and 5=very loud" },
+            summary: { type: "string", description: "One sentence describing the noise environment" },
+          },
+          required: ["score", "summary"],
+        },
+        lighting: {
+          type: "object",
+          properties: {
+            score:   { type: "number", description: "Lighting intensity 1-5, where 1=dim and 5=harsh" },
+            summary: { type: "string", description: "One sentence describing the lighting environment" },
+          },
+          required: ["score", "summary"],
+        },
+        crowd: {
+          type: "object",
+          properties: {
+            score:   { type: "number", description: "Crowd density 1-5, where 1=empty and 5=packed" },
+            summary: { type: "string", description: "One sentence describing crowd levels" },
+          },
+          required: ["score", "summary"],
+        },
+        bestTime:         { type: "string",  description: "One sentence recommending the best time to visit" },
+        sentiment:        { type: "string",  enum: ["positive", "neutral", "negative"] },
+        tags:             { type: "array",   items: { type: "string" }, description: "Short sensory descriptor tags" },
+        preparationGuide: { type: "array",   items: { type: "string" }, description: "Practical sensory preparation tips" },
+      },
+      required: ["confidence", "noise", "lighting", "crowd", "bestTime", "sentiment", "tags", "preparationGuide"],
+    };
 
-Analyze these reviews for "${location.name}" and return ONLY a JSON object with this exact structure:
-{
-  "confidence": <number 0-100>,
-  "noise": {
-    "score": <number 1-5>,
-    "summary": "<one sentence description of noise>"
-  },
-  "lighting": {
-    "score": <number 1-5>,
-    "summary": "<one sentence description of lighting>"
-  },
-  "crowd": {
-    "score": <number 1-5>,
-    "summary": "<one sentence description of crowd levels>"
-  },
-  "bestTime": "<one sentence about best time to visit>",
-  "sentiment": "<positive|neutral|negative>",
-  "tags": ["<tag1>", "<tag2>", "<tag3>"],
-  "preparationGuide": ["<tip1>", "<tip2>", "<tip3>"]
-}
+    const prompt = `You are a sensory analysis assistant helping autistic and sensory-sensitive people find comfortable public spaces.
+
+Analyze these reviews for "${location.name}" and produce a structured sensory profile with scores (1-5), summaries, best visit time, sentiment, descriptor tags, and practical preparation tips.
 
 Reviews:
-${reviewTexts}
+${reviewTexts}`;
 
-Return ONLY the JSON. No explanation, no markdown, no backticks.
-    `;
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: insightsSchema },
+    });
+    const parsed = JSON.parse(result.response.text());
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
-    const parsed = JSON.parse(text);
+    // Generate and store embedding in the background — non-fatal if it fails
+    generateLocationEmbedding(location, parsed)
+      .then((embedding) => prisma.location.update({ where: { id: locationId }, data: { embedding } }))
+      .catch((e) => console.error("Embedding generation failed:", e));
 
     res.json(parsed);
   } catch (error) {

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { submitReview, analyzeReview } from '../services/api';
-import api from '../services/api'; // adjust if your axios instance is exported differently
+import api from '../services/api';
 
 // ─── Slider row ──────────────────────────────────────────────────────────────
 function SliderRow({ label, value, onChange, aiActive }) {
@@ -588,9 +588,6 @@ function SubmitReview({ location, onClose, onSubmitted }) {
                                 </p>
                             )}
                         </div>
-
-                        {/* Spinner keyframe injected once */}
-                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
                         {/* Submit button */}
                         <button
