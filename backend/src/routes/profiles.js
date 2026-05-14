@@ -27,7 +27,7 @@ router.get("/me", requireAuth, syncUser, async (req, res) => {
         res.json(profile);
     } catch (error) {
         console.error("Error fetching profile:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to fetch profile" });
     }
 });
 
@@ -36,6 +36,14 @@ router.put("/me", requireAuth, syncUser, async (req, res) => {
     try {
         const auth0Id = req.auth.payload.sub;
         const { noiseTolerance, lightingTolerance, crowdTolerance, notes } = req.body;
+
+        const tolerances = [noiseTolerance, lightingTolerance, crowdTolerance];
+        if (tolerances.some(v => v != null && (!Number.isInteger(Number(v)) || v < 1 || v > 5))) {
+            return res.status(400).json({ error: "Tolerance values must be integers between 1 and 5" });
+        }
+        if (notes && notes.length > 500) {
+            return res.status(400).json({ error: "Notes must be under 500 characters" });
+        }
 
         const user = await prisma.user.findUnique({ where: { auth0Id } });
         if (!user) return res.status(404).json({ error: "User not found" });
@@ -49,7 +57,7 @@ router.put("/me", requireAuth, syncUser, async (req, res) => {
         res.json(profile);
     } catch (error) {
         console.error("Error saving profile:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to save profile" });
     }
 });
 

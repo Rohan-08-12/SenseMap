@@ -22,8 +22,8 @@ router.get("/", async (req, res) => {
         });
         res.json(toGeoJSON(locations));
     } catch (error) {
-        console.error("Full error:", JSON.stringify(error, null, 2));
-        res.status(500).json({ error: error.message });
+        console.error("Error:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 })
 
@@ -35,48 +35,52 @@ router.get("/", async (req, res) => {
  */
 router.get("/heatmap", async (req, res) => {
     try {
-        const locations = await prisma.location.findMany({
+        // Prioritise locations with real user reviews, fall back to Gemini-seeded scores
+        // The two values 2.8 and 3.8 are OSM-import defaults with no meaningful signal
+        const DEFAULT_SCORES = [2.8, 3.8];
+
+        const scored = await prisma.sensoryScore.findMany({
+            where: {
+                comfortScore: { notIn: DEFAULT_SCORES },
+            },
             take: 500,
+            orderBy: { reviewCount: "desc" },
             select: {
-                id: true,
-                name: true,
-                category: true,
-                latitude: true,
-                longitude: true,
-                sensoryScores: {
+                reviewCount: true,
+                noiseScore: true,
+                lightingScore: true,
+                crowdScore: true,
+                comfortScore: true,
+                location: {
                     select: {
-                        noiseScore: true,
-                        lightingScore: true,
-                        crowdScore: true,
-                        comfortScore: true,
-                        reviewCount: true,
+                        id: true,
+                        name: true,
+                        category: true,
+                        latitude: true,
+                        longitude: true,
                     }
                 }
             }
         });
 
-        const heatMapData = locations
-            .filter(loc => loc.latitude != null && loc.longitude != null)
-            .map((loc) => {
-                const s = loc.sensoryScores;
-                return {
-                    locationId: loc.id,
-                    longitude: loc.longitude,
-                    latitude: loc.latitude,
-                    name: loc.name,
-                    category: loc.category,
-                    noiseScore: s?.noiseScore ?? null,
-                    lightingScore: s?.lightingScore ?? null,
-                    crowdScore: s?.crowdScore ?? null,
-                    comfortScore: s?.comfortScore ?? null,
-                    reviewCount: s?.reviewCount ?? 0,
-                };
-            });
+        const heatMapData = scored.map(({ location: loc, ...s }) => ({
+            locationId: loc.id,
+            longitude: loc.longitude,
+            latitude: loc.latitude,
+            name: loc.name,
+            category: loc.category,
+            // clamp scores to valid 1-5 range
+            noiseScore: s.noiseScore != null ? Math.min(5, Math.max(1, s.noiseScore)) : null,
+            lightingScore: s.lightingScore != null ? Math.min(5, Math.max(1, s.lightingScore)) : null,
+            crowdScore: s.crowdScore != null ? Math.min(5, Math.max(1, s.crowdScore)) : null,
+            comfortScore: s.comfortScore != null ? Math.min(5, Math.max(1, s.comfortScore)) : null,
+            reviewCount: s.reviewCount ?? 0,
+        }));
 
         res.json(heatMapData);
     } catch (error) {
-        console.error("Full error:", JSON.stringify(error, null, 2));
-        res.status(500).json({ error: error.message });
+        console.error("Error:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 })
 
@@ -133,7 +137,7 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
         res.json(matches);
     } catch (error) {
         console.error("Error calculating matches:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -162,7 +166,7 @@ router.get("/search", async (req, res) => {
         res.json(toGeoJSON(locations));
     } catch (error) {
         console.error("Error searching locations:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -211,7 +215,7 @@ router.get("/similar/:id", async (req, res) => {
         res.json(results);
     } catch (error) {
         console.error("Error fetching similar locations:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -238,7 +242,7 @@ router.get("/:id", async (req, res) => {
         res.json(location);
     } catch (error) {
         console.error("Error fetching location:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 

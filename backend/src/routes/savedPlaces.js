@@ -25,7 +25,7 @@ router.get("/", requireAuth, syncUser, async (req, res) => {
         res.json(saved);
     } catch (error) {
         console.error("Error fetching saved places:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -34,6 +34,10 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
     try {
         const auth0Id = req.auth.payload.sub;
         const { locationId } = req.body;
+
+        if (!locationId || typeof locationId !== "string") {
+            return res.status(400).json({ error: "locationId is required" });
+        }
 
         const user = await prisma.user.findUnique({ where: { auth0Id } });
         if (!user) return res.status(404).json({ error: "User not found" });
@@ -45,7 +49,7 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
         res.status(201).json(saved);
     } catch (error) {
         console.error("Error saving place:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to save place" });
     }
 });
 
@@ -68,7 +72,7 @@ router.delete("/:locationId", requireAuth, syncUser, async (req, res) => {
         res.json({ message: "Removed from saved places" });
     } catch (error) {
         console.error("Error removing saved place:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 

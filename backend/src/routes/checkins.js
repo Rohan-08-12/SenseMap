@@ -51,7 +51,7 @@ router.post("/:locationId", requireAuth, syncUser, async (req, res) => {
         res.status(201).json(checkIn);
     } catch (error) {
         console.error("Error creating check-in:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -79,7 +79,7 @@ router.get("/recent", requireAuth, syncUser, async (req, res) => {
         res.json(checkIns);
     } catch (error) {
         console.error("Error fetching check-ins:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 

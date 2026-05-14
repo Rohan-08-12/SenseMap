@@ -16,7 +16,7 @@ router.get("/:locationId", async (req, res) => {
         res.json(reviews);
     } catch (error) {
         console.error("Error fetching reviews:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to fetch reviews" });
     }
 });
 
@@ -26,8 +26,17 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
         const auth0Id = req.auth.payload.sub;
         const { locationId, bodyText, rating, noiseLevel, lightingLevel, crowdLevel, imageUrl } = req.body;
 
-        if (!locationId || rating == null || noiseLevel == null || lightingLevel == null || crowdLevel == null) {
-            return res.status(400).json({ error: "locationId, rating, noiseLevel, lightingLevel, and crowdLevel are required" });
+        if (!locationId || typeof locationId !== "string") {
+            return res.status(400).json({ error: "locationId is required" });
+        }
+        if (rating == null || noiseLevel == null || lightingLevel == null || crowdLevel == null) {
+            return res.status(400).json({ error: "rating, noiseLevel, lightingLevel, and crowdLevel are required" });
+        }
+        if (![rating, noiseLevel, lightingLevel, crowdLevel].every(v => Number.isInteger(Number(v)) && v >= 1 && v <= 10)) {
+            return res.status(400).json({ error: "rating and sensory levels must be integers between 1 and 10" });
+        }
+        if (bodyText && bodyText.length > 2000) {
+            return res.status(400).json({ error: "Review text must be under 2000 characters" });
         }
 
         const user = await prisma.user.findUnique({ where: { auth0Id } });
@@ -37,22 +46,21 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
             data: {
                 userId: user.id,
                 locationId,
-                bodyText,
-                rating,
-                noiseLevel,
-                lightingLevel,
-                crowdLevel,
+                bodyText: bodyText ?? "",
+                rating: Number(rating),
+                noiseLevel: Number(noiseLevel),
+                lightingLevel: Number(lightingLevel),
+                crowdLevel: Number(crowdLevel),
                 imageUrl: imageUrl ?? null,
             }
         });
 
-        // recalculate scores after new review
         await recalculateScores(locationId);
 
         res.status(201).json(review);
     } catch (error) {
         console.error("Error creating review:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to submit review" });
     }
 });
 

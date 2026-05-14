@@ -23,11 +23,12 @@ const analyzeSchema = {
   required: ["noise_score", "lighting_score", "crowd_score", "sentiment", "tags", "summary"],
 };
 
-// POST /ai/analyze — analyze review text for sensory signals
-router.post("/analyze", async (req, res) => {
+// POST /ai/analyze — analyze review text for sensory signals (protected)
+router.post("/analyze", requireAuth, syncUser, async (req, res) => {
   try {
     const { text } = req.body;
-    if (!text) return res.status(400).json({ error: "Text is required" });
+    if (!text || typeof text !== "string") return res.status(400).json({ error: "Text is required" });
+    if (text.length > 5000) return res.status(400).json({ error: "Text must be under 5000 characters" });
 
     const prompt = `You are a sensory analysis assistant helping autistic and sensory-sensitive people evaluate public spaces.
 
@@ -43,7 +44,7 @@ ${text}`;
     res.json(JSON.parse(result.response.text()));
   } catch (error) {
     console.error("AI analyze error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -127,7 +128,7 @@ ${reviewTexts}`;
     res.json(parsed);
   } catch (error) {
     console.error("AI error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

@@ -13,7 +13,6 @@ const router = express.Router();
  * Used to populate the "Top ranked sensory-friendly places" sidebar in the UI.
  */
 router.get("/", async (req, res) => {
-    console.log("Received GET /rankings");
     try {
         const rankings = await prisma.sensoryScore.findMany({
             orderBy: { comfortScore: "desc" },

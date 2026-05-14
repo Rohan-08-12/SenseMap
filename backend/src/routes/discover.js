@@ -1,6 +1,7 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
 import { toGeoJSON } from "../lib/geojson.js";
+import { getSystemUser } from "../lib/systemBot.js";
 import {
     searchGooglePlaces,
     getGooglePlaceDetails,
@@ -74,11 +75,7 @@ function enrichLocationInBackground(locationId, photoRef, name, category, google
                         },
                     });
 
-                    const systemUser = await prisma.user.upsert({
-                        where: { auth0Id: "system|sensorysafe-bot" },
-                        update: {},
-                        create: { auth0Id: "system|sensorysafe-bot", email: "bot@sensorysafe.com", username: "SensorySafe Bot" },
-                    });
+                    const systemUser = await getSystemUser();
 
                     for (const review of analysis.reviews) {
                         await prisma.review.create({
@@ -106,6 +103,7 @@ function enrichLocationInBackground(locationId, photoRef, name, category, google
 router.get("/", async (req, res) => {
     const { q, lat, lng } = req.query;
     if (!q) return res.status(400).json({ error: "Query parameter q is required" });
+    if (q.length > 200) return res.status(400).json({ error: "Query too long" });
 
     const parsedLat = lat != null ? parseFloat(lat) : undefined;
     const parsedLng = lng != null ? parseFloat(lng) : undefined;
