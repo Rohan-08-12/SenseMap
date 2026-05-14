@@ -3,7 +3,6 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel } from '../utils.js';
 import MapView from './MapView';
-import SubmitReview from './SubmitReview';
 import { getRankings, getLocationHeatmap, getLocationById, searchLocations } from '../services/api';
 import './NonLoginMapView.css';
 
@@ -17,8 +16,8 @@ const QUICK_FILTERS = [
 ];
 
 const CATEGORY_CHIPS = [
-  { emoji: '🤫', title: 'Quiet', desc: 'Low-noise spots', filter: 'library' },
-  { emoji: '☕', title: 'Cafes', desc: 'Gentler lighting', filter: 'cafe' },
+  { emoji: '🤫', title: 'Quiet', desc: 'Low-noise spots', filter: 'quiet-now' },
+  { emoji: '💡', title: 'Soft light', desc: 'Gentler lighting', filter: 'soft-lighting' },
   { emoji: '🌳', title: 'Outdoor', desc: 'Open green areas', filter: 'outdoor' },
   { emoji: '🔍', title: 'Explore all', desc: 'See every place', filter: null },
 ];
@@ -46,7 +45,6 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
   const [searchNoResults, setSearchNoResults] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const [showSigninDetail, setShowSigninDetail] = useState(false);
-  const [showReviewForm, setShowReviewForm] = useState(false); // NEW
 
   const toggleNavCollapse = () => setIsNavCollapsed((prev) => !prev);
   const toggleSigninDetail = () => setShowSigninDetail((prev) => !prev);
@@ -142,7 +140,6 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
     if (!selectedLocation) return;
     setLocationDetail(null);
     setAvgRating(null);
-    setShowReviewForm(false); // close review form when switching locations
 
     const locId = selectedLocation.id;
     if (!locId) return;
@@ -227,8 +224,6 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
   // Map filter conversion for MapView
   const mapFilter = (() => {
     if (!activeFilter) return null;
-    if (activeFilter === 'quiet-now') return 'quiet';
-    if (activeFilter === 'before-noon') return 'quiet';
     if (activeFilter === 'nearby') return null;
     return activeFilter;
   })();
@@ -293,30 +288,6 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
           heatmapData={heatmapData}
         />
       </div>
-
-      {/* SubmitReview slide-in panel */}
-      {showReviewForm && selectedLocation && (
-        <SubmitReview
-          location={selectedLocation}
-          onClose={() => setShowReviewForm(false)}
-          onSubmitted={() => {
-            setShowReviewForm(false);
-            // Re-fetch location detail so review count updates
-            if (selectedLocation?.id) {
-              getLocationById(selectedLocation.id)
-                .then((res) => {
-                  const detail = res.data;
-                  setLocationDetail(detail);
-                  if (detail?.reviews?.length > 0) {
-                    const avg = detail.reviews.reduce((a, b) => a + (b.rating || 0), 0) / detail.reviews.length;
-                    setAvgRating(avg);
-                  }
-                })
-                .catch(() => { });
-            }
-          }}
-        />
-      )}
 
       <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 9999 }}>
         <button
@@ -577,11 +548,11 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
                   </div>
                 )}
 
-                {/* Write a Review button — only shows when a location is selected */}
+                {/* Write a Review button — redirects to login for unauthenticated users */}
                 <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                   <button
                     className="nlm-write-review-btn"
-                    onClick={() => setShowReviewForm(true)}
+                    onClick={() => onLogin()}
                     style={{
                       flex: 1,
                       padding: '9px 0',

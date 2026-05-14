@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../theme/ThemeContext.jsx';
+import { deleteAccount } from '../services/api';
+import LegalModal from './LegalModal';
 import './Settings.css';
 
 const STORAGE_KEY = 'sensorysafe_settings';
@@ -15,7 +17,6 @@ const DEFAULT_SETTINGS = {
   fontSize: 'medium',
   mapStyle: 'default',
   distanceUnit: 'km',
-  shareAnonymousData: true,
   showProfileBadge: true,
 };
 
@@ -33,20 +34,55 @@ const THEMES = [
   { id: 'calm', label: 'Calm', desc: 'Blue / teal', color: '#5b9bd5' },
 ];
 
-function Settings({ user, userProfile, onLogout }) {
+function Settings({ user, userProfile, onLogout, onSettingsChange }) {
   const [settings, setSettings] = useState(loadSettings);
   const { theme, setTheme, resetTheme } = useTheme();
+  const [savedToast, setSavedToast] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [legalModal, setLegalModal] = useState(null);
+  const toastRef = useRef(null);
+  const mountedRef = useRef(false);
+
+  const showSaved = useCallback(() => {
+    setSavedToast(true);
+    clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => setSavedToast(false), 2000);
+  }, []);
 
   useEffect(() => {
+    if (!mountedRef.current) { mountedRef.current = true; return; }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [settings]);
+    onSettingsChange?.(settings);
+    showSaved();
+  }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (key) => setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
   const set = (key, val) => setSettings((prev) => ({ ...prev, [key]: val }));
 
+  const handleNotificationsToggle = async () => {
+    if (!settings.notifications && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'denied') return; // don't toggle if user blocked
+    }
+    toggle('notifications');
+  };
+
   const handleReset = () => {
     setSettings({ ...DEFAULT_SETTINGS });
     resetTheme();
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deleteConfirm) { setDeleteConfirm(true); return; }
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      onLogout?.();
+    } catch {
+      setDeleting(false);
+      setDeleteConfirm(false);
+    }
   };
 
   const joined = user?.updated_at
@@ -71,6 +107,12 @@ function Settings({ user, userProfile, onLogout }) {
           <p>Manage your account, preferences, and accessibility options.</p>
         </div>
       </div>
+
+      {savedToast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: 'var(--theme-accent)', color: '#fff', padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+          Settings saved
+        </div>
+      )}
 
       <div className="sett-grid">
         {/* ── Account Card ── */}
@@ -122,7 +164,7 @@ function Settings({ user, userProfile, onLogout }) {
           <h2>Notifications</h2>
           <p className="sett-card-desc">Choose which alerts and updates you receive.</p>
 
-          <Toggle label="Push notifications" sublabel="Real-time sensory alerts on your device" checked={settings.notifications} onChange={() => toggle('notifications')} />
+          <Toggle label="Push notifications" sublabel="Real-time sensory alerts on your device" checked={settings.notifications} onChange={handleNotificationsToggle} />
           <Toggle label="Quiet zone alerts" sublabel="Notify when nearby places drop below your noise threshold" checked={settings.quietAlerts} onChange={() => toggle('quietAlerts')} />
           <Toggle label="Crowd warnings" sublabel="Alert when saved places exceed your crowd tolerance" checked={settings.crowdWarnings} onChange={() => toggle('crowdWarnings')} />
           <Toggle label="Weekly email digest" sublabel="Summary of your comfort scores and new quiet spots" checked={settings.emailDigest} onChange={() => toggle('emailDigest')} />
@@ -207,7 +249,6 @@ function Settings({ user, userProfile, onLogout }) {
           <h2>Privacy</h2>
           <p className="sett-card-desc">Control how your data is used.</p>
 
-          <Toggle label="Anonymous usage data" sublabel="Help improve SenseMap with anonymized analytics" checked={settings.shareAnonymousData} onChange={() => toggle('shareAnonymousData')} />
           <Toggle label="Show profile badge" sublabel="Display your sensory profile type to the community" checked={settings.showProfileBadge} onChange={() => toggle('showProfileBadge')} />
         </section>
 
@@ -234,9 +275,20 @@ function Settings({ user, userProfile, onLogout }) {
           <div className="sett-action-row sett-action-danger">
             <div>
               <span className="sett-toggle-label">Delete account</span>
-              <span className="sett-toggle-sub">Permanently remove your account and all data</span>
+              <span className="sett-toggle-sub">
+                {deleteConfirm ? 'This will permanently remove your account and all data. This cannot be undone.' : 'Permanently remove your account and all data'}
+              </span>
             </div>
-            <button type="button" className="sett-btn sett-btn-danger" disabled>Coming Soon</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {deleteConfirm && (
+                <button type="button" className="sett-btn sett-btn-reset" onClick={() => setDeleteConfirm(false)} disabled={deleting}>
+                  Cancel
+                </button>
+              )}
+              <button type="button" className="sett-btn sett-btn-danger" onClick={handleDeleteAccount} disabled={deleting}>
+                {deleting ? 'Deleting…' : deleteConfirm ? 'Yes, delete' : 'Delete account'}
+              </button>
+            </div>
           </div>
         </section>
       </div>
@@ -244,8 +296,12 @@ function Settings({ user, userProfile, onLogout }) {
       <div className="sett-footer">
         <span>SenseMap v1.0</span>
         <span>·</span>
-        <span>All preferences are saved locally on this device</span>
+        <button className="sett-legal-link" onClick={() => setLegalModal('privacy')}>Privacy Policy</button>
+        <span>·</span>
+        <button className="sett-legal-link" onClick={() => setLegalModal('terms')}>Terms of Use</button>
       </div>
+
+      {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
     </div>
   );
 }

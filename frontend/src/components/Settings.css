@@ -401,6 +401,17 @@
   padding: 8px 0 4px;
 }
 
+.sett-legal-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--theme-text-soft);
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .sett-grid {

@@ -1,5 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+.launch-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  font-size: 11px;
+  color: var(--theme-text-soft, #9ca3af);
+}
+
+.launch-legal-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--theme-text-soft, #9ca3af);
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .launch {
   font-family: 'Inter', sans-serif;
   background: var(--theme-bg);

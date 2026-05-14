@@ -138,4 +138,13 @@ export const checkIn = (locationId) => {
     return api.post(`/checkins/${locationId}`);
 };
 
+export const getRecentCheckIns = () =>
+    api.get('/checkins/recent');
+
+export const getSimilarLocations = (locationId) =>
+    api.get(`/locations/similar/${locationId}`);
+
+export const deleteAccount = () =>
+    api.delete('/users/me');
+
 export default api;

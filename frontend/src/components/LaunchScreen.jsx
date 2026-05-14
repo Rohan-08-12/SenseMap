@@ -3,48 +3,49 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import LogoutConfirmation from './LogoutConfirmation';
+import LegalModal from './LegalModal';
 import './LaunchScreen.css';
 
 const CATEGORIES = [
     {
         emoji: '📚',
-        title: 'Quiet Libraries',
-        desc: 'Spaces with strictly enforced noise levels, comfortable seating, and calm environments.',
+        title: 'Quiet Spaces',
+        desc: 'Spaces with very low noise scores — libraries, reading rooms, and calm indoor venues.',
         tags: ['Low Noise', 'Focused'],
-        filter: 'library',
+        filter: 'quiet-now',
     },
     {
-        emoji: '☕',
-        title: 'Soft-Light Cafés',
-        desc: 'Coffee shops prioritizing natural or warm lighting over harsh fluorescents.',
+        emoji: '💡',
+        title: 'Soft-Light Spots',
+        desc: 'Venues prioritizing natural or warm lighting over harsh fluorescents.',
         tags: ['Warm Light', 'Cozy'],
-        filter: 'cafe',
+        filter: 'soft-lighting',
     },
     {
         emoji: '🌳',
         title: 'Calm Parks',
         desc: 'Open outdoor areas away from heavy traffic with plenty of personal space.',
         tags: ['Open Space', 'Nature'],
-        filter: 'park',
+        filter: 'outdoor',
     },
     {
-        emoji: '🏛️',
-        title: 'Sensory Museums',
-        desc: 'Museums offering dedicated quiet hours, low-stimulation zones, and relaxed rules.',
-        tags: ['Quiet Hours', 'Spacious'],
-        filter: 'museum',
+        emoji: '👥',
+        title: 'Low-Crowd Places',
+        desc: 'Venues rated low on crowd density — easy to move through without sensory overload.',
+        tags: ['Low Density', 'Spacious'],
+        filter: 'low-crowds',
     },
     {
-        emoji: '🛍️',
-        title: 'Accessible Retail',
-        desc: 'Stores offering sensory-friendly shopping times with reduced music and dimmed lights.',
-        tags: ['No Music', 'Low Crowds'],
-        filter: 'retail',
+        emoji: '🌅',
+        title: 'Before-Noon Spots',
+        desc: 'Places that are quieter and less crowded in the morning hours.',
+        tags: ['Morning', 'Calm'],
+        filter: 'before-noon',
     },
     {
         emoji: '🔍',
         title: 'Explore All Nearby',
-        desc: 'View the sensory map to see real-time data and AI insights for places around you.',
+        desc: 'View the full sensory map with AI insights for places around you.',
         tags: ['Highly Recommended'],
         highlight: true,
         filter: null,
@@ -52,7 +53,7 @@ const CATEGORIES = [
 ];
 
 const POPULAR_TAGS = [
-    { emoji: '🤫', label: 'Quiet spaces', filter: 'quiet' },
+    { emoji: '🤫', label: 'Quiet spaces', filter: 'quiet-now' },
     { emoji: '💡', label: 'Soft lighting', filter: 'soft-lighting' },
     { emoji: '👥', label: 'Low crowds', filter: 'low-crowds' },
     { emoji: '🌿', label: 'Outdoor areas', filter: 'outdoor' },
@@ -87,13 +88,10 @@ const categoryCardVariants = (reducedMotion) => ({
 });
 
 function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
-    // 🔓 DEV BYPASS
-    // const { loginWithRedirect, isAuthenticated, user } = useAuth0();
-    const isAuthenticated = false;
-    const user = { name: "Dev Mode", email: "dev@sensemap.app" };
-    const loginWithRedirect = () => onLogin();
+    const { isAuthenticated, user } = useAuth0();
     const [searchQuery, setSearchQuery] = useState('');
     const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [legalModal, setLegalModal] = useState(null);
     const prefersReducedMotion = useReducedMotion();
     const { theme, setTheme } = useTheme();
 
@@ -328,12 +326,20 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
                 </motion.section>
             </div>
 
+            <footer className="launch-footer">
+                <button className="launch-legal-link" onClick={() => setLegalModal('privacy')}>Privacy Policy</button>
+                <span>·</span>
+                <button className="launch-legal-link" onClick={() => setLegalModal('terms')}>Terms of Use</button>
+            </footer>
+
             {showLogoutModal && (
                 <LogoutConfirmation
                     onCancel={() => setShowLogoutModal(false)}
                     onLogout={onLogout}
                 />
             )}
+
+            {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
         </div>
     );
 }

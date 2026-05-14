@@ -10,8 +10,27 @@ import SensoryProfile from './SensoryProfile';
 import Settings from './Settings';
 import LogoutConfirmation from './LogoutConfirmation';
 import SubmitReview from './SubmitReview'; // NEW
-import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, updateSensoryProfile, getLocationById, getAIInsights, searchLocations, discoverLocations, getSavedPlaces, savePlace, removeSavedPlace, checkIn, submitReview } from '../services/api';
+import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, updateSensoryProfile, getLocationById, getAIInsights, discoverLocations, getSavedPlaces, savePlace, removeSavedPlace, checkIn, submitReview, getSimilarLocations } from '../services/api';
 import './LoggedInMapView.css';
+
+const SETTINGS_KEY = 'sensorysafe_settings';
+
+const MAP_STYLE_URLS = {
+  default: 'mapbox://styles/mapbox/light-v11',
+  satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
+  terrain: 'mapbox://styles/mapbox/outdoors-v12',
+  dark: 'mapbox://styles/mapbox/dark-v11',
+};
+
+const FONT_ZOOM = { small: '0.875', medium: '1', large: '1.125' };
+
+function applyDomSettings(s) {
+  document.documentElement.setAttribute('data-high-contrast', s.highContrast ? 'true' : 'false');
+  document.documentElement.setAttribute('data-reduced-motion', s.reducedMotion ? 'true' : 'false');
+  document.documentElement.style.zoom = FONT_ZOOM[s.fontSize] || '1';
+  // Let Mapbox know the canvas dimensions changed after zoom
+  requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+}
 
 const NAV_ITEMS = [
   { id: 'explore', label: 'Explore map', icon: 'map' },
@@ -65,12 +84,32 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [savedPlacesList, setSavedPlacesList] = useState([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [flyToLocation, setFlyToLocation] = useState(null);
+  const [mapStyleUrl, setMapStyleUrl] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+      return MAP_STYLE_URLS[s.mapStyle] || MAP_STYLE_URLS.default;
+    } catch { return MAP_STYLE_URLS.default; }
+  });
+  const [similarLocations, setSimilarLocations] = useState([]);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInError, setCheckInError] = useState(null);
   const [showQuickRating, setShowQuickRating] = useState(false);
   const [quickRatingSubmitted, setQuickRatingSubmitted] = useState(false);
   const [quickSelections, setQuickSelections] = useState({ noise: null, lighting: null, crowd: null });
+
+  // Apply accessibility + appearance settings from localStorage on mount
+  useEffect(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+      applyDomSettings(s);
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleSettingsChange = useCallback((s) => {
+    applyDomSettings(s);
+    setMapStyleUrl(MAP_STYLE_URLS[s.mapStyle] || MAP_STYLE_URLS.default);
+  }, []);
 
   const buildSnapshot = useCallback((data, coords) => {
     if (!Array.isArray(data) || data.length === 0) return;
@@ -215,6 +254,14 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
     if (!selectedLocation) return;
     refreshLocationData(selectedLocation.id);
   }, [selectedLocation, refreshLocationData]);
+
+  // Fetch similar locations when selection changes
+  useEffect(() => {
+    if (!selectedLocation?.id) { setSimilarLocations([]); return; }
+    getSimilarLocations(selectedLocation.id)
+      .then((res) => setSimilarLocations(res.data || []))
+      .catch(() => setSimilarLocations([]));
+  }, [selectedLocation?.id]);
 
   const handleLocationSelect = (location) => {
     setSelectedLocation(location);
@@ -551,6 +598,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
           user={user}
           userProfile={userProfile}
           onLogout={() => setShowLogoutModal(true)}
+          onSettingsChange={handleSettingsChange}
         />
       ) : activeNav === 'profile' ? (
         <SensoryProfile
@@ -660,8 +708,10 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   selectedLocationId={selectedLocation?.id}
                   selectedLocation={selectedLocation}
                   flyToLocation={flyToLocation}
+                  userCoords={userCoords}
                   heatmapData={heatmapData}
                   heatmapEnabled={heatmapOn}
+                  mapStyle={mapStyleUrl}
                 />
               </div>
 
@@ -1017,12 +1067,23 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   <div className="box-value small">{noiseLevel}</div>
                 </div>
                 <div className="lmv-stat-box">
-                  <div className="box-label">Best time</div>
+                  <div className="box-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Best time
+                    {aiInsights?.bestTime && (
+                      <span style={{ fontSize: 10, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 4px', fontWeight: 600 }}>AI</span>
+                    )}
+                  </div>
                   <div className="box-value small">{bestTimeText}</div>
                 </div>
               </div>
 
               <div className="lmv-loc-tags">
+                {aiInsights?.tags?.length > 0 && (
+                  <span className="lmv-loc-tag" style={{ background: '#ede9fe', color: '#5b21b6', fontSize: 11, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="#5b21b6" strokeWidth="1.2"/><path d="M5 3v2.5l1.5 1" stroke="#5b21b6" strokeWidth="1" strokeLinecap="round"/></svg>
+                    AI tags
+                  </span>
+                )}
                 {locationTags.map((tag) => (
                   <span key={tag} className="lmv-loc-tag">{tag}</span>
                 ))}
@@ -1040,7 +1101,8 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-crowd spot</span>
                 )}
                 {aiInsights?.bestTime && (
-                  <span className="lmv-loc-tag" style={{ background: '#eef3f8' }}>
+                  <span className="lmv-loc-tag" style={{ background: '#ede9fe', color: '#5b21b6' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, marginRight: 2 }}>AI</span>
                     Best: {aiInsights.bestTime.split(' ').slice(0, 3).join(' ')}
                   </span>
                 )}
@@ -1082,7 +1144,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               <div className="lmv-detail-card">
                 <div>
                   <h3 className="lmv-section-title">Noise through the day</h3>
-                  <p className="lmv-section-desc">Based on sensory scores for this location.</p>
+                  <p className="lmv-section-desc">Estimated trend based on sensory scores — not real-time data.</p>
                 </div>
                 <div style={{ width: '100%', height: 120, minWidth: 0 }}>
                   <ResponsiveContainer width="100%" height="100%" debounce={50}>
@@ -1102,8 +1164,11 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
             {/* AI Insight */}
             <div className="lmv-detail-card">
               <div>
-                <h3 className="lmv-section-title">AI insight</h3>
-                <p className="lmv-section-desc">Only the most important signals are shown.</p>
+                <h3 className="lmv-section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  AI insight
+                  <span style={{ fontSize: 11, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>Gemini AI</span>
+                </h3>
+                <p className="lmv-section-desc">Generated by AI from community reviews. Not a substitute for personal judgement.</p>
               </div>
 
               {reviewCount === 0 ? (
@@ -1284,6 +1349,38 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </div>
               )}
             </div>
+
+            {/* Similar Places */}
+            {similarLocations.length > 0 && (
+              <div className="lmv-detail-card" style={{ marginBottom: 32 }}>
+                <div>
+                  <h3 className="lmv-section-title">Similar places</h3>
+                  <p className="lmv-section-desc">Locations with a matching sensory profile.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                  {similarLocations.map((loc) => (
+                    <div
+                      key={loc.id}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--theme-tag-soft)', borderRadius: 8, cursor: 'pointer' }}
+                      onClick={() => {
+                        handleLocationSelect(loc);
+                        if (loc.longitude != null && loc.latitude != null) {
+                          setFlyToLocation({ longitude: loc.longitude, latitude: loc.latitude, zoom: 16, _ts: Date.now() });
+                        }
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--theme-text)' }}>{loc.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--theme-text-muted)', marginTop: 2 }}>{loc.category || '—'} · {loc.similarity}% similar</div>
+                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--theme-accent)', flexShrink: 0, marginLeft: 8 }}>
+                        {(loc.sensoryScores?.comfortScore ?? 0).toFixed(1)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </aside>
         </>
       )}
