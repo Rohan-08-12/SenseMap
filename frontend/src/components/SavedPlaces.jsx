@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getAIInsights, getLocationById } from '../services/api';
+import { scoreToLabel } from '../utils.js';
 import './SavedPlaces.css';
-
-const scoreToLabel = (s) => (s == null ? '—' : s < 2 ? 'Low' : s < 3.5 ? 'Medium' : 'High');
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -14,7 +13,14 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 
 function distLabel(km) {
   if (km == null) return null;
-  return km < 1 ? `${(km * 1000).toFixed(0)}m away` : `${km.toFixed(1)} km away`;
+  try {
+    const s = JSON.parse(localStorage.getItem('sensorysafe_settings') || '{}');
+    if (s.distanceUnit === 'mi') {
+      const mi = km * 0.621371;
+      return mi < 0.1 ? `${(mi * 5280).toFixed(0)}ft away` : `${mi.toFixed(1)}mi away`;
+    }
+  } catch { /* ignore */ }
+  return km < 1 ? `${(km * 1000).toFixed(0)}m away` : `${km.toFixed(1)}km away`;
 }
 
 function matchLabel(score) {
@@ -268,7 +274,7 @@ function SavedPlaces({ savedPlacesList = [], userCoords, userProfile, matchScore
 /* ═══════════════════════════════════════════ */
 /* Saved Place Detail View                    */
 /* ═══════════════════════════════════════════ */
-function SavedPlaceDetail({ place, userProfile, userCoords, onBack, onRemove }) {
+function SavedPlaceDetail({ place, onBack, onRemove }) {
   const [detail, setDetail] = useState(null);
   const [aiInsights, setAiInsights] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -444,10 +450,10 @@ function SavedPlaceDetail({ place, userProfile, userCoords, onBack, onRemove }) 
                   <p className="spd-rating-hint">Most visitors describe it as comfortable and easy to plan around.</p>
                 </div>
                 <div className="spd-community-right">
-                  <div className="spd-bar-row"><span className="spd-bar-label">Quietness</span><div className="spd-bar-track"><div className="spd-bar-fill blue" style={{ width: `${((10 - noiseScore) / 10) * 100}%` }} /></div><span className="spd-bar-val">{(10 - noiseScore).toFixed(1)} / 10</span></div>
-                  <div className="spd-bar-row"><span className="spd-bar-label">Crowding comfort</span><div className="spd-bar-track"><div className="spd-bar-fill teal" style={{ width: `${((10 - crowdScore) / 10) * 100}%` }} /></div><span className="spd-bar-val">{(10 - crowdScore).toFixed(1)} / 10</span></div>
-                  <div className="spd-bar-row"><span className="spd-bar-label">Lighting comfort</span><div className="spd-bar-track"><div className="spd-bar-fill purple" style={{ width: `${((10 - lightScore) / 10) * 100}%` }} /></div><span className="spd-bar-val">{(10 - lightScore).toFixed(1)} / 10</span></div>
-                  <div className="spd-bar-row"><span className="spd-bar-label">Predictability</span><div className="spd-bar-track"><div className="spd-bar-fill green" style={{ width: `${(comfortScore / 10) * 100}%` }} /></div><span className="spd-bar-val">{comfortScore.toFixed(1)} / 10</span></div>
+                  <div className="spd-bar-row"><span className="spd-bar-label">Quietness</span><div className="spd-bar-track"><div className="spd-bar-fill blue" style={{ width: `${((5 - noiseScore) / 5) * 100}%` }} /></div><span className="spd-bar-val">{(10 - noiseScore * 2).toFixed(1)} / 10</span></div>
+                  <div className="spd-bar-row"><span className="spd-bar-label">Crowding comfort</span><div className="spd-bar-track"><div className="spd-bar-fill teal" style={{ width: `${((5 - crowdScore) / 5) * 100}%` }} /></div><span className="spd-bar-val">{(10 - crowdScore * 2).toFixed(1)} / 10</span></div>
+                  <div className="spd-bar-row"><span className="spd-bar-label">Lighting comfort</span><div className="spd-bar-track"><div className="spd-bar-fill purple" style={{ width: `${((5 - lightScore) / 5) * 100}%` }} /></div><span className="spd-bar-val">{(10 - lightScore * 2).toFixed(1)} / 10</span></div>
+                  <div className="spd-bar-row"><span className="spd-bar-label">Predictability</span><div className="spd-bar-track"><div className="spd-bar-fill green" style={{ width: `${(comfortScore / 5) * 100}%` }} /></div><span className="spd-bar-val">{(comfortScore * 2).toFixed(1)} / 10</span></div>
                 </div>
               </div>
             ) : (
@@ -574,19 +580,23 @@ function SavedPlaceDetail({ place, userProfile, userCoords, onBack, onRemove }) 
             <h4>Sensory Time Pattern</h4>
             <p className="spd-sidebar-desc">Activity levels throughout the day</p>
             <div className="spd-time-chart">
-              {['6am', '12pm', '6pm', '10pm'].map((t, i) => {
-                const heights = [30, 60, 80, 45];
-                return (
+              {(() => {
+                const pattern = [0.35, 0.65, 1.0, 0.55];
+                const clamp = (v) => Math.round(Math.max(15, Math.min(100, v)));
+                const noiseH = pattern.map(b => clamp(b * (noiseScore / 5) * 100));
+                const crowdH = pattern.map(b => clamp(b * (crowdScore / 5) * 100));
+                const lightH = pattern.map(b => clamp(b * (lightScore / 5) * 100));
+                return ['6am', '12pm', '6pm', '10pm'].map((t, i) => (
                   <div key={t} className="spd-time-bar-group">
                     <div className="spd-time-bars">
-                      <div className="spd-time-bar noise" style={{ height: `${heights[i] * 0.8}%` }} />
-                      <div className="spd-time-bar crowd" style={{ height: `${heights[i]}%` }} />
-                      <div className="spd-time-bar light" style={{ height: `${heights[i] * 0.6}%` }} />
+                      <div className="spd-time-bar noise" style={{ height: `${noiseH[i]}%` }} />
+                      <div className="spd-time-bar crowd" style={{ height: `${crowdH[i]}%` }} />
+                      <div className="spd-time-bar light" style={{ height: `${lightH[i]}%` }} />
                     </div>
                     <span className="spd-time-label">{t}</span>
                   </div>
-                );
-              })}
+                ));
+              })()}
             </div>
           </div>
         )}

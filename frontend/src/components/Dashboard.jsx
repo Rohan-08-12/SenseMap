@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { getAIInsights } from '../services/api';
+import { getAIInsights, getRecentCheckIns } from '../services/api';
+import { haversineDistance } from '../utils.js';
 import './Dashboard.css';
 
 // Profile tolerance 1–5 → display label
@@ -13,17 +14,6 @@ const SLIDER_CONFIG = [
   { key: 'lightingTolerance', label: 'Lighting sensitivity', min: 'Dim', max: 'Bright' },
   { key: 'crowdTolerance', label: 'Crowd tolerance', min: 'Calm', max: 'Crowded' },
 ];
-
-function haversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return km < 1 ? `${(km * 1000).toFixed(0)}m away` : `${km.toFixed(1)} km away`;
-}
 
 function Dashboard({
   userProfile,
@@ -43,6 +33,7 @@ function Dashboard({
   const [aiInsights, setAiInsights] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(false);
+  const [recentCheckIns, setRecentCheckIns] = useState([]);
 
   // Fetch AI insights for best match when we have a location with id
   const bestMatchLocationId = bestMatch?.locationId ?? bestMatch?.id;
@@ -64,6 +55,12 @@ function Dashboard({
       })
       .finally(() => setAiLoading(false));
   }, [bestMatchLocationId]);
+
+  useEffect(() => {
+    getRecentCheckIns()
+      .then((res) => setRecentCheckIns(res.data || []))
+      .catch(() => {});
+  }, []);
 
   const handleSearchSubmit = (e) => {
     e?.preventDefault();
@@ -89,7 +86,6 @@ function Dashboard({
     const comfort = scores.comfortScore ?? scores.comfort ?? 0;
     const noise = scores.noiseScore ?? scores.noise ?? 0;
     const light = scores.lightingScore ?? scores.lighting ?? 0;
-    const crowd = scores.crowdScore ?? scores.crowd ?? 0;
 
     const parts = [];
     if (userCoords && loc.latitude != null && loc.longitude != null) {
@@ -384,6 +380,33 @@ function Dashboard({
             <p className="dash-right-desc" style={{ marginTop: 8 }}>
               No alerts right now. Conditions look okay for your best match.
             </p>
+          )}
+        </div>
+
+        <div className="dash-right-card">
+          <div>
+            <h3 className="dash-right-title">Recent visits</h3>
+            <p className="dash-right-desc">Places you checked into recently.</p>
+          </div>
+          {recentCheckIns.length === 0 ? (
+            <p className="dash-right-desc" style={{ marginTop: 8 }}>
+              No check-ins yet. Use "I'm here" on any location to log a visit.
+            </p>
+          ) : (
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {recentCheckIns.slice(0, 5).map((ci) => (
+                <div key={ci.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--theme-bg)', border: '1px solid var(--theme-border)', borderRadius: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--theme-text)' }}>{ci.location?.name || '—'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--theme-text-muted)', marginTop: 2 }}>
+                      {new Date(ci.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {ci.location?.category ? ` · ${ci.location.category}` : ''}
+                    </div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75c-2.9 0-5.25 2.35-5.25 5.25 0 2.9 5.25 5.25 5.25 5.25s5.25-2.35 5.25-5.25c0-2.9-2.35-5.25-5.25-5.25z" stroke="var(--theme-accent)" strokeWidth="1.2" /><circle cx="7" cy="7" r="1.5" fill="var(--theme-accent)" /></svg>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
