@@ -1,59 +1,111 @@
-# SenseMap (AutisticAI)
+# SenseMap
 
-SenseMap is a full-stack sensory mapping application that crowdsources and calculates sensory scores (noise, lighting, crowds, and comfort) for public spaces, helping neurodivergent individuals and those with sensory sensitivities find suitable places to visit.
+**Find places that feel right for you.**
 
-This `clean-dev` branch has been fully documented with architectural JSDoc comments across the core backend routes and frontend React components to clearly explain how the application works under the hood.
+SenseMap is a community-powered sensory map helping autistic and sensory-sensitive individuals discover comfortable public spaces. Every location shows real community ratings for noise, lighting, and crowd density — plus AI-generated insights from Google Gemini.
 
-## 🚀 Tech Stack
+Currently in beta, covering **Toronto**.
 
-- **Frontend:** React (Vite), Deck.gl (Mapping), Axios
-- **Backend:** Node.js, Express
-- **Database:** PostgreSQL (hosted on Supabase), Prisma ORM
-- **Authentication:** Auth0
-- **AI Integrations:** Google Gemini (Review parsing & sentiment analysis)
-- **Media:** Cloudinary (Image uploads)
+---
 
-## 📁 Project Structure
+## What it does
 
-The project is structured as a monorepo containing two main directories:
+- **Interactive map** — color-coded pins and heatmap showing sensory comfort at a glance
+- **Sensory scores** — noise, lighting, crowds, and overall comfort rated 1–10 by real users
+- **AI insights** — Gemini 2.5-flash analyzes community reviews and surfaces noise patterns, best visit times, and sensory tags
+- **Personalized matching** — set your own noise/lighting/crowd tolerance and get a % match for every location
+- **Check-in flow** — quick tap ratings when you're physically at a location
+- **Saved places** — bookmark spots that work for you
+- **No account needed to explore** — sign up only to review or save
 
-- `/backend`: The Express server, Prisma schema, and API routes.
-- `/frontend`: The React application and UI components.
+---
 
-## 🛠️ Local Development Setup
+## Tech stack
 
-To run this project locally, you will need to set up environment configurations for both the frontend and the backend.
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, Vite, Mapbox GL JS, react-map-gl |
+| Backend | Node.js, Express 5 |
+| Database | PostgreSQL via Supabase, Prisma ORM |
+| Auth | Auth0 |
+| AI | Google Gemini 2.5-flash |
+| Images | Cloudinary |
+| Security | helmet, express-rate-limit, CORS |
 
-### 1. Install Dependencies
-Run npm install in both directories:
+---
+
+## Running locally
+
+### 1. Clone and install
+
 ```bash
+git clone https://github.com/Rohan-08-12/SenseMap.git
+cd SenseMap/AutisticAI
+npm install
 cd backend && npm install
 cd ../frontend && npm install
 ```
 
-### 2. Environment Variables
+### 2. Set up environment variables
 
-**Backend (`backend/.env`):**
-Requires keys for PostgreSQL, Auth0, Google Places, Cloudinary, and Gemini. (These are intentionally not checked into version control for security purposes. Please contact the repo owner for the `.env` configuration file).
-
-**Frontend (`frontend/.env`):**
-Requires keys for Mapbox and Auth0, as well as the local API base URL:
-```env
-VITE_API_URL=http://127.0.0.1:3000
-```
-
-### 3. Run the Development Servers
-From the root directory, you can start both the frontend and backend concurrently using the root package.json:
+Copy the example files and fill in your keys:
 
 ```bash
-npm install # Installs dependencies for concurrently
-npm run dev:servers
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-- **Frontend** will be running at `http://localhost:5173`
-- **Backend** will be running at `http://localhost:3000`
+**Backend** (`backend/.env`) requires: `DATABASE_URL`, `AUTH0_AUDIENCE`, `AUTH0_ISSUER_BASE_URL`, `GEMINI_API_KEY`, `GOOGLE_PLACES_KEY`, `CLOUDINARY_*`
 
-## 🧠 AI Review Analysis
-The application features an AI integration that analyzes text-based user reviews using Google Gemini. It automatically extracts estimated noise, lighting, and crowd levels from the user's natural language, which are then fed into the global scoring matrix for the location.
+**Frontend** (`frontend/.env`) requires: `VITE_MAPBOX_TOKEN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_AUDIENCE`, `VITE_API_URL`
 
-> **Note:** The core code architecture, API routing logic, and Map integration logic are thoroughly commented within the files themselves in this branch.
+### 3. Run
+
+```bash
+# From AutisticAI/
+npm run dev:servers       # Frontend + backend together
+npm run dev:all           # OSM seed import, then both servers
+```
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:3000`
+
+### 4. Seed the database (Toronto)
+
+```bash
+npm run osm-import
+```
+
+---
+
+## Project structure
+
+```
+AutisticAI/
+├── frontend/
+│   ├── src/
+│   │   ├── components/     # React components
+│   │   ├── services/api.js # Axios instance + all API calls
+│   │   └── theme/          # ThemeContext, CSS variables
+│   └── public/
+├── backend/
+│   ├── src/
+│   │   ├── routes/         # Express route handlers
+│   │   ├── middleware/      # Auth, syncUser, optionalAuth
+│   │   └── lib/            # Prisma, Gemini, scores, systemBot
+│   └── prisma/
+│       └── schema.prisma
+└── DOCS.md                 # Full technical documentation
+```
+
+---
+
+## Documentation
+
+See [DOCS.md](./DOCS.md) for full API reference, data models, architecture, and data flow diagrams.
+
+---
+
+## Status
+
+**Beta** — Toronto only. Active development.

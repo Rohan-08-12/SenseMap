@@ -1,12 +1,12 @@
 # SenseMap — Platform Documentation
 
-> Last updated: March 30, 2026
+> Last updated: May 14, 2026
 
 ---
 
 ## What is SenseMap?
 
-SenseMap helps autistic and sensory-sensitive individuals find comfortable public spaces. Users can explore an interactive map, view community sensory ratings (noise, lighting, crowd), submit reviews, check in to locations, and receive AI-powered insights tailored to their personal sensory profile.
+SenseMap helps autistic and sensory-sensitive individuals find comfortable public spaces. Users explore an interactive map, view community sensory ratings (noise, lighting, crowd), submit reviews, check in to locations, and receive AI-powered insights tailored to their personal sensory profile.
 
 ---
 
@@ -66,7 +66,25 @@ cd backend && npm run dev
 | `CLOUDINARY_CLOUD_NAME` | Image hosting |
 | `CLOUDINARY_API_KEY` | Image hosting |
 | `CLOUDINARY_API_SECRET` | Image hosting |
+| `ALLOWED_ORIGINS` | Comma-separated allowed CORS origins (defaults to localhost) |
 | `PORT` | Server port (default 3000) |
+
+---
+
+## Security
+
+All production deployments must set `ALLOWED_ORIGINS` to the frontend domain.
+
+| Layer | Implementation |
+|---|---|
+| HTTP headers | `helmet` on all routes |
+| CORS | Restricted to `ALLOWED_ORIGINS` env var |
+| Body size | `express.json({ limit: "1mb" })` |
+| Rate limiting | API: 200/15min · Reviews: 20/hr · AI: 30/min |
+| Auth | Auth0 JWT validation on all write endpoints |
+| Input validation | Length + type checks on reviews, AI, upload, discover routes |
+| Error responses | Global error handler — never returns stack traces |
+| File uploads | Images only, 5MB max (Multer) |
 
 ---
 
@@ -100,6 +118,7 @@ Relations: savedPlaces, reviews, checkIns, sensoryProfile
 | longitude | Float | |
 
 Relations: reviews, checkIns, sensoryScores, savedBy
+Indexes: `category`
 
 ---
 
@@ -123,6 +142,8 @@ Relations: reviews, checkIns, sensoryScores, savedBy
 | aiSentiment | String? | positive / neutral / negative |
 | aiTags | String[] | e.g. ["quiet", "good lighting"] |
 
+Indexes: `locationId`, `userId`
+
 ---
 
 ### SensoryScore
@@ -136,6 +157,8 @@ Aggregated per location. Updated on every new review via `recalculateScores()`.
 | crowdScore | Float | Average crowd (1–10) |
 | comfortScore | Float | Average rating (1–10) |
 | reviewCount | Int | Total reviews |
+
+Indexes: `locationId`, `userId`
 
 ---
 
@@ -166,11 +189,12 @@ Visit tracking. 1-hour cooldown enforced per user+location on the backend.
 
 ```
 Request
-  └── app.js (CORS, JSON parsing)
+  └── app.js (helmet, CORS, rate limiting, body limit)
        └── middleware/auth.js        → validate Auth0 JWT
             └── middleware/syncUser.js → upsert User in DB
                  └── route handler
                       └── lib/scores.js (recalculate on review create)
+                           └── global error handler (clean JSON, no stack traces)
 ```
 
 ### Middleware
@@ -190,7 +214,7 @@ Request
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/locations` | No | All locations as GeoJSON |
-| GET | `/locations/heatmap` | No | Top 500 locations with sensory scores (Deck.gl) |
+| GET | `/locations/heatmap` | No | Top 500 scored locations (filters default scores) |
 | GET | `/locations/match` | Required | Personalized matches sorted by match score |
 | GET | `/locations/search?q=` | No | Search by name/category/address |
 | GET | `/locations/:id` | No | Single location + last 10 reviews |
@@ -200,13 +224,13 @@ Request
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/reviews/:locationId` | No | All reviews for a location |
-| POST | `/reviews` | Required | Submit review; triggers score recalculation |
+| POST | `/reviews` | Required | Submit review (validated); triggers score recalculation |
 
 ### AI (`/ai`)
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/ai/analyze` | No | Extract sensory scores from review text (Gemini) |
+| POST | `/ai/analyze` | Required | Extract sensory scores from review text (Gemini) |
 | POST | `/ai/insights/:locationId` | Required | Full AI summary of a location's sensory profile |
 
 ### Rankings (`/rankings`)
@@ -247,7 +271,13 @@ Request
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/upload` | Required | Upload image to Cloudinary; returns `{ imageUrl }` |
+| POST | `/upload` | Required | Upload image to Cloudinary (5MB limit, images only); returns `{ imageUrl }` |
+
+### Users (`/users`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| DELETE | `/users/me` | Required | Delete user account and all associated data |
 
 ---
 
@@ -257,13 +287,26 @@ Request
 Singleton Prisma client using `@prisma/adapter-pg` (pg driver for Supabase).
 
 ### `gemini.js`
-Initializes `@google/generative-ai` with `gemini-2.5-flash`. Exported as `model`.
+Initializes `@google/generative-ai` with `gemini-2.5-flash`. Exports `model` and `embeddingModel`.
 
 ### `scores.js` — `recalculateScores(locationId)`
 - Fetches all reviews for a location
 - Averages noise, lighting, crowd, and rating
 - Upserts the `SensoryScore` record
 - **Must be called after every review create/update**
+
+### `systemBot.js` — `getSystemUser()`
+Shared credentials for the SenseMap Bot account used to seed AI-generated reviews from Google Places. Upserts the bot user on first call.
+
+```js
+export const SYSTEM_BOT = {
+  auth0Id: "system|sensemap-bot",
+  email: "bot@sensemap.app",
+  username: "SenseMap Bot",
+};
+```
+
+Bot-seeded reviews are labeled "AI-assisted" in the UI.
 
 ### `placesService.js`
 Handles all Google Places integration + AI enrichment:
@@ -276,7 +319,6 @@ Handles all Google Places integration + AI enrichment:
 | `uploadPlacePhoto(photoReference)` | Uploads Google photo → Cloudinary |
 | `analyzeWithGemini(name, category, reviews)` | Gemini analysis of reviews → sensory scores + seed reviews |
 | `discoverAndCachePlace(googlePlace)` | Full enrichment pipeline (create location + photo + AI reviews) |
-| `getSystemUser()` | Internal bot user for seeding reviews |
 
 ### `cloudinary.js`
 Initializes Cloudinary SDK with API credentials.
@@ -317,6 +359,8 @@ getAIInsights(id)        analyzeReview(text)
 getSavedPlaces()         savePlace(id)        removeSavedPlace(id)
 uploadImage(formData)
 checkIn(locationId)
+getRecentCheckIns()
+deleteAccount()
 ```
 
 ---
@@ -324,28 +368,30 @@ checkIn(locationId)
 ## Frontend Components
 
 ### `LaunchScreen.jsx`
-Landing page. Hero text, category cards, search bar, auth buttons, theme switcher.
+Landing page. Hero text, category cards, search bar, auth buttons, theme switcher, legal footer.
+- Category cards and popular tags use valid MapView filter keys (`quiet-now`, `soft-lighting`, `low-crowds`, `outdoor`, `before-noon`)
 
 ### `NonLoginMapView.jsx`
 Full public map experience (no login required).
 - Fetches heatmap + rankings on mount
 - Sidebar: quick filters, top ranked places, search
-- Location detail panel: snapshot stats, sign-in prompt for reviews
+- Location detail panel: snapshot stats, sign-in prompt for write actions
 
 ### `LoggedInMapView.jsx`
 Authenticated map with all features.
 - Nav tabs: Explore, Dashboard, Saved Places, Sensory Profile, Settings
 - Fetches: match scores, AI insights, saved places, user profile
-- Check-in flow: 1-hour cooldown → button shows "Checked in" for 3s then resets
+- Check-in flow: 1-hour cooldown → quick rating prompt after check-in
+- AI-generated data labeled with purple "AI" / "Gemini AI" badges throughout
 
 ### `MapView.jsx`
-Pure Mapbox GL + Deck.gl map component.
-- `ScatterplotLayer` — location pins (green → yellow → red by comfort score)
-- `HeatmapLayer` — sensory overlay
-- Props: `onLocationSelect`, `filter`, `searchResultsGeoJSON`, `heatmapEnabled`, `heatmapData`, `flyToLocation`
+Pure Mapbox GL map component using native `react-map-gl` layers.
+- `circle` layer — location pins, color-interpolated by comfort score (red → yellow → green)
+- `heatmap` layer — sensory overlay (toggleable)
+- `mapRef.flyTo()` — imperative navigation for user geolocation and location selection
+- Props: `onLocationSelect`, `filter`, `searchResultsGeoJSON`, `heatmapEnabled`, `heatmapData`, `flyToLocation`, `userCoords`, `mapStyle`
 
-### `LocationDetail.jsx`
-Location modal. Shows comfort score, sensory labels, AI insights, community reviews, noise-through-day chart.
+> **Note:** deck.gl has been removed. All map layers use native Mapbox GL via react-map-gl `Source` + `Layer` to fix coordinate drift at low zoom with pitch.
 
 ### `SubmitReview.jsx`
 Review form:
@@ -364,11 +410,14 @@ Welcome view with: env stats, best nearby match, profile preview, saved places l
 ### `SavedPlaces.jsx`
 Grid of bookmarked locations. Sort by: match score, distance, noise, crowd, name.
 
-### `Rankings.jsx`
-Sortable rankings modal. Sort by: comfort score, quietest, least crowded.
-
 ### `Settings.jsx`
-Account info, notification toggles, accessibility options, theme switcher.
+Account info, accessibility options (font size, high contrast, reduced motion), theme switcher, legal links, account deletion.
+
+### `LegalModal.jsx`
+Bottom-sheet modal (mobile) / centered modal (desktop) containing Privacy Policy and Terms of Use. Linked from LaunchScreen footer and Settings.
+
+### `ErrorBoundary.jsx`
+React class component — catches render errors and shows a graceful fallback with a refresh button.
 
 ---
 
@@ -380,7 +429,7 @@ User searches
   → GET /discover?q=&lat=&lng=
   → DB search + Google Places (parallel, 12s timeout)
   → New Google results quick-cached as Location
-  → Background: photo → Cloudinary, reviews → Gemini → seed reviews
+  → Background: photo → Cloudinary, reviews → Gemini → seed reviews (SenseMap Bot)
   → Returns combined GeoJSON
 ```
 
@@ -389,7 +438,7 @@ User searches
 User fills form
   → (Optional) AI auto-fill: POST /ai/analyze → Gemini → scores fill sliders
   → Photo: POST /upload → Cloudinary → imageUrl
-  → POST /reviews
+  → POST /reviews (validated: rating 1-10, body ≤ 2000 chars)
   → recalculateScores() re-aggregates SensoryScore
 ```
 
@@ -398,8 +447,7 @@ User fills form
 User taps "I'm here"
   → POST /checkins/:locationId
   → Backend: 1-hour cooldown check (429 + minutesLeft if on cooldown)
-  → Success: button changes to "Checked in" for 3 seconds then resets
-  → No GPS verification — any logged-in user can check in to any location
+  → Success: quick low/high rating prompt for noise, lighting, crowds
 ```
 
 ### 4. Personalised Matching
@@ -418,8 +466,14 @@ Frontend: POST /ai/insights/:locationId
   → Filters out blank bodyText
   → Gemini 2.5-flash analyzes text
   → Returns: noise summary, lighting summary, best time, tags, confidence %
-  → Frontend displays in LocationDetail modal
+  → Frontend displays with "Gemini AI" badge
 ```
+
+---
+
+## Heatmap Data
+
+`GET /locations/heatmap` returns the top 500 locations by review count, filtering out locations with default seeded scores (2.8 or 3.8) to surface only locations with meaningful community or Gemini-analyzed data. Scores are clamped to 1–5 for the map layer.
 
 ---
 
@@ -456,6 +510,7 @@ Applied via `data-theme` attribute on `<html>` + CSS variables.
 - **Graceful degradation** — fallback data if APIs timeout
 - **Debounced saves** — sliders auto-save after 600ms, no save button needed
 - **Optional auth** — public routes work without login; protected features prompt sign-in
+- **AI transparency** — all AI-generated content labeled with purple "Gemini AI" badges
 
 ---
 
@@ -474,6 +529,6 @@ node debug_places.js   # Debug Google Places enrichment
 ## Known Issues / TODOs
 
 - Match score formula assumes same scale for location scores (1–10) and user tolerances (1–5) — needs normalisation
-- New users get 404 on `/profiles/me` — should auto-create default profile
 - AI insights show 0% confidence if all reviews have empty `bodyText`
 - Rankings endpoint may return empty if no `SensoryScore` records exist yet
+- Currently Toronto-only — city expansion planned post-beta
