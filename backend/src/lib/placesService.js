@@ -1,6 +1,7 @@
 import prisma from "./prisma.js";
 import cloudinary from "./cloudinary.js";
 import { model } from "./gemini.js";
+import { getSystemUser } from "./systemBot.js";
 
 const CATEGORY_MAP = {
     library: "library",
@@ -111,17 +112,6 @@ Analyze the sensory environment and return ONLY a valid JSON object with this ex
     return JSON.parse(cleaned);
 }
 
-async function getSystemUser() {
-    return prisma.user.upsert({
-        where: { auth0Id: "system|sensorysafe-bot" },
-        update: {},
-        create: {
-            auth0Id: "system|sensorysafe-bot",
-            email: "bot@sensorysafe.com",
-            username: "SensorySafe Bot",
-        },
-    });
-}
 
 export async function discoverAndCachePlace(googlePlace) {
     const gpid = googlePlace.place_id;
