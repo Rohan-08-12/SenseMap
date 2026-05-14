@@ -1,11 +1,9 @@
-import { useState, useMemo, useCallback } from 'react';
-import Map, { useControl } from 'react-map-gl/mapbox';
-import { MapboxOverlay } from '@deck.gl/mapbox';
-import { ScatterplotLayer } from '@deck.gl/layers';
-import { HeatmapLayer } from '@deck.gl/aggregation-layers';
+import { useMemo, useCallback, useRef, useEffect } from 'react';
+import Map, { Source, Layer } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
+const DEFAULT_MAP_STYLE = 'mapbox://styles/mapbox/light-v11';
 
 const INITIAL_VIEW_STATE = {
     longitude: -79.3832,
@@ -15,22 +13,30 @@ const INITIAL_VIEW_STATE = {
     bearing: -10,
 };
 
-function getComfortColor(score) {
-    const s = Math.max(0, Math.min(5, score || 2.5));
-    const t = s / 5;
-    const r = Math.round(220 * (1 - t) + 34 * t);
-    const g = Math.round(60 * (1 - t) + 197 * t);
-    const b = Math.round(80 * (1 - t) + 94 * t);
-    return [r, g, b, 220];
-}
+export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON, heatmapEnabled, heatmapData, flyToLocation, userCoords, mapStyle }) {
+    const mapRef = useRef(null);
+    const hasFlownToUser = useRef(false);
 
-function DeckGLOverlay(props) {
-    const overlay = useControl(() => new MapboxOverlay(props));
-    overlay.setProps(props);
-    return null;
-}
+    // Fly to user's location once on first load
+    useEffect(() => {
+        if (!userCoords || !mapRef.current || hasFlownToUser.current) return;
+        hasFlownToUser.current = true;
+        mapRef.current.flyTo({
+            center: [userCoords.lng, userCoords.lat],
+            zoom: 13,
+            duration: 1200,
+        });
+    }, [userCoords]);
 
-export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON, heatmapEnabled, heatmapData, flyToLocation }) {
+    // Fly to a selected location
+    useEffect(() => {
+        if (!flyToLocation || !mapRef.current) return;
+        mapRef.current.flyTo({
+            center: [flyToLocation.longitude, flyToLocation.latitude],
+            zoom: flyToLocation.zoom || 16,
+            duration: 1000,
+        });
+    }, [flyToLocation]);
     const normalizedHeatmap = useMemo(() => {
         if (!heatmapData?.length) return [];
         return heatmapData.map((d) => ({
@@ -50,7 +56,12 @@ export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON
         if (searchResultsGeoJSON && searchResultsGeoJSON.features) {
             return searchResultsGeoJSON.features.map(f => ({
                 position: f.geometry.coordinates,
-                ...f.properties
+                ...f.properties,
+                noise_score: f.properties.noiseScore ?? null,
+                lighting_score: f.properties.lightingScore ?? null,
+                crowd_score: f.properties.crowdScore ?? null,
+                comfort_score: f.properties.comfortScore ?? null,
+                review_count: f.properties.reviewCount ?? 0,
             }));
         }
         return normalizedHeatmap;
@@ -62,64 +73,128 @@ export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON
             const f = filter.toLowerCase();
             data = data.filter((d) => {
                 const cat = (d.category || '').toLowerCase();
-                if (f === 'quiet-now') return d.noise_score < 2;
-                if (f === 'before-noon') return d.noise_score < 2.5;
-                if (f === 'low-crowds') return d.crowd_score < 2;
+                if (f === 'quiet-now') return (d.noise_score ?? 5) < 2;
+                if (f === 'before-noon') return (d.noise_score ?? 5) < 2.5;
+                if (f === 'low-crowds') return (d.crowd_score ?? 5) < 2;
+                if (f === 'soft-lighting') return (d.lighting_score ?? 5) < 2.5;
+                if (f === 'outdoor') return /park|garden|outdoor|field|trail|beach|nature|forest|plaza|square/i.test(cat);
                 return true;
             });
         }
         return data;
     }, [baseData, filter]);
 
-    const layers = [
-        heatmapEnabled && new HeatmapLayer({
-            id: 'comfort-heatmap',
-            data: filteredData,
-            getPosition: d => d.position,
-            getWeight: d => Math.pow((d.comfort_score || 2.5), 2),
-            intensity: 8,
-            radiusPixels: 120,
-            threshold: 0.02,
-            colorRange: [
-                [255, 230, 230],
-                [255, 204, 153],
-                [255, 240, 153],
-                [204, 255, 204],
-                [153, 255, 153],
-                [102, 255, 178],
-            ]
-        }),
-        new ScatterplotLayer({
-            id: 'location-pins',
-            data: filteredData,
-            getPosition: d => d.position,
-            getFillColor: d => getComfortColor(d.comfort_score),
-            getRadius: 60,
-            radiusMinPixels: 8,
-            radiusMaxPixels: 22,
-            stroked: true,
-            getLineColor: [255, 255, 255, 255],
-            lineWidthMinPixels: 2,
-            pickable: true,
-            onClick: info => info.object && onLocationSelect?.(info.object)
-        })
-    ].filter(Boolean);
+    // Single GeoJSON source for both heatmap and pins
+    const geojson = useMemo(() => ({
+        type: 'FeatureCollection',
+        features: filteredData.map(d => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: d.position },
+            properties: {
+                id: d.id,
+                name: d.name,
+                category: d.category,
+                comfort_score: Math.min(5, Math.max(1, d.comfort_score || 2.5)),
+                noise_score: d.noise_score,
+                lighting_score: d.lighting_score,
+                crowd_score: d.crowd_score,
+                review_count: d.review_count,
+            },
+        })),
+    }), [filteredData]);
 
-    const initialViewState = flyToLocation
-        ? { ...INITIAL_VIEW_STATE, longitude: flyToLocation.longitude, latitude: flyToLocation.latitude, zoom: flyToLocation.zoom || 16 }
-        : INITIAL_VIEW_STATE;
+    const handleClick = useCallback((e) => {
+        const features = e.features;
+        if (!features?.length) return;
+        const f = features[0];
+        onLocationSelect?.({
+            id: f.properties.id,
+            name: f.properties.name,
+            category: f.properties.category,
+            comfort_score: f.properties.comfort_score,
+            noise_score: f.properties.noise_score,
+            lighting_score: f.properties.lighting_score,
+            crowd_score: f.properties.crowd_score,
+            review_count: f.properties.review_count,
+            longitude: f.geometry.coordinates[0],
+            latitude: f.geometry.coordinates[1],
+        });
+    }, [onLocationSelect]);
 
     return (
         <Map
-            initialViewState={initialViewState}
-            mapStyle="mapbox://styles/mapbox/light-v11"
+            ref={mapRef}
+            initialViewState={INITIAL_VIEW_STATE}
+            mapStyle={mapStyle || DEFAULT_MAP_STYLE}
             mapboxAccessToken={MAPBOX_TOKEN}
             style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+            interactiveLayerIds={['location-pins']}
+            onClick={handleClick}
+            cursor="auto"
         >
-            <DeckGLOverlay
-                layers={layers}
-                getTooltip={({ object }) => object && object.name}
-            />
+            <Source id="locations-source" type="geojson" data={geojson}>
+                {/* Heatmap layer — below pins */}
+                {heatmapEnabled && (
+                    <Layer
+                        id="comfort-heatmap"
+                        type="heatmap"
+                        paint={{
+                            'heatmap-weight': [
+                                'interpolate', ['linear'], ['get', 'comfort_score'],
+                                1, 0.1,
+                                3, 0.5,
+                                5, 1.0,
+                            ],
+                            'heatmap-intensity': [
+                                'interpolate', ['linear'], ['zoom'],
+                                10, 1,
+                                15, 2,
+                            ],
+                            'heatmap-radius': [
+                                'interpolate', ['linear'], ['zoom'],
+                                10, 20,
+                                13, 40,
+                                15, 60,
+                            ],
+                            'heatmap-opacity': 0.7,
+                            'heatmap-color': [
+                                'interpolate', ['linear'], ['heatmap-density'],
+                                0,   'rgba(255,230,230,0)',
+                                0.2, 'rgba(255,204,153,0.6)',
+                                0.4, 'rgba(255,240,153,0.7)',
+                                0.6, 'rgba(153,255,153,0.8)',
+                                0.8, 'rgba(102,255,178,0.9)',
+                                1.0, 'rgba(34,197,94,1)',
+                            ],
+                        }}
+                    />
+                )}
+
+                {/* Circle pins — above heatmap, fully locked to map coordinates */}
+                <Layer
+                    id="location-pins"
+                    type="circle"
+                    paint={{
+                        'circle-radius': [
+                            'interpolate', ['linear'], ['zoom'],
+                            10, 4,
+                            13, 7,
+                            16, 11,
+                        ],
+                        'circle-color': [
+                            'interpolate', ['linear'], ['get', 'comfort_score'],
+                            1, '#dc3c50',
+                            2, '#f59e0b',
+                            3, '#facc15',
+                            4, '#4ade80',
+                            5, '#22c55e',
+                        ],
+                        'circle-stroke-width': 2,
+                        'circle-stroke-color': '#ffffff',
+                        'circle-opacity': 0.92,
+                    }}
+                />
+            </Source>
         </Map>
     );
 }
