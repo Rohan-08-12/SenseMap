@@ -47,6 +47,8 @@ model Location {
   reviews        Review[]
   checkIns       CheckIn[]
   sensoryScores  SensoryScore?
+
+  @@index([category])
 }
 
 model Review {
@@ -73,6 +75,9 @@ model Review {
 
   user            User      @relation(fields: [userId], references: [id])
   location        Location  @relation(fields: [locationId], references: [id])
+
+  @@index([locationId])
+  @@index([userId])
 }
 
 model SensoryScore {
