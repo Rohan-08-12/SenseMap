@@ -107,16 +107,19 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
             include: { sensoryScores: true }
         });
 
+        const safeScore = (score) => score != null ? score : 3;
+
         const matches = locations
             .filter(loc => loc.sensoryScores)
             .map(loc => {
                 const s = loc.sensoryScores;
 
-                // calculate match: how close is location score to user tolerance (both 1-5)
-                const noiseMatch = 100 - Math.abs(s.noiseScore - noiseTolerance) * 20;
-                const lightingMatch = 100 - Math.abs(s.lightingScore - lightingTolerance) * 20;
-                const crowdMatch = 100 - Math.abs(s.crowdScore - crowdTolerance) * 20;
-                const matchScore = Math.round((noiseMatch + lightingMatch + crowdMatch) / 3);
+                // Both location scores (stored /2) and user tolerances are on 1-5 scale.
+                // Clamp to [0,100] to guard against out-of-range DB values.
+                const noiseMatch   = Math.max(0, 100 - Math.abs(safeScore(s.noiseScore)   - noiseTolerance)   * 25);
+                const lightingMatch = Math.max(0, 100 - Math.abs(safeScore(s.lightingScore) - lightingTolerance) * 25);
+                const crowdMatch    = Math.max(0, 100 - Math.abs(safeScore(s.crowdScore)    - crowdTolerance)   * 25);
+                const matchScore   = Math.min(100, Math.max(0, Math.round((noiseMatch + lightingMatch + crowdMatch) / 3)));
 
                 return {
                     locationId: loc.id,

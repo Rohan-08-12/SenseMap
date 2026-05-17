@@ -528,7 +528,4 @@ node debug_places.js   # Debug Google Places enrichment
 
 ## Known Issues / TODOs
 
-- Match score formula assumes same scale for location scores (1–10) and user tolerances (1–5) — needs normalisation
-- AI insights show 0% confidence if all reviews have empty `bodyText`
-- Rankings endpoint may return empty if no `SensoryScore` records exist yet
 - Currently Toronto-only — city expansion planned post-beta
