@@ -244,28 +244,29 @@ async function seed() {
       });
     }
 
-    // Compute and upsert sensory scores from reviews
+    // Compute and upsert sensory scores from reviews.
+    // Review sliders are 1-10; divide by 2 to match the 1-5 scale used everywhere else.
     const avg = (field) => loc.reviews.reduce((a, b) => a + b[field], 0) / loc.reviews.length;
     await prisma.sensoryScore.upsert({
       where: { locationId: location.id },
       update: {
-        noiseScore: avg("noiseLevel"),
-        lightingScore: avg("lightingLevel"),
-        crowdScore: avg("crowdLevel"),
-        comfortScore: avg("rating"),
+        noiseScore: avg("noiseLevel") / 2,
+        lightingScore: avg("lightingLevel") / 2,
+        crowdScore: avg("crowdLevel") / 2,
+        comfortScore: avg("rating") / 2,
         reviewCount: loc.reviews.length,
       },
       create: {
         locationId: location.id,
-        noiseScore: avg("noiseLevel"),
-        lightingScore: avg("lightingLevel"),
-        crowdScore: avg("crowdLevel"),
-        comfortScore: avg("rating"),
+        noiseScore: avg("noiseLevel") / 2,
+        lightingScore: avg("lightingLevel") / 2,
+        crowdScore: avg("crowdLevel") / 2,
+        comfortScore: avg("rating") / 2,
         reviewCount: loc.reviews.length,
       },
     });
 
-    console.log(`  ✓ ${loc.name} — ${loc.reviews.length} reviews, comfort: ${avg("rating").toFixed(1)}`);
+    console.log(`  ✓ ${loc.name} — ${loc.reviews.length} reviews, comfort: ${(avg("rating") / 2).toFixed(1)}`);
   }
 
   // 3. Seed locations WITHOUT reviews
