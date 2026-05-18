@@ -21,58 +21,56 @@ const BASE_URL = `http://localhost:${process.env.PORT || 3000}`;
 const LAT = 43.6532;
 const LNG = -79.3832;
 
-// Search queries — mix of categories and neighbourhoods to get broad coverage
+// Search queries — plain place-type searches Google Places understands
 const QUERIES = [
   // Libraries
-  "quiet library Toronto",
+  "public library Toronto",
   "public library Scarborough",
-  "library North York",
-  "library Etobicoke",
+  "public library North York",
+  "public library Etobicoke",
+  "public library Mississauga",
 
-  // Cafes
-  "calm cafe Toronto downtown",
-  "quiet coffee shop Kensington Market",
-  "peaceful cafe Annex Toronto",
-  "cozy cafe Leslieville",
-  "quiet cafe Yorkville",
-  "calm coffee shop Liberty Village",
+  // Cafes by neighbourhood
+  "cafe Toronto downtown",
+  "coffee shop Kensington Market Toronto",
+  "cafe Annex Toronto",
+  "cafe Leslieville Toronto",
+  "cafe Yorkville Toronto",
+  "coffee shop Liberty Village Toronto",
+  "cafe Bloor West Village Toronto",
+  "cafe The Junction Toronto",
 
   // Parks & nature
-  "peaceful park Toronto",
+  "park Toronto",
   "nature trail Toronto",
   "botanical garden Toronto",
-  "quiet waterfront park Toronto",
-  "ravine trail Toronto",
+  "ravine park Toronto",
+  "waterfront park Toronto",
+  "conservation area Toronto",
 
   // Museums & galleries
   "art gallery Toronto",
-  "museum Toronto quiet",
+  "museum Toronto",
   "science centre Toronto",
-  "history museum Toronto",
+  "aquarium Toronto",
 
-  // Community spaces
+  // Community & wellness
   "community centre Toronto",
   "recreation centre North York",
-  "wellness centre Toronto",
   "yoga studio Toronto",
+  "meditation centre Toronto",
 
   // Bookstores
   "bookstore Toronto",
-  "independent bookshop Toronto",
+  "book shop Toronto",
 
-  // Food & drink (sensory-friendly)
-  "quiet restaurant Toronto",
-  "calm brunch Toronto",
+  // Restaurants & tea
   "tea house Toronto",
-  "bakery cafe Toronto",
-
-  // Neighbourhoods
-  "quiet cafe Bloor West Village",
-  "calm restaurant Beaches Toronto",
-  "peaceful spot Rosedale Toronto",
-  "quiet place Midtown Toronto",
-  "calm cafe Junction Toronto",
-  "peaceful East York Toronto",
+  "bakery Toronto",
+  "brunch restaurant Toronto",
+  "restaurant Beaches Toronto",
+  "restaurant Rosedale Toronto",
+  "restaurant Midtown Toronto",
 ];
 
 // ─── helpers ─────────────────────────────────────────────────
