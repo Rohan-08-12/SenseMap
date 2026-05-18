@@ -291,7 +291,11 @@ Initializes `@google/generative-ai` with `gemini-2.5-flash`. Exports `model` and
 
 ### `scores.js` — `recalculateScores(locationId)`
 - Fetches all reviews for a location
-- Averages noise, lighting, crowd, and rating
+- Computes **time-decay weighted averages** for noise, lighting, crowd, and rating
+- Decay formula: `weight = e^(-λ * ageDays)` where λ = `ln(2) / 180` (half-life of 180 days)
+- A review from 6 months ago counts at 50%, 12 months = 25%, 2 years = 6.25%
+- Old reviews never fully disappear — fresh visits progressively dominate
+- Divides slider values (1-10) by 2 before storing (1-5 scale)
 - Upserts the `SensoryScore` record
 - **Must be called after every review create/update**
 

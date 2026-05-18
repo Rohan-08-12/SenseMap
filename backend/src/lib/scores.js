@@ -1,30 +1,51 @@
 import prisma from "./prisma.js";
 
+// Review weight halves every 180 days — a visit from 6 months ago counts
+// at 50%, 12 months = 25%, etc. Old reviews never fully disappear but
+// fresh community data progressively dominates.
+const HALF_LIFE_DAYS = 180;
+const DECAY_LAMBDA = Math.LN2 / HALF_LIFE_DAYS;
+
+function reviewWeight(review) {
+    const visitedAt = review.visitedAt || review.createdAt;
+    const ageDays = (Date.now() - new Date(visitedAt).getTime()) / 86_400_000;
+    return Math.exp(-DECAY_LAMBDA * ageDays);
+}
+
+function weightedAvg(reviews, field) {
+    const pairs = reviews
+        .map(r => ({ value: r[field], weight: reviewWeight(r) }))
+        .filter(p => p.value != null);
+    if (pairs.length === 0) return null;
+    const totalWeight = pairs.reduce((sum, p) => sum + p.weight, 0);
+    return pairs.reduce((sum, p) => sum + p.value * p.weight, 0) / totalWeight;
+}
+
 /**
- * Recalculates the aggregated sensory scores for a specific location.
- * Called after every new review. Raw slider values are 1-10; dividing by 2
- * normalises them to the 1-5 scale used everywhere else (AI insights, match
- * calculation, display labels).
+ * Recalculates aggregated sensory scores for a location.
+ * Called after every new review. Uses exponential time-decay weighting
+ * (half-life 180 days) so recent visits progressively override older data.
+ * Raw slider values are 1-10; divided by 2 to store on the 1-5 scale.
  */
 export const recalculateScores = async (locationId) => {
     const reviews = await prisma.review.findMany({
-        where: { locationId }
+        where: { locationId },
+        select: {
+            noiseLevel: true,
+            lightingLevel: true,
+            crowdLevel: true,
+            rating: true,
+            visitedAt: true,
+            createdAt: true,
+        },
     });
 
     if (reviews.length === 0) return;
 
-    const avg = (field) => {
-        const values = reviews.map(r => r[field]).filter(v => v !== null);
-        if (values.length === 0) return null;
-        return values.reduce((a, b) => a + b, 0) / values.length;
-    };
-
-    // Slider values are 1-10; divide by 2 to store on the 1-5 scale
-    const noiseScore    = avg("noiseLevel")    != null ? avg("noiseLevel")    / 2 : null;
-    const lightingScore = avg("lightingLevel") != null ? avg("lightingLevel") / 2 : null;
-    const crowdScore    = avg("crowdLevel")    != null ? avg("crowdLevel")    / 2 : null;
-    // Rating slider is also 1-10 (overall comfort); normalise to 1-5
-    const comfortScore  = avg("rating")        != null ? avg("rating")        / 2 : null;
+    const noiseScore    = weightedAvg(reviews, "noiseLevel")    != null ? weightedAvg(reviews, "noiseLevel")    / 2 : null;
+    const lightingScore = weightedAvg(reviews, "lightingLevel") != null ? weightedAvg(reviews, "lightingLevel") / 2 : null;
+    const crowdScore    = weightedAvg(reviews, "crowdLevel")    != null ? weightedAvg(reviews, "crowdLevel")    / 2 : null;
+    const comfortScore  = weightedAvg(reviews, "rating")        != null ? weightedAvg(reviews, "rating")        / 2 : null;
 
     await prisma.sensoryScore.upsert({
         where: { locationId },
