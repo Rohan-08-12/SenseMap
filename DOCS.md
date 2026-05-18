@@ -1,6 +1,6 @@
 # SenseMap — Platform Documentation
 
-> Last updated: May 14, 2026
+> Last updated: May 18, 2026
 
 ---
 
@@ -217,7 +217,7 @@ Request
 | GET | `/locations/heatmap` | No | Top 500 scored locations (filters default scores) |
 | GET | `/locations/match` | Required | Personalized matches sorted by match score |
 | GET | `/locations/search?q=` | No | Search by name/category/address |
-| GET | `/locations/:id` | No | Single location + last 10 reviews |
+| GET | `/locations/:id` | No | Single location + last 10 reviews (includes `user.username` and `user.email` for each review) |
 
 ### Reviews (`/reviews`)
 
@@ -383,6 +383,12 @@ Authenticated map with all features.
 - Fetches: match scores, AI insights, saved places, user profile
 - Check-in flow: 1-hour cooldown → quick rating prompt after check-in
 - AI-generated data labeled with purple "AI" / "Gemini AI" badges throughout
+- **Data source label** on sensory scores — shows one of four states:
+  - Green: community reviews only (real visitor data)
+  - Purple: AI-estimated only (Gemini-seeded, no community visits yet)
+  - Grey: mixed community + AI-seeded
+  - Yellow: no reviews yet (default estimates)
+- **Review list** — last 5 reviews with author, date, noise/lighting/crowd sliders, body text; SenseMap Bot reviews labeled with purple AI badge
 
 ### `MapView.jsx`
 Pure Mapbox GL map component using native `react-map-gl` layers.
@@ -454,8 +460,9 @@ User taps "I'm here"
 ```
 User sets sensory profile (noise/lighting/crowd tolerance 1–5)
   → GET /locations/match
-  → Backend compares location scores vs user tolerances
-  → Match % = 100 - |score - tolerance| * 20
+  → Backend compares location scores vs user tolerances (both 1–5 scale)
+  → Null scores default to 3 (neutral) via safeScore()
+  → Match % = max(0, 100 - |score - tolerance| * 25), clamped to [0, 100]
   → Returns sorted by match score
 ```
 
@@ -479,11 +486,13 @@ Frontend: POST /ai/insights/:locationId
 
 ## Sensory Score Scale
 
+All scores stored and displayed on a **1–5 scale** (review sliders are 1–10 and divided by 2 before storage in `recalculateScores()`).
+
 | Score | Meaning |
 |---|---|
-| 1–3 | Low stimulation (quiet, dim, empty) |
-| 4–6 | Moderate |
-| 7–10 | High stimulation (loud, bright, busy) |
+| 1.0–2.0 | Low stimulation (quiet, dim, empty) |
+| 2.5–3.5 | Moderate |
+| 4.0–5.0 | High stimulation (loud, bright, busy) |
 
 **Lower score = more sensory-friendly.**
 
@@ -510,9 +519,20 @@ Applied via `data-theme` attribute on `<html>` + CSS variables.
 - **Graceful degradation** — fallback data if APIs timeout
 - **Debounced saves** — sliders auto-save after 600ms, no save button needed
 - **Optional auth** — public routes work without login; protected features prompt sign-in
-- **AI transparency** — all AI-generated content labeled with purple "Gemini AI" badges
+- **AI transparency** — all AI-generated content labeled with purple "Gemini AI" badges; individual reviews show author + AI badge for SenseMap Bot; sensory score source labeled per location (community / AI-estimated / mixed)
 
 ---
+
+## Seeding Scripts (run from `backend/`)
+
+```bash
+node seed_demo.js      # 15 handpicked Toronto locations with human-written reviews
+node seed_bulk.js      # Bulk seed via /discover → Google Places + Gemini pipeline (requires backend running)
+npm run osm-import     # ~3800 Toronto locations from OpenStreetMap (default scores only)
+```
+
+`seed_demo.js` and `seed_bulk.js` require a valid `GOOGLE_PLACES_KEY` with the Places API enabled.
+`seed_bulk.js` fires 35 plain place-type queries (e.g. "cafe Annex Toronto") — descriptive words like "quiet" or "calm" are not supported by Google Places and return 0 results.
 
 ## Debug / Test Scripts (run from `backend/`)
 
