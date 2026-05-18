@@ -29,8 +29,17 @@ From the `AutisticAI/` root:
 ```bash
 npm run dev:servers    # Start frontend + backend together
 npm run dev:all        # OSM import first, then both servers
-npm run osm-import     # Seed DB from OpenStreetMap (Toronto)
+npm run osm-import     # Seed DB from OpenStreetMap (~3800 Toronto locations, default scores)
 ```
+
+Seed the database (run from `AutisticAI/backend/`):
+
+```bash
+node seed_demo.js      # 15 handpicked Toronto locations with human-written reviews
+node seed_bulk.js      # Bulk seed via Google Places + Gemini (requires servers running)
+```
+
+Run all three seeders for the fullest map. `seed_demo.js` and `seed_bulk.js` require a valid `GOOGLE_PLACES_KEY` with Places API enabled.
 
 Frontend only:
 ```bash
