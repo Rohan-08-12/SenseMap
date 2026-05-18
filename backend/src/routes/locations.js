@@ -236,6 +236,9 @@ router.get("/:id", async (req, res) => {
                 reviews: {
                     orderBy: { createdAt: "desc" },
                     take: 10,
+                    include: {
+                        user: { select: { username: true, email: true } }
+                    }
                 }
             }
         });

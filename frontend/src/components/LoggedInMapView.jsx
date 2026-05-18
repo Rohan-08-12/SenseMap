@@ -1050,12 +1050,38 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </div>
               )}
 
-              {reviewCount === 0 ? (
-                <div style={{ padding: '12px 0', color: 'var(--theme-text-muted)', fontSize: 13, border: '1px solid var(--theme-border)', borderRadius: 8, marginTop: 8, background: 'var(--theme-tag-soft)' }}>
-                  <strong style={{ display: 'block', marginBottom: 4, color: 'var(--theme-text)' }}>No visits yet — be the first to check in</strong>
-                  Default category estimates shown below — not real community data.
-                </div>
-              ) : null}
+              {(() => {
+                const reviews = locationDetail?.reviews ?? [];
+                const botReviews = reviews.filter(r => r.user?.email === 'bot@sensemap.app');
+                const communityReviews = reviews.filter(r => r.user?.email !== 'bot@sensemap.app');
+                const allBot = reviews.length > 0 && communityReviews.length === 0;
+                const mixed = communityReviews.length > 0 && botReviews.length > 0;
+
+                if (reviewCount === 0) return (
+                  <div style={{ padding: '12px', color: 'var(--theme-text-muted)', fontSize: 13, border: '1px solid var(--theme-border)', borderRadius: 8, marginTop: 8, background: 'var(--theme-tag-soft)' }}>
+                    <strong style={{ display: 'block', marginBottom: 4, color: 'var(--theme-text)' }}>No visits yet — be the first to check in</strong>
+                    Default category estimates shown below — not real community data.
+                  </div>
+                );
+                if (allBot) return (
+                  <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#ede9fe', color: '#5b21b6', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 10, background: '#5b21b6', color: '#fff', borderRadius: 4, padding: '1px 5px' }}>AI</span>
+                    Scores estimated from Google reviews via Gemini — no community visits yet.
+                  </div>
+                );
+                if (mixed) return (
+                  <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: 'var(--theme-tag-soft)', color: 'var(--theme-text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.2"/><path d="M6.5 4v3l1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                    {communityReviews.length} community {communityReviews.length === 1 ? 'review' : 'reviews'} · AI-seeded data also included
+                  </div>
+                );
+                return (
+                  <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#d6f5e1', color: '#05360d', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 6.5l2.5 2.5 4.5-4.5" stroke="#05360d" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    {communityReviews.length} community {communityReviews.length === 1 ? 'review' : 'reviews'} — real visitor data
+                  </div>
+                );
+              })()}
 
               <div className="lmv-stat-boxes" style={{ opacity: reviewCount === 0 ? 0.4 : 1 }}>
                 <div className="lmv-stat-box">
@@ -1231,6 +1257,39 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>Select a location to see AI insights.</p>
               )}
             </div>
+
+            {/* Recent Reviews */}
+            {locationDetail?.reviews?.length > 0 && (
+              <div className="lmv-detail-card">
+                <h3 className="lmv-section-title">Recent reviews</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+                  {locationDetail.reviews.slice(0, 5).map((review) => {
+                    const isBot = review.user?.email === 'bot@sensemap.app';
+                    const author = isBot ? 'SenseMap Bot' : (review.user?.username || 'Anonymous');
+                    const date = new Date(review.visitedAt || review.createdAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+                    return (
+                      <div key={review.id} style={{ borderBottom: '1px solid var(--theme-border)', paddingBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--theme-text)' }}>{author}</span>
+                          {isBot && (
+                            <span style={{ fontSize: 10, fontWeight: 700, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 5px' }}>AI</span>
+                          )}
+                          <span style={{ fontSize: 11, color: 'var(--theme-text-muted)', marginLeft: 'auto' }}>{date}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, background: 'var(--theme-tag-soft)', borderRadius: 4, padding: '2px 6px', color: 'var(--theme-text-muted)' }}>🔇 {review.noiseLevel}/10</span>
+                          <span style={{ fontSize: 11, background: 'var(--theme-tag-soft)', borderRadius: 4, padding: '2px 6px', color: 'var(--theme-text-muted)' }}>💡 {review.lightingLevel}/10</span>
+                          <span style={{ fontSize: 11, background: 'var(--theme-tag-soft)', borderRadius: 4, padding: '2px 6px', color: 'var(--theme-text-muted)' }}>👥 {review.crowdLevel}/10</span>
+                        </div>
+                        {review.bodyText && (
+                          <p style={{ fontSize: 13, color: 'var(--theme-text)', lineHeight: 1.5, margin: 0 }}>{review.bodyText}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Sensory Profile (Radar) */}
             <div className="lmv-detail-card">
