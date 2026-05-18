@@ -106,7 +106,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Historic Victorian industrial district with boutiques and cafes. Car-free cobblestone streets.",
     latitude: 43.6503,
     longitude: -79.3596,
-    noiseScore: 5, lightingScore: 5, crowdScore: 5, comfortScore: 5,
+    noiseScore: 4, lightingScore: 4, crowdScore: 4, comfortScore: 2.5,
   },
   {
     googlePlaceId: "demo_trinity_bellwoods",
@@ -116,7 +116,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Popular west-end park with a mix of open lawns and tree canopy. Busy on weekends, calm on weekday mornings.",
     latitude: 43.6475,
     longitude: -79.4186,
-    noiseScore: 4, lightingScore: 3, crowdScore: 4, comfortScore: 6,
+    noiseScore: 3, lightingScore: 3, crowdScore: 3, comfortScore: 3,
   },
   {
     googlePlaceId: "demo_harbourfront_centre",
@@ -126,7 +126,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Lakefront arts and culture centre with open waterfront walkways. Views of Lake Ontario with fresh air.",
     latitude: 43.6385,
     longitude: -79.3831,
-    noiseScore: 4, lightingScore: 4, crowdScore: 4, comfortScore: 6,
+    noiseScore: 3, lightingScore: 4, crowdScore: 3, comfortScore: 3.5,
   },
   {
     googlePlaceId: "demo_kensington_market",
@@ -136,7 +136,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Eclectic open-air market neighbourhood. Vibrant and colourful. Can be stimulating — best visited early.",
     latitude: 43.6546,
     longitude: -79.4005,
-    noiseScore: 6, lightingScore: 5, crowdScore: 6, comfortScore: 4,
+    noiseScore: 4, lightingScore: 4, crowdScore: 4, comfortScore: 2.5,
   },
   {
     googlePlaceId: "demo_nathan_phillips_square",
@@ -146,7 +146,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Iconic city hall plaza with seasonal skating rink. Open and flat with lots of sky above.",
     latitude: 43.6529,
     longitude: -79.3832,
-    noiseScore: 5, lightingScore: 6, crowdScore: 5, comfortScore: 5,
+    noiseScore: 3.5, lightingScore: 4, crowdScore: 3.5, comfortScore: 3,
   },
   {
     googlePlaceId: "demo_casa_loma",
@@ -156,7 +156,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Gothic Revival castle with gardens and secret tunnels. Structured layout helps with navigation.",
     latitude: 43.6780,
     longitude: -79.4094,
-    noiseScore: 4, lightingScore: 4, crowdScore: 5, comfortScore: 6,
+    noiseScore: 2.5, lightingScore: 3, crowdScore: 3, comfortScore: 3.5,
   },
   {
     googlePlaceId: "demo_st_lawrence_market",
@@ -166,7 +166,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Historic indoor market with vendors and prepared foods. Very busy Saturday mornings — visit weekday afternoons for calm.",
     latitude: 43.6488,
     longitude: -79.3715,
-    noiseScore: 6, lightingScore: 5, crowdScore: 7, comfortScore: 4,
+    noiseScore: 4, lightingScore: 4, crowdScore: 4.5, comfortScore: 2.5,
   },
   {
     googlePlaceId: "demo_ripleys_aquarium",
@@ -176,7 +176,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Large aquarium near CN Tower. Dark, controlled lighting in most areas. Sensory-friendly mornings available.",
     latitude: 43.6424,
     longitude: -79.3862,
-    noiseScore: 4, lightingScore: 3, crowdScore: 5, comfortScore: 6,
+    noiseScore: 2.5, lightingScore: 2, crowdScore: 3, comfortScore: 3.5,
   },
   {
     googlePlaceId: "demo_ago",
@@ -186,7 +186,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "World-class art museum with Frank Gehry architecture. Gallery spaces are quiet with controlled lighting.",
     latitude: 43.6537,
     longitude: -79.3925,
-    noiseScore: 3, lightingScore: 4, crowdScore: 4, comfortScore: 7,
+    noiseScore: 2, lightingScore: 3, crowdScore: 2.5, comfortScore: 4,
   },
   {
     googlePlaceId: "demo_toronto_islands",
@@ -196,7 +196,7 @@ const LOCATIONS_NO_REVIEWS = [
     description: "Car-free island parks across from downtown. Accessible by ferry. Natural soundscape, minimal city noise.",
     latitude: 43.6216,
     longitude: -79.3793,
-    noiseScore: 2, lightingScore: 3, crowdScore: 3, comfortScore: 8,
+    noiseScore: 1.5, lightingScore: 3, crowdScore: 2, comfortScore: 4.5,
   },
 ];
 
