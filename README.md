@@ -11,7 +11,7 @@ Currently in beta, covering **Toronto**.
 ## What it does
 
 - **Interactive map** — color-coded pins and heatmap showing sensory comfort at a glance
-- **Sensory scores** — noise, lighting, crowds, and overall comfort on a 1–5 scale
+- **Sensory scores** — noise, lighting, crowds, and overall comfort on a 1–5 scale; aggregated with exponential time-decay (6-month half-life) so fresh visits progressively outweigh older data
 - **Data transparency** — every location clearly labels whether scores come from community reviews, AI-seeded data, or a mix of both
 - **AI insights** — Gemini 2.5-flash analyzes community reviews and surfaces noise patterns, best visit times, and sensory tags
 - **Personalized matching** — set your own noise/lighting/crowd tolerance and get a % match for every location
