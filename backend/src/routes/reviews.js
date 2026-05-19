@@ -24,7 +24,7 @@ router.get("/:locationId", async (req, res) => {
 router.post("/", requireAuth, syncUser, async (req, res) => {
     try {
         const auth0Id = req.auth.payload.sub;
-        const { locationId, bodyText, rating, noiseLevel, lightingLevel, crowdLevel, imageUrl } = req.body;
+        const { locationId, bodyText, rating, noiseLevel, lightingLevel, crowdLevel, imageUrl, visitTime } = req.body;
 
         if (!locationId || typeof locationId !== "string") {
             return res.status(400).json({ error: "locationId is required" });
@@ -37,6 +37,11 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
         }
         if (bodyText && bodyText.length > 2000) {
             return res.status(400).json({ error: "Review text must be under 2000 characters" });
+        }
+
+        const VALID_VISIT_TIMES = ["morning", "afternoon", "evening", "night"];
+        if (visitTime != null && !VALID_VISIT_TIMES.includes(visitTime)) {
+            return res.status(400).json({ error: "Invalid visitTime — must be morning, afternoon, evening, or night" });
         }
 
         // Only accept Cloudinary-hosted image URLs to prevent SSRF / XSS via imageUrl
@@ -59,6 +64,7 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
                 lightingLevel: Number(lightingLevel),
                 crowdLevel: Number(crowdLevel),
                 imageUrl: imageUrl ?? null,
+                visitTime: visitTime ?? null,
             }
         });
 

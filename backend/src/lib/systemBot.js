@@ -1,7 +1,7 @@
 import prisma from "./prisma.js";
 
 export const SYSTEM_BOT = {
-    auth0Id: "system|sensemap-bot",
+    auth0Id: process.env.SYSTEM_BOT_AUTH0_ID || "system|sensemap-bot",
     email: "bot@sensemap.app",
     username: "SenseMap Bot",
 };
