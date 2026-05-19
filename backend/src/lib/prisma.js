@@ -13,7 +13,9 @@ const pool = new pg.Pool({
   max: 10,
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.DB_SSL_CA
+    ? { ca: process.env.DB_SSL_CA }
+    : { rejectUnauthorized: false },
 });
 
 // Create a Prisma adapter to use the connection pool instead of Prisma's default engine
