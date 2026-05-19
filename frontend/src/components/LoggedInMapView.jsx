@@ -532,7 +532,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   }, [userCoords]);
 
   return (
-    <div className="lmv">
+    <div className={`lmv${selectedLocation ? ' lmv--has-detail' : ''}`}>
       {/* Left Nav */}
       <nav className="lmv-nav">
         <div className="lmv-nav-logo">
@@ -551,6 +551,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               key={item.id}
               className={`lmv-nav-link${activeNav === item.id ? ' active' : ''}`}
               onClick={() => handleNavClick(item)}
+              aria-label={item.label}
             >
               <NavIcon type={item.icon} active={activeNav === item.id} />
               {item.label}
@@ -844,8 +845,20 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
             </form>
           </main>
 
+          {selectedLocation && (
+            <div className="lmv-detail-backdrop" onClick={() => { setSelectedLocation(null); setLocationDetail(null); }} />
+          )}
+
           {/* Right Detail Panel */}
           <aside className="lmv-detail">
+            <button
+              className="lmv-detail-close"
+              onClick={() => { setSelectedLocation(null); setLocationDetail(null); }}
+              aria-label="Close detail panel"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+              Close
+            </button>
             {/* Location Card */}
             <div className="lmv-detail-card">
               <div className="lmv-loc-photo">

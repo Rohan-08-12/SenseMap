@@ -1317,7 +1317,19 @@
   }
 }
 
+/* ── Mobile detail backdrop (hidden on desktop) ── */
+.lmv-detail-backdrop {
+  display: none;
+}
+.lmv-detail-close {
+  display: none;
+}
+
 @media (max-width: 768px) {
+  .lmv {
+    padding: 0;
+    gap: 0;
+  }
   .lmv-nav {
     position: fixed;
     bottom: 0;
@@ -1335,7 +1347,7 @@
     justify-content: space-around;
     overflow: visible;
   }
-  .lmv-nav-logo, .lmv-nav-spacer, .lmv-nav-user {
+  .lmv-nav-logo, .lmv-nav-spacer, .lmv-nav-user, .lmv-theme-switcher {
     display: none;
   }
   .lmv-nav-links {
@@ -1378,5 +1390,84 @@
   }
   .lmv-btn-outline, .lmv-btn-primary {
     flex: 1;
+  }
+
+  /* Mobile bottom sheet for detail panel */
+  .lmv-detail-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 39;
+  }
+  .lmv--has-detail .lmv-detail {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 72vh;
+    border-radius: 20px 20px 0 0;
+    border: 1px solid var(--theme-border);
+    border-bottom: none;
+    overflow-y: auto;
+    z-index: 40;
+    background: var(--theme-bg);
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+    padding: 0 16px 100px;
+    gap: 16px;
+    box-sizing: border-box;
+  }
+  .lmv--has-detail .lmv-detail::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+    margin: 14px auto 0;
+    flex-shrink: 0;
+  }
+  .lmv-detail-close {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-end;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--theme-surface-soft);
+    border: 1px solid var(--theme-border);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--theme-text);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    flex-shrink: 0;
+  }
+
+  /* Inner pages bottom padding for mobile nav */
+  .dash .dash-scroll {
+    padding-bottom: 16px;
+  }
+  .sp-list-scroll,
+  .spd-scroll {
+    padding-bottom: 16px;
+  }
+
+  /* Map legend: smaller chips on mobile */
+  .lmv-map-legend {
+    gap: 6px;
+  }
+  .lmv-legend-chip {
+    font-size: 11px;
+    padding: 5px 8px;
+    gap: 5px;
+  }
+
+  /* Map time-filter buttons: tighter on mobile */
+  .lmv-map-time-filter {
+    font-size: 11px;
+    padding: 6px 10px;
   }
 }

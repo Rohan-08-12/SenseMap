@@ -265,3 +265,11 @@
     padding: 20px 16px;
   }
 }
+
+@media (max-width: 768px) {
+  .spro-page {
+    padding: 12px 12px 100px;
+    width: 100vw;
+    box-sizing: border-box;
+  }
+}

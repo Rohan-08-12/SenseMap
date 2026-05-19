@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { submitReview, analyzeReview } from '../services/api';
 import api from '../services/api';
 
@@ -60,6 +60,13 @@ function SubmitReview({ location, onClose, onSubmitted }) {
     });
     const [submitting, setSubmitting] = useState(false);
     const [aiParsing, setAiParsing] = useState(false);
+
+    const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+    useEffect(() => {
+        const handler = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handler);
+        return () => window.removeEventListener('resize', handler);
+    }, []);
     const [aiResult, setAiResult] = useState(null);
     const [aiFilledFields, setAiFilledFields] = useState(new Set());
     const [error, setError] = useState(null);
@@ -201,25 +208,60 @@ function SubmitReview({ location, onClose, onSubmitted }) {
             });
     };
 
+    const mobileStyle = {
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        width: '100%',
+        height: '88vh',
+        zIndex: 10001,
+        background: 'var(--theme-surface, #ffffff)',
+        color: 'var(--theme-text, #0f1720)',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
+        borderRadius: '20px 20px 0 0',
+        borderTop: '1px solid var(--theme-border, #e5e7eb)',
+    };
+    const desktopStyle = {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        width: 340,
+        height: '100%',
+        zIndex: 10000,
+        background: 'var(--theme-surface, #ffffff)',
+        color: 'var(--theme-text, #0f1720)',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.08)',
+        borderLeft: '1px solid var(--theme-border, #e5e7eb)',
+    };
+
     return (
-        <div style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            width: 340,
-            height: '100%',
-            zIndex: 10000,
-            background: 'var(--theme-surface, #ffffff)',
-            color: 'var(--theme-text, #0f1720)',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '-4px 0 24px rgba(0,0,0,0.08)',
-            borderLeft: '1px solid var(--theme-border, #e5e7eb)',
-        }}>
+        <>
+        {isMobile && (
+            <div
+                onClick={onClose}
+                style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0.35)',
+                    zIndex: 10000,
+                }}
+            />
+        )}
+        <div style={isMobile ? mobileStyle : desktopStyle}>
+
+            {/* Mobile drag handle */}
+            {isMobile && (
+                <div style={{ width: 40, height: 4, background: 'rgba(0,0,0,0.15)', borderRadius: 2, margin: '14px auto 0', flexShrink: 0 }} />
+            )}
 
             {/* Header */}
             <div style={{
-                padding: '18px 20px 14px',
+                padding: isMobile ? '12px 20px 14px' : '18px 20px 14px',
                 borderBottom: '1px solid var(--theme-border, #e5e7eb)',
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -260,7 +302,7 @@ function SubmitReview({ location, onClose, onSubmitted }) {
             </div>
 
             {/* Scrollable body */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', paddingBottom: isMobile ? 80 : 18 }}>
                 {success ? (
                     <div style={{ textAlign: 'center', paddingTop: 48 }}>
                         <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
@@ -614,6 +656,7 @@ function SubmitReview({ location, onClose, onSubmitted }) {
                 )}
             </div>
         </div>
+        </>
     );
 }
 
