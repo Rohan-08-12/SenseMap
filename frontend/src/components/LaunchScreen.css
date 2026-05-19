@@ -688,9 +688,31 @@
   .launch-hero {
     padding: 32px 16px;
   }
+  /* Fix: collapse 3-col header to logo + auth on row 1, theme on row 2 */
   .launch-header {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
     padding: 12px 16px;
-    gap: 8px;
+    gap: 6px 8px;
+  }
+  .launch-logo {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .launch-auth {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    gap: 6px;
+  }
+  .launch-theme-switcher {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    background: none;
+    border: none;
+    padding: 0;
+    gap: 4px;
   }
   .launch-map-preview {
     height: 220px;
@@ -706,11 +728,38 @@
     font-size: 26px;
     line-height: 32px;
   }
+  /* Remove negative margin — causes horizontal scroll */
   .launch-map-card {
-    margin: 0 -8px;
+    margin: 0;
   }
-  .btn-login, .btn-signup {
-    padding: 10px 16px;
+  /* Hide logo subtitle and theme switcher to save space */
+  .launch-logo-text p {
+    display: none;
+  }
+  .launch-theme-switcher {
+    display: none;
+  }
+  .launch-header {
+    grid-template-rows: auto;
+    grid-template-columns: 1fr auto;
+  }
+  .launch-auth .btn-login, .launch-auth .btn-signup {
+    padding: 8px 14px;
     font-size: 13px;
+  }
+  /* Tighter map search bar so it fits in 220px preview */
+  .map-search {
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    padding: 8px;
+    gap: 8px;
+  }
+  .map-search-input {
+    padding: 7px 10px;
+  }
+  .map-search-btn {
+    padding: 9px 14px;
+    font-size: 12px;
   }
 }

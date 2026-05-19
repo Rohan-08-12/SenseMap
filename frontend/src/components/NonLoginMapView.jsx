@@ -289,7 +289,7 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
         />
       </div>
 
-      <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 9999 }}>
+      <div className="nlm-heatmap-toggle" style={{ display: 'flex', flexDirection: 'column', gap: 8, zIndex: 9999 }}>
         <button
           className="nlm-theme-btn nlm-theme-btn--text"
           onClick={() => setHeatmapOn((prev) => !prev)}
@@ -306,6 +306,8 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
       <aside
         className={`nlm-sidebar-left${isNavCollapsed ? ' nlm-sidebar-left--collapsed' : ''}`}
       >
+        {/* Drag handle — visible only in mobile bottom-sheet mode via CSS */}
+        <div className="nlm-sidebar-drag-handle" aria-hidden="true" />
         {/* Fixed header / navigation bar */}
         <div className="nlm-sidebar-left-header">
           <div className="nlm-logo-row">

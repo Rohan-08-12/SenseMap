@@ -1214,6 +1214,18 @@
   outline-offset: 2px;
 }
 
+/* ── Mobile drag handle (hidden on desktop) ── */
+.nlm-sidebar-drag-handle {
+  display: none;
+}
+
+/* ── Heatmap toggle (base — positioned here so media queries can override) ── */
+.nlm-heatmap-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 1200px) {
   .nlm-bottom-search {
@@ -1234,7 +1246,7 @@
     min-width: unset;
   }
   .nlm-heatmap-toggle {
-    width: 340px;
+    right: 16px;
   }
   .nlm-sidebar-left {
     width: 280px;
@@ -1242,6 +1254,7 @@
 }
 
 @media (max-width: 700px) {
+  /* Sidebar becomes a bottom sheet */
   .nlm-sidebar-left {
     position: fixed;
     top: auto;
@@ -1252,15 +1265,43 @@
     max-height: 45vh;
     border-radius: 20px 20px 0 0;
     z-index: 20;
-    gap: 16px;
-    padding: 16px;
+    padding: 0;
+  }
+  /* Show drag handle in bottom-sheet mode */
+  .nlm-sidebar-drag-handle {
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+    margin: 12px auto 0;
+    flex-shrink: 0;
+  }
+  /* Tighten the header inside the bottom sheet */
+  .nlm-sidebar-left .nlm-sidebar-left-header {
+    padding: 10px 16px 10px;
+  }
+  /* Collapse button doesn't make sense in bottom-sheet mode */
+  .nlm-sidebar-left .nlm-nav-collapse-btn {
+    display: none;
   }
   .nlm-hero-card {
     display: none;
   }
+  /* Heatmap toggle: compact on left, so it doesn't collide with close button (center) */
   .nlm-heatmap-toggle {
-    width: calc(100vw - 32px);
-    top: 12px;
+    left: 16px;
+    right: auto;
+    top: 16px;
+  }
+  /* Close map button: move to top-right to avoid overlap with heatmap toggle */
+  .nlm-close-map-btn {
+    left: auto;
+    right: 16px;
+    transform: none;
+    min-width: unset;
+    padding: 8px 14px;
+    font-size: 13px;
   }
   .nlm-bottom-search {
     display: none;
@@ -1280,8 +1321,9 @@
   .nlm-ranked {
     padding: 12px;
   }
-  .nlm-heatmap-toggle {
-    padding: 10px 14px;
-    min-height: 56px;
+  /* Heatmap toggle: icon + text still but tighter */
+  .nlm-heatmap-toggle button {
+    padding: 6px 10px;
+    font-size: 13px;
   }
 }
