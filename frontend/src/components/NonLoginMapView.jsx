@@ -671,6 +671,120 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
         </div>
       </aside>
 
+      {/* ── Mobile location detail bottom sheet (hidden on desktop via CSS) ── */}
+      <AnimatePresence>
+        {selectedLocation && (
+          <>
+            <motion.div
+              className="nlm-mobile-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setSelectedLocation(null)}
+            />
+            <motion.div
+              className="nlm-mobile-detail"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={prefersReducedMotion ? { duration: 0.1 } : { duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+            >
+              {/* Drag handle */}
+              <div className="nlm-mobile-detail-handle" aria-hidden="true" />
+
+              {/* Header: name + score + close */}
+              <div className="nlm-mobile-detail-header">
+                <div className="nlm-mobile-detail-title">
+                  <h2>{locationName}</h2>
+                  {selectedLocation.category && (
+                    <p>{selectedLocation.category}</p>
+                  )}
+                </div>
+                <div className="nlm-score-badge">
+                  <span className="score-value">{overallScore}</span>
+                  <span className="score-label">{reviewCount} reviews</span>
+                </div>
+                <button
+                  className="nlm-mobile-detail-close"
+                  onClick={() => setSelectedLocation(null)}
+                  aria-label="Close"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              {/* Stars */}
+              <div className="nlm-stars">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className={`nlm-star ${i <= starCount ? 'filled' : 'empty'}`}>
+                    {i <= starCount && <div className="star-overlay" />}
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 1.33L10.06 5.51L14.67 6.18L11.33 9.43L12.12 14.01L8 11.85L3.88 14.01L4.67 9.43L1.33 6.18L5.94 5.51L8 1.33Z"
+                        fill={i <= starCount ? '#F5A623' : 'none'}
+                        stroke={i <= starCount ? '#F5A623' : '#CBD5E1'}
+                        strokeWidth={i <= starCount ? '0.5' : '1'}
+                        strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                ))}
+              </div>
+
+              {/* Rating tags */}
+              <div className="nlm-rating-tags" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {ratingTags.map((tag) => (
+                  <span key={tag} className="nlm-rating-tag">{tag}</span>
+                ))}
+              </div>
+
+              {/* Score bars */}
+              {reviewCount === 0 ? (
+                <div style={{ padding: '10px 12px', background: 'var(--theme-tag-soft)', borderRadius: 8, color: 'var(--theme-text-muted)', fontSize: 13 }}>
+                  No community data yet — be the first to review.
+                </div>
+              ) : (
+                <div className="nlm-score-bars">
+                  {[
+                    { label: 'Noise', val: noiseScore },
+                    { label: 'Lighting', val: lightingScore },
+                    { label: 'Crowds', val: crowdScore },
+                    { label: 'Comfort', val: comfortScore },
+                  ].map(({ label, val }) => (
+                    <div key={label} className="nlm-score-row">
+                      <span className="nlm-score-label">{label}</span>
+                      <div className="nlm-score-bar">
+                        <div className="nlm-score-bar-fill" style={{ width: `${(val / 5) * 100}%` }} />
+                      </div>
+                      <span className="nlm-score-value">{val.toFixed(1)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="nlm-mobile-detail-actions">
+                <button
+                  className="nlm-mobile-signin-btn"
+                  onClick={() => onLogin()}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  Sign in &amp; Review
+                </button>
+                <button
+                  className="nlm-mobile-directions-btn"
+                  onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedLocation.latitude},${selectedLocation.longitude}`, '_blank')}
+                >
+                  Directions
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Top Center: Close map */}
       {onBackToHome && (
         <button

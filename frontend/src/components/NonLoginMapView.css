@@ -1327,3 +1327,124 @@
     font-size: 13px;
   }
 }
+
+/* ── Mobile location detail bottom sheet ── */
+
+/* Hidden on desktop — only shown via media query below */
+.nlm-mobile-backdrop,
+.nlm-mobile-detail {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .nlm-mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 29;
+  }
+
+  .nlm-mobile-detail {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    max-height: 72vh;
+    background: var(--theme-surface, #fff);
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid var(--theme-border, #e5e7eb);
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.14);
+    overflow-y: auto;
+    padding: 0 20px 32px;
+    gap: 16px;
+    box-sizing: border-box;
+  }
+
+  .nlm-mobile-detail-handle {
+    width: 40px;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+    margin: 14px auto 0;
+    flex-shrink: 0;
+  }
+
+  .nlm-mobile-detail-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .nlm-mobile-detail-title {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .nlm-mobile-detail-title h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--theme-text);
+    letter-spacing: -0.2px;
+    line-height: 1.3;
+  }
+
+  .nlm-mobile-detail-title p {
+    margin: 3px 0 0;
+    font-size: 13px;
+    color: var(--theme-text-muted);
+  }
+
+  .nlm-mobile-detail-close {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--theme-border, #e5e7eb);
+    background: var(--theme-surface-soft);
+    color: var(--theme-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nlm-mobile-detail-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .nlm-mobile-signin-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 11px 0;
+    border-radius: 8px;
+    border: none;
+    background: var(--theme-accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .nlm-mobile-directions-btn {
+    padding: 11px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--theme-accent);
+    background: transparent;
+    color: var(--theme-accent);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    white-space: nowrap;
+  }
+}
