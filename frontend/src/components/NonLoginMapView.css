@@ -1281,9 +1281,13 @@
   .nlm-sidebar-left .nlm-sidebar-left-header {
     padding: 10px 16px 10px;
   }
-  /* Collapse button doesn't make sense in bottom-sheet mode */
+  /* Show collapse button in mobile bottom sheet — rotated to indicate up/down */
   .nlm-sidebar-left .nlm-nav-collapse-btn {
-    display: none;
+    display: flex;
+  }
+  /* Arrow points down (= minimize) when sheet is open */
+  .nlm-sidebar-left .nlm-nav-collapse-arrow {
+    transform: rotate(-90deg);
   }
   .nlm-hero-card {
     display: none;
@@ -1325,6 +1329,40 @@
   .nlm-heatmap-toggle button {
     padding: 6px 10px;
     font-size: 13px;
+  }
+}
+
+/* ── Mobile collapsed sidebar overrides ──
+   The desktop collapsed state uses !important to go transparent/borderless.
+   These rules re-assert the bottom-sheet appearance when collapsed on mobile. */
+@media (max-width: 700px) {
+  .nlm-sidebar-left--collapsed {
+    max-height: 64px !important;
+    width: 100% !important;
+    background: color-mix(in srgb, var(--theme-surface) 94%, transparent) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid var(--theme-border) !important;
+    border-radius: 20px 20px 0 0 !important;
+    box-shadow: 0px -4px 16px rgba(15, 23, 32, 0.1) !important;
+    overflow: hidden;
+  }
+  /* Keep logo visible in mobile collapsed strip */
+  .nlm-sidebar-left--collapsed .nlm-logo-row,
+  .nlm-sidebar-left--collapsed .nlm-logo-group {
+    width: auto !important;
+    min-width: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+  /* Hide drag handle when minimised (no room) */
+  .nlm-sidebar-left--collapsed .nlm-sidebar-drag-handle {
+    display: none;
+  }
+  /* Arrow points up (= expand) when sheet is minimised */
+  .nlm-sidebar-left--collapsed .nlm-nav-collapse-arrow {
+    transform: rotate(90deg) !important;
   }
 }
 
