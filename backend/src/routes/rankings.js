@@ -16,6 +16,7 @@ router.get("/", async (req, res) => {
     try {
         const rankings = await prisma.sensoryScore.findMany({
             orderBy: { comfortScore: "desc" },
+            take: 100,
             include: {
                 location: {
                     select: {

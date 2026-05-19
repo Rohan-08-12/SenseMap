@@ -16,6 +16,7 @@ const router = express.Router()
 router.get("/", async (req, res) => {
     try {
         const locations = await prisma.location.findMany({
+            take: 500,
             include: {
                 sensoryScores: true,
             }
@@ -104,6 +105,7 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
         const { noiseTolerance = 3, lightingTolerance = 3, crowdTolerance = 3 } = user.sensoryProfile ?? {};
 
         const locations = await prisma.location.findMany({
+            take: 500,
             include: { sensoryScores: true }
         });
 
@@ -163,6 +165,7 @@ router.get("/search", async (req, res) => {
                     { description: { contains: q, mode: "insensitive" } },
                 ]
             },
+            take: 100,
             include: { sensoryScores: true }
         });
 
@@ -192,6 +195,7 @@ router.get("/similar/:id", async (req, res) => {
 
         const candidates = await prisma.location.findMany({
             where: { id: { not: id } },
+            take: 200,
             select: {
                 id: true, name: true, category: true, address: true,
                 latitude: true, longitude: true, imageUrl: true,
@@ -237,7 +241,7 @@ router.get("/:id", async (req, res) => {
                     orderBy: { createdAt: "desc" },
                     take: 10,
                     include: {
-                        user: { select: { username: true, email: true } }
+                        user: { select: { username: true } }
                     }
                 }
             }

@@ -39,6 +39,13 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
             return res.status(400).json({ error: "Review text must be under 2000 characters" });
         }
 
+        // Only accept Cloudinary-hosted image URLs to prevent SSRF / XSS via imageUrl
+        if (imageUrl != null) {
+            if (typeof imageUrl !== "string" || !/^https:\/\/res\.cloudinary\.com\//.test(imageUrl)) {
+                return res.status(400).json({ error: "Invalid imageUrl — must be a Cloudinary URL" });
+            }
+        }
+
         const user = await prisma.user.findUnique({ where: { auth0Id } });
         if (!user) return res.status(404).json({ error: "User not found" });
 

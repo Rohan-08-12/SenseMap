@@ -6,9 +6,6 @@ import { syncUser } from "../middleware/syncUser.js";
 import { generateLocationEmbedding } from "../lib/embeddings.js";
 const router = express.Router();
 
-router.get("/", (req, res) => {
-  res.json({ message: "ai route live" });
-});
 
 const analyzeSchema = {
   type: "object",

@@ -8,5 +8,8 @@ const jwtCheck = auth({
 
 export const optionalAuth = (req, res, next) => {
     if (!req.headers.authorization) return next();
-    jwtCheck(req, res, () => next()); // swallow JWT errors — treat invalid token as unauthenticated
+    jwtCheck(req, res, (err) => {
+        if (err) console.warn('[optionalAuth] Invalid/expired token from IP:', req.ip);
+        next();
+    });
 };

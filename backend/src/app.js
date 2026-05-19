@@ -22,7 +22,7 @@ const app = express();
 app.use(helmet());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(",")
+    ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean)
     : ["http://localhost:5173", "http://localhost:5174"];
 
 app.use(cors({
@@ -56,6 +56,14 @@ const aiLimiter = rateLimit({
     message: { error: "AI request limit reached, please slow down." },
 });
 
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Upload limit reached. You can upload up to 10 images per hour." },
+});
+
 app.use(apiLimiter);
 
 app.get("/", (req, res) => {
@@ -67,7 +75,7 @@ app.use("/reviews", reviewLimiter, reviewsRoutes);
 app.use("/profiles", profilesRoutes);
 app.use("/rankings", rankingsRoutes);
 app.use("/ai", aiLimiter, aiRoutes);
-app.use("/upload", uploadRoutes);
+app.use("/upload", uploadLimiter, uploadRoutes);
 app.use("/saved-places", savedPlacesRouter);
 app.use("/discover", discoverRouter);
 app.use("/checkins", checkinsRouter);

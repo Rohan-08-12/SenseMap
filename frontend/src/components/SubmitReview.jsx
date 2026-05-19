@@ -99,8 +99,8 @@ function SubmitReview({ location, onClose, onSubmitted }) {
             setPhotoError('Please select an image file.');
             return;
         }
-        if (file.size > 10 * 1024 * 1024) {
-            setPhotoError('Image must be under 10 MB.');
+        if (file.size > 5 * 1024 * 1024) {
+            setPhotoError('Image must be under 5 MB.');
             return;
         }
 
