@@ -13,7 +13,7 @@ const INITIAL_VIEW_STATE = {
     bearing: -10,
 };
 
-export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON, heatmapEnabled, heatmapData, flyToLocation, userCoords, mapStyle }) {
+export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON, heatmapEnabled, heatmapData, flyToLocation, userCoords, mapStyle, trafficEnabled }) {
     const mapRef = useRef(null);
     const hasFlownToUser = useRef(false);
 
@@ -137,6 +137,29 @@ export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON
             onClick={handleClick}
             cursor="auto"
         >
+            {/* Mapbox real-time traffic layer */}
+            {trafficEnabled && (
+                <Source id="mapbox-traffic" type="vector" url="mapbox://mapbox.mapbox-traffic-v1">
+                    <Layer
+                        id="traffic-flow"
+                        type="line"
+                        source-layer="traffic"
+                        paint={{
+                            'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 14, 4],
+                            'line-color': [
+                                'match', ['get', 'congestion'],
+                                'low',      '#4ade80',
+                                'moderate', '#fbbf24',
+                                'heavy',    '#f97316',
+                                'severe',   '#dc2626',
+                                '#94a3b8',
+                            ],
+                            'line-opacity': 0.82,
+                        }}
+                    />
+                </Source>
+            )}
+
             <Source id="locations-source" type="geojson" data={geojson}>
                 {/* Heatmap layer — below pins */}
                 {heatmapEnabled && (

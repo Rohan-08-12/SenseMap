@@ -62,6 +62,8 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
   const [avgRating, setAvgRating] = useState(null);
   const [locationHours, setLocationHours] = useState(null);
   const [locationWeather, setLocationWeather] = useState(null);
+  const [nearbyConstruction, setNearbyConstruction] = useState(false);
+  const [trafficOn, setTrafficOn] = useState(false);
   const [searchNoResults, setSearchNoResults] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const [showSigninDetail, setShowSigninDetail] = useState(false);
@@ -162,6 +164,7 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
     setAvgRating(null);
     setLocationHours(null);
     setLocationWeather(null);
+    setNearbyConstruction(false);
 
     const locId = selectedLocation.id;
     if (!locId) return;
@@ -190,6 +193,15 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
           if (data.current) {
             setLocationWeather({ temp: Math.round(data.current.temperature_2m), code: data.current.weather_code });
           }
+        })
+        .catch(() => { });
+
+      const overpassQuery = `[out:json][timeout:8];(way["highway"="construction"](around:600,${lat},${lng});way["construction"](around:600,${lat},${lng});way["landuse"="construction"](around:600,${lat},${lng}););out count;`;
+      fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const total = parseInt(data.elements?.[0]?.tags?.total ?? '0', 10);
+          setNearbyConstruction(total > 0);
         })
         .catch(() => { });
     }
@@ -325,6 +337,7 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
           searchResultsGeoJSON={searchResults}
           heatmapEnabled={heatmapOn}
           heatmapData={heatmapData}
+          trafficEnabled={trafficOn}
         />
       </div>
 
@@ -338,6 +351,18 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
             <path d="M4 12V8M8 12V4M12 12V6" stroke={heatmapOn ? "var(--theme-accent)" : "#6b7280"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Heatmap
+        </button>
+        <button
+          className="nlm-theme-btn nlm-theme-btn--text"
+          onClick={() => setTrafficOn((prev) => !prev)}
+          style={{ cursor: 'pointer', border: trafficOn ? '2px solid #f97316' : '1px solid var(--theme-border)', background: 'var(--theme-surface)', padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 500 }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="4" r="2" fill={trafficOn ? "#dc2626" : "#6b7280"} />
+            <circle cx="8" cy="8" r="2" fill={trafficOn ? "#fbbf24" : "#9ca3af"} />
+            <circle cx="8" cy="12" r="2" fill={trafficOn ? "#4ade80" : "#d1d5db"} />
+          </svg>
+          Traffic
         </button>
       </div>
 
@@ -629,6 +654,12 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
                     <div className="nlm-meta-chip">
                       <span aria-hidden>{weatherEmoji(locationWeather.code)}</span>
                       <span>{locationWeather.temp}°C</span>
+                    </div>
+                  )}
+                  {nearbyConstruction && (
+                    <div className="nlm-meta-chip nlm-meta-chip--construction">
+                      <span aria-hidden>🚧</span>
+                      <span>Construction nearby</span>
                     </div>
                   )}
                 </div>

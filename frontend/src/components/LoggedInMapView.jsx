@@ -67,6 +67,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [searchLoading, setSearchLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);
   const [heatmapOn, setHeatmapOn] = useState(true);
+  const [trafficOn, setTrafficOn] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false); // NEW
 
@@ -713,6 +714,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   userCoords={userCoords}
                   heatmapData={heatmapData}
                   heatmapEnabled={heatmapOn}
+                  trafficEnabled={trafficOn}
                   mapStyle={mapStyleUrl}
                 />
               </div>
@@ -762,6 +764,18 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                     <path d="M4 12V8M8 12V4M12 12V6" stroke={heatmapOn ? "var(--theme-accent)" : "#6b7280"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   Heatmap
+                </button>
+                <button
+                  className="lmv-map-time-filter"
+                  onClick={() => setTrafficOn((prev) => !prev)}
+                  style={{ cursor: 'pointer', border: trafficOn ? '2px solid #f97316' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="4" r="2" fill={trafficOn ? "#dc2626" : "#6b7280"} />
+                    <circle cx="8" cy="8" r="2" fill={trafficOn ? "#fbbf24" : "#9ca3af"} />
+                    <circle cx="8" cy="12" r="2" fill={trafficOn ? "#4ade80" : "#d1d5db"} />
+                  </svg>
+                  Traffic
                 </button>
               </div>
 
