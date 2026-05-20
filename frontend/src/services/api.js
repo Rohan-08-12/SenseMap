@@ -148,6 +148,9 @@ export const getRecentCheckIns = () =>
 export const getSimilarLocations = (locationId) =>
     api.get(`/locations/similar/${locationId}`);
 
+export const checkNearbyConstruction = (lat, lng) =>
+    api.get(`/locations/construction-check?lat=${lat}&lng=${lng}`);
+
 export const deleteAccount = () =>
     api.delete('/users/me');
 

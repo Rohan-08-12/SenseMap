@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel } from '../utils.js';
 import MapView from './MapView';
-import { getRankings, getLocationHeatmap, getLocationById, getLocationHours, searchLocations } from '../services/api';
+import { getRankings, getLocationHeatmap, getLocationById, getLocationHours, searchLocations, checkNearbyConstruction } from '../services/api';
 import './NonLoginMapView.css';
 
 const QUICK_FILTERS = [
@@ -196,22 +196,9 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
         })
         .catch(() => { });
 
-      const constructionCtrl = new AbortController();
-      const constructionTimer = setTimeout(() => constructionCtrl.abort(), 10000);
-      fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en', { signal: constructionCtrl.signal })
-        .then((r) => r.json())
-        .then((data) => {
-          clearTimeout(constructionTimer);
-          if (Array.isArray(data)) {
-            const nearby = data.some(
-              (p) => p.Latitude && p.Longitude &&
-                Math.abs(p.Latitude - lat) < 0.02 &&
-                Math.abs(p.Longitude - lng) < 0.025
-            );
-            setNearbyConstruction(nearby);
-          }
-        })
-        .catch(() => { clearTimeout(constructionTimer); });
+      checkNearbyConstruction(lat, lng)
+        .then((res) => { setNearbyConstruction(!!res.data?.nearby); })
+        .catch(() => {});
     }
   }, [selectedLocation]);
 

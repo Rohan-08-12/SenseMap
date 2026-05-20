@@ -8,6 +8,30 @@ import { cosineSimilarity } from "../lib/embeddings.js";
 
 const router = express.Router()
 
+// Simple in-memory cache for 511 Ontario construction data (15-min TTL)
+let constructionCache = { data: null, fetchedAt: 0 };
+const CONSTRUCTION_TTL = 15 * 60 * 1000;
+
+async function getConstructionProjects() {
+  if (constructionCache.data && Date.now() - constructionCache.fetchedAt < CONSTRUCTION_TTL) {
+    return constructionCache.data;
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const res = await fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en', { signal: ctrl.signal });
+    const data = await res.json();
+    clearTimeout(timer);
+    if (Array.isArray(data)) {
+      constructionCache = { data, fetchedAt: Date.now() };
+      return data;
+    }
+  } catch {
+    clearTimeout(timer);
+  }
+  return constructionCache.data || [];
+}
+
 /**
  * GET /locations
  * Returns all locations formatted as a GeoJSON FeatureCollection.
@@ -197,6 +221,23 @@ router.get("/search", async (req, res) => {
  * ranked by cosine similarity of their sensory embeddings.
  * Must be registered before /:id so Express doesn't consume "similar" as an id.
  */
+router.get("/construction-check", async (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+  if (isNaN(lat) || isNaN(lng)) return res.json({ nearby: false });
+  try {
+    const projects = await getConstructionProjects();
+    const nearby = projects.some(
+      (p) => p.Latitude && p.Longitude &&
+        Math.abs(p.Latitude - lat) < 0.02 &&
+        Math.abs(p.Longitude - lng) < 0.025
+    );
+    res.json({ nearby });
+  } catch {
+    res.json({ nearby: false });
+  }
+});
+
 router.get("/similar/:id", async (req, res) => {
     try {
         const { id } = req.params;

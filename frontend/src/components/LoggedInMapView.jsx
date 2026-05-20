@@ -10,7 +10,7 @@ import SensoryProfile from './SensoryProfile';
 import Settings from './Settings';
 import LogoutConfirmation from './LogoutConfirmation';
 import SubmitReview from './SubmitReview'; // NEW
-import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, updateSensoryProfile, getLocationById, getLocationHours, getAIInsights, discoverLocations, getSavedPlaces, savePlace, removeSavedPlace, checkIn, submitReview, getSimilarLocations } from '../services/api';
+import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, updateSensoryProfile, getLocationById, getLocationHours, getAIInsights, discoverLocations, getSavedPlaces, savePlace, removeSavedPlace, checkIn, submitReview, getSimilarLocations, checkNearbyConstruction } from '../services/api';
 import './LoggedInMapView.css';
 
 const SETTINGS_KEY = 'sensorysafe_settings';
@@ -280,22 +280,9 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
         .then((d) => { if (d.current) setLocationWeather({ temp: Math.round(d.current.temperature_2m), code: d.current.weather_code }); })
         .catch(() => {});
 
-      const constructionCtrl = new AbortController();
-      const constructionTimer = setTimeout(() => constructionCtrl.abort(), 10000);
-      fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en', { signal: constructionCtrl.signal })
-        .then((r) => r.json())
-        .then((data) => {
-          clearTimeout(constructionTimer);
-          if (Array.isArray(data)) {
-            const nearby = data.some(
-              (p) => p.Latitude && p.Longitude &&
-                Math.abs(p.Latitude - lat) < 0.02 &&
-                Math.abs(p.Longitude - lng) < 0.025
-            );
-            if (nearby) setNearbyConstruction(true);
-          }
-        })
-        .catch(() => { clearTimeout(constructionTimer); });
+      checkNearbyConstruction(lat, lng)
+        .then((res) => { if (res.data?.nearby) setNearbyConstruction(true); })
+        .catch(() => {});
     }
   }, [selectedLocation?.id]);
 
