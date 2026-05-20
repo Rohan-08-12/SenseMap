@@ -226,6 +226,7 @@ Request
 | GET | `/locations/heatmap` | No | Top 500 scored locations (filters default scores) |
 | GET | `/locations/match` | Required | Personalized matches sorted by match score |
 | GET | `/locations/search?q=` | No | Search by name/category/address; auto-normalizes plural/singular (e.g. "cafes" matches "cafe" records) |
+| GET | `/locations/construction-check?lat=&lng=` | No | Proxies Ontario 511 API; returns `{ nearby: bool }` — true if any active construction project found within ~2km. Results cached in memory for 15 min. ⚠️ See known issues. |
 | GET | `/locations/:id/hours` | No | Opening hours from Google Places API using stored `googlePlaceId`; returns `{ available, open_now, weekday_text }` |
 | GET | `/locations/:id` | No | Single location + last 10 reviews (includes `user.username` and `user.email` for each review) |
 
@@ -363,14 +364,15 @@ Single Axios instance for all API calls:
 
 All exported functions:
 ```
-getLocations()           getLocationById(id)
-getLocationHeatmap()     getLocationMatch()
-searchLocations(q)       discoverLocations(q, lat, lng)
-submitReview(data)       getReviewsByLocation(id)
-getRankings()
-getSensoryProfile()      updateSensoryProfile(data)
-getAIInsights(id)        analyzeReview(text)
-getSavedPlaces()         savePlace(id)        removeSavedPlace(id)
+getLocations()                getLocationById(id)
+getLocationHeatmap()          getLocationMatch()
+getLocationHours(id)          checkNearbyConstruction(lat, lng)
+searchLocations(q)            discoverLocations(q, lat, lng)
+submitReview(data)            getReviewsByLocation(id)
+getRankings()                 getSimilarLocations(id)
+getSensoryProfile()           updateSensoryProfile(data)
+getAIInsights(id)             analyzeReview(text)
+getSavedPlaces()              savePlace(id)        removeSavedPlace(id)
 uploadImage(formData)
 checkIn(locationId)
 getRecentCheckIns()
@@ -389,7 +391,7 @@ Landing page. Hero text, category cards, search bar, auth buttons, theme switche
 Full public map experience (no login required).
 - Fetches heatmap + rankings on mount
 - Sidebar: quick sensory filters + venue-type category filters (cafes, parks, libraries, restaurants, fitness), top ranked places, search (results replace ranked list when active)
-- Location detail chips: address, open/closed status (`GET /locations/:id/hours`), current weather (Open-Meteo, no key), construction warning (Overpass API, no key)
+- Location detail chips: address, open/closed status (`GET /locations/:id/hours`), current weather (Open-Meteo, no key), construction warning (`GET /locations/construction-check` — backend proxy to Ontario 511 API)
 - Map overlays: Heatmap toggle, Traffic toggle (Mapbox Traffic v1)
 
 ### `LoggedInMapView.jsx`
@@ -568,3 +570,14 @@ node debug_places.js   # Debug Google Places enrichment
 ## Known Issues / TODOs
 
 - Currently Toronto-only — city expansion planned post-beta
+
+### Construction chip (🚧) — to-do fix
+
+**Current implementation:** `GET /locations/construction-check?lat=&lng=` proxies the [Ontario 511 API](https://511on.ca/api/v2/get/constructionprojects) server-side (browser fetch blocked by CORS). The backend caches the full project list for 15 minutes and checks proximity using a bounding-box filter (~2km).
+
+**Problems:**
+1. The 511 API only covers highway and major arterial roadwork — local street and sidewalk construction is not included.
+2. The 511 API response time is variable (3–8s), so the chip may appear late or not at all if the server times out.
+3. No proactive caching — cache is cold on first request after each 15-min window.
+
+**Planned fix:** Schedule a background job (cron) to refresh the 511 cache every 10 minutes so the `/construction-check` endpoint always returns immediately from cache. Also evaluate supplementing with Toronto's [Road Closures open data feed](https://open.toronto.ca/) once a reliable endpoint is confirmed.

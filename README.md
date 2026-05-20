@@ -18,7 +18,7 @@ Currently in beta, covering **Toronto**.
 - **Review list** — see individual reviews with author, date, and slider ratings; AI-seeded reviews labeled with a badge
 - **Check-in flow** — quick tap ratings when you're physically at a location
 - **Saved places** — bookmark spots that work for you
-- **Location details** — selecting any place shows its short address, open/closed status (via Google Places), current weather (via Open-Meteo), and a construction warning if there's active roadwork within 600m (via OpenStreetMap)
+- **Location details** — selecting any place shows its short address, open/closed status (via Google Places), and current weather (via Open-Meteo); a 🚧 construction chip appears when the Ontario 511 API reports active roadwork within ~2km (proxied through the backend to avoid CORS)
 - **Live traffic layer** — toggleable real-time road congestion overlay (green → red) powered by Mapbox Traffic v1; no extra API key required
 - **Category filters** — filter the map by venue type: cafes, parks, libraries, restaurants, fitness; sensory filters (quiet, low crowds, soft lighting) also available
 - **Search sidebar** — search results populate the sidebar list; smart plural/singular matching so "cafe" and "cafes" return the same results
@@ -141,3 +141,11 @@ See [DOCS.md](./DOCS.md) for full API reference, data models, architecture, and 
 ## Status
 
 **Beta** — Toronto only. Active development.
+
+---
+
+## Known Issues / To-do
+
+| # | Issue | Notes |
+|---|---|---|
+| 1 | **Construction chip unreliable** | The 🚧 chip is proxied through the backend to the Ontario 511 API. The 511 API is slow (~3–8s), covers only highway/major-arterial roadwork (not local street construction), and its data coverage outside the GTA is sparse. The chip works when the 511 API responds in time but is not guaranteed. Fix: add a dedicated municipal construction data source or cache the 511 response more aggressively on a cron schedule. |
