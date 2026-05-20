@@ -392,54 +392,124 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
             </div>
           </div>
 
-          {/* Top Ranked */}
-          <div className="nlm-ranked">
-            <div className="nlm-ranked-header">
-              <h3>Top ranked sensory-friendly places</h3>
-              <p>Best options nearby with simple summaries.</p>
-            </div>
-            <div className="nlm-ranked-list">
-              {rankings.length > 0 ? rankings.map((place) => (
-                <div
-                  key={place.id ?? place.name}
-                  className="nlm-ranked-item"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleLocationSelect(place)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLocationSelect(place)}
-                >
-                  <div className="nlm-ranked-info">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <h4>{place.name}</h4>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(
-                            `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`,
-                            '_blank'
-                          );
-                        }}
-                        className="nlm-btn-directions-small"
-                        title="Get Directions"
-                      >
-                        Directions
-                      </button>
+          {/* Search results or top ranked */}
+          {searchResults ? (
+            <div className="nlm-ranked">
+              <div className="nlm-ranked-header">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <h3>
+                    {searchLoading
+                      ? 'Searching…'
+                      : searchResults.features?.length > 0
+                        ? `${searchResults.features.length} result${searchResults.features.length !== 1 ? 's' : ''}`
+                        : 'No results found'}
+                  </h3>
+                  <button
+                    className="nlm-btn-directions-small"
+                    onClick={() => { setSearchResults(null); setSearchQuery(''); setSearchNoResults(false); }}
+                  >
+                    Clear
+                  </button>
+                </div>
+                <p>Showing places matching your search.</p>
+              </div>
+              <div className="nlm-ranked-list">
+                {searchLoading ? (
+                  <>
+                    <div className="animate-pulse" style={{ height: 56, background: 'var(--theme-border)', borderRadius: 8, marginBottom: 8 }} />
+                    <div className="animate-pulse" style={{ height: 56, background: 'var(--theme-border)', borderRadius: 8, marginBottom: 8 }} />
+                    <div className="animate-pulse" style={{ height: 56, background: 'var(--theme-border)', borderRadius: 8 }} />
+                  </>
+                ) : searchResults.features?.length > 0 ? searchResults.features.map((feat) => {
+                  const p = feat.properties;
+                  const lat = feat.geometry.coordinates[1];
+                  const lng = feat.geometry.coordinates[0];
+                  const score = p.comfortScore ?? 0;
+                  const tier = score >= 4 ? 'high' : score >= 2.5 ? 'medium' : 'low';
+                  const place = { id: p.id, name: p.name, category: p.category, latitude: lat, longitude: lng, score, tier, noise_score: p.noiseScore, lighting_score: p.lightingScore, crowd_score: p.crowdScore, comfort_score: p.comfortScore };
+                  return (
+                    <div
+                      key={p.id ?? p.name}
+                      className="nlm-ranked-item"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleLocationSelect(place)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleLocationSelect(place)}
+                    >
+                      <div className="nlm-ranked-info">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <h4>{p.name}</h4>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank'); }}
+                            className="nlm-btn-directions-small"
+                            title="Get Directions"
+                          >
+                            Directions
+                          </button>
+                        </div>
+                        <p>{p.category || 'Place'}</p>
+                      </div>
+                      <div className={`nlm-ranked-score ${tier}`}>
+                        {score > 0 ? score.toFixed(1) : '—'}
+                      </div>
                     </div>
-                    <p>{place.tags}</p>
+                  );
+                }) : (
+                  <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--theme-text-muted)', fontSize: 13 }}>
+                    Try a different search term.
                   </div>
-                  <div className={`nlm-ranked-score ${place.tier}`}>
-                    {(place.score || 0).toFixed(1)}
-                  </div>
-                </div>
-              )) : (
-                <div style={{ padding: 16, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
-                  <div className="animate-pulse" style={{ height: 48, background: '#e5e7eb', borderRadius: 6, marginBottom: 8 }} />
-                  <div className="animate-pulse" style={{ height: 48, background: '#e5e7eb', borderRadius: 6, marginBottom: 8 }} />
-                  <div className="animate-pulse" style={{ height: 48, background: '#e5e7eb', borderRadius: 6 }} />
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="nlm-ranked">
+              <div className="nlm-ranked-header">
+                <h3>Top ranked sensory-friendly places</h3>
+                <p>Best options nearby with simple summaries.</p>
+              </div>
+              <div className="nlm-ranked-list">
+                {rankings.length > 0 ? rankings.map((place) => (
+                  <div
+                    key={place.id ?? place.name}
+                    className="nlm-ranked-item"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleLocationSelect(place)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLocationSelect(place)}
+                  >
+                    <div className="nlm-ranked-info">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <h4>{place.name}</h4>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(
+                              `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`,
+                              '_blank'
+                            );
+                          }}
+                          className="nlm-btn-directions-small"
+                          title="Get Directions"
+                        >
+                          Directions
+                        </button>
+                      </div>
+                      <p>{place.tags}</p>
+                    </div>
+                    <div className={`nlm-ranked-score ${place.tier}`}>
+                      {(place.score || 0).toFixed(1)}
+                    </div>
+                  </div>
+                )) : (
+                  <div style={{ padding: 16, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
+                    <div className="animate-pulse" style={{ height: 48, background: '#e5e7eb', borderRadius: 6, marginBottom: 8 }} />
+                    <div className="animate-pulse" style={{ height: 48, background: '#e5e7eb', borderRadius: 6, marginBottom: 8 }} />
+                    <div className="animate-pulse" style={{ height: 48, background: '#e5e7eb', borderRadius: 6 }} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 
