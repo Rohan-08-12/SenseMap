@@ -231,6 +231,32 @@ router.get("/similar/:id", async (req, res) => {
  * Fetches full details for a specific location including its sensory scores
  * and the 10 most recent community reviews.
  */
+router.get("/:id/hours", async (req, res) => {
+    try {
+        const location = await prisma.location.findUnique({
+            where: { id: req.params.id },
+            select: { googlePlaceId: true },
+        });
+        if (!location?.googlePlaceId) return res.json({ available: false });
+
+        const key = process.env.GOOGLE_PLACES_KEY;
+        const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${location.googlePlaceId}&fields=opening_hours,utc_offset_minutes&key=${key}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        const hours = data.result?.opening_hours;
+        if (!hours) return res.json({ available: false });
+
+        res.json({
+            available: true,
+            open_now: hours.open_now ?? null,
+            weekday_text: hours.weekday_text ?? [],
+        });
+    } catch {
+        res.json({ available: false });
+    }
+});
+
 router.get("/:id", async (req, res) => {
     try {
         const location = await prisma.location.findUnique({
