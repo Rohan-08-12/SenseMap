@@ -281,7 +281,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
         .catch(() => {});
 
       const constructionCtrl = new AbortController();
-      const constructionTimer = setTimeout(() => constructionCtrl.abort(), 6000);
+      const constructionTimer = setTimeout(() => constructionCtrl.abort(), 10000);
       fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en', { signal: constructionCtrl.signal })
         .then((r) => r.json())
         .then((data) => {
@@ -289,7 +289,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
           if (Array.isArray(data)) {
             const nearby = data.some(
               (p) => p.Latitude && p.Longitude &&
-                Math.abs(p.Latitude - lat) < 0.018 &&
+                Math.abs(p.Latitude - lat) < 0.02 &&
                 Math.abs(p.Longitude - lng) < 0.025
             );
             if (nearby) setNearbyConstruction(true);
