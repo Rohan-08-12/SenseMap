@@ -684,6 +684,43 @@
   color: #6b7280;
 }
 
+/* Location meta chips (address, hours, weather) */
+.nlm-location-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.nlm-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--theme-text-muted);
+  background: var(--theme-badge-bg);
+  border: 1px solid var(--theme-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.nlm-meta-chip--open {
+  color: #16a34a;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.nlm-meta-chip--closed {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
 /* Stars */
 .nlm-stars {
   display: flex;

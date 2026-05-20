@@ -64,6 +64,10 @@ export const getLocationById = (id) => {
     return api.get(`/locations/${id}`);
 };
 
+export const getLocationHours = (id) => {
+    return api.get(`/locations/${id}/hours`);
+};
+
 export const getLocationHeatmap = () => {
     return api.get('/locations/heatmap', { timeout: 60000 });
 };

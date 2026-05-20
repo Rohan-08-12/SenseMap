@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel } from '../utils.js';
 import MapView from './MapView';
-import { getRankings, getLocationHeatmap, getLocationById, searchLocations } from '../services/api';
+import { getRankings, getLocationHeatmap, getLocationById, getLocationHours, searchLocations } from '../services/api';
 import './NonLoginMapView.css';
 
 const QUICK_FILTERS = [
@@ -29,6 +29,16 @@ const CATEGORY_CHIPS = [
  * It renders the Deck.gl map, fetches the location heatmap, displays top-ranked
  * sensory-friendly places, and allows users to explore locations without an account.
  */
+function weatherEmoji(code) {
+  if (code === 0) return '☀️';
+  if (code <= 3) return '🌤️';
+  if (code <= 48) return '🌫️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '❄️';
+  if (code <= 82) return '🌦️';
+  return '⛈️';
+}
+
 function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initialFilter, onLogin }) {
   const loginWithRedirect = () => onLogin();
   const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);
@@ -42,6 +52,8 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
   const [snapshot, setSnapshot] = useState(null);
   const [locationDetail, setLocationDetail] = useState(null);
   const [avgRating, setAvgRating] = useState(null);
+  const [locationHours, setLocationHours] = useState(null);
+  const [locationWeather, setLocationWeather] = useState(null);
   const [searchNoResults, setSearchNoResults] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const [showSigninDetail, setShowSigninDetail] = useState(false);
@@ -135,11 +147,13 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
       .finally(() => setSearchLoading(false));
   }, [initialSearchQuery]);
 
-  // --- When selected location changes: fetch detail ---
+  // --- When selected location changes: fetch detail, hours, weather ---
   useEffect(() => {
     if (!selectedLocation) return;
     setLocationDetail(null);
     setAvgRating(null);
+    setLocationHours(null);
+    setLocationWeather(null);
 
     const locId = selectedLocation.id;
     if (!locId) return;
@@ -154,6 +168,23 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
         }
       })
       .catch(() => { });
+
+    getLocationHours(locId)
+      .then((res) => setLocationHours(res.data))
+      .catch(() => { });
+
+    const lat = selectedLocation.latitude;
+    const lng = selectedLocation.longitude;
+    if (lat != null && lng != null) {
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&temperature_unit=celsius&forecast_days=1`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.current) {
+            setLocationWeather({ temp: Math.round(data.current.temperature_2m), code: data.current.weather_code });
+          }
+        })
+        .catch(() => { });
+    }
   }, [selectedLocation]);
 
   const handleFilterClick = (filter) => {
@@ -487,6 +518,28 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
                     <span className="score-value">{overallScore}</span>
                     <span className="score-label">{reviewCount} reviews</span>
                   </div>
+                </div>
+
+                {/* Address + hours + weather info row */}
+                <div className="nlm-location-meta">
+                  {locationDetail?.address && (
+                    <div className="nlm-meta-chip">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                      <span>{locationDetail.address.split(',').slice(0, 2).join(',')}</span>
+                    </div>
+                  )}
+                  {locationHours?.available && (
+                    <div className={`nlm-meta-chip nlm-meta-chip--${locationHours.open_now ? 'open' : 'closed'}`}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      <span>{locationHours.open_now ? 'Open now' : 'Closed'}</span>
+                    </div>
+                  )}
+                  {locationWeather && (
+                    <div className="nlm-meta-chip">
+                      <span aria-hidden>{weatherEmoji(locationWeather.code)}</span>
+                      <span>{locationWeather.temp}°C</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Stars */}
