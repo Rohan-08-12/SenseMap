@@ -196,12 +196,17 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
         })
         .catch(() => { });
 
-      const overpassQuery = `[out:json][timeout:10];(way["highway"="construction"](around:1000,${lat},${lng});way["construction"](around:1000,${lat},${lng});way["landuse"="construction"](around:1000,${lat},${lng});node["barrier"="construction"](around:1000,${lat},${lng});way["under_construction"](around:1000,${lat},${lng}););out count;`;
-      fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`)
+      fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en')
         .then((r) => r.json())
         .then((data) => {
-          const total = parseInt(data.elements?.[0]?.tags?.total ?? '0', 10);
-          setNearbyConstruction(total > 0);
+          if (Array.isArray(data)) {
+            const nearby = data.some(
+              (p) => p.Latitude && p.Longitude &&
+                Math.abs(p.Latitude - lat) < 0.009 &&
+                Math.abs(p.Longitude - lng) < 0.012
+            );
+            setNearbyConstruction(nearby);
+          }
         })
         .catch(() => { });
     }
