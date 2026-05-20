@@ -317,7 +317,6 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
               </div>
               <div className="nlm-logo-text">
                 <h1>SenseMap</h1>
-                <p>Explore safely and simply</p>
               </div>
             </div>
           </div>
