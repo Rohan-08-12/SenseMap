@@ -1,6 +1,6 @@
 # SenseMap — Platform Documentation
 
-> Last updated: May 19, 2026
+> Last updated: May 20, 2026
 
 ---
 
@@ -388,8 +388,9 @@ Landing page. Hero text, category cards, search bar, auth buttons, theme switche
 ### `NonLoginMapView.jsx`
 Full public map experience (no login required).
 - Fetches heatmap + rankings on mount
-- Sidebar: quick filters, top ranked places, search
-- Location detail panel: snapshot stats, sign-in prompt for write actions
+- Sidebar: quick sensory filters + venue-type category filters (cafes, parks, libraries, restaurants, fitness), top ranked places, search (results replace ranked list when active)
+- Location detail chips: address, open/closed status (`GET /locations/:id/hours`), current weather (Open-Meteo, no key), construction warning (Overpass API, no key)
+- Map overlays: Heatmap toggle, Traffic toggle (Mapbox Traffic v1)
 
 ### `LoggedInMapView.jsx`
 Authenticated map with all features.
@@ -407,11 +408,15 @@ Authenticated map with all features.
 ### `MapView.jsx`
 Pure Mapbox GL map component using native `react-map-gl` layers.
 - `circle` layer — location pins, color-interpolated by comfort score (red → yellow → green)
-- `heatmap` layer — sensory overlay (toggleable)
+- `heatmap` layer — sensory overlay (toggleable via `heatmapEnabled` prop)
+- `traffic` layer — real-time road congestion overlay from `mapbox://mapbox.mapbox-traffic-v1` (toggleable via `trafficEnabled` prop); colors: green = low, yellow = moderate, orange = heavy, red = severe
 - `mapRef.flyTo()` — imperative navigation for user geolocation and location selection
-- Props: `onLocationSelect`, `filter`, `searchResultsGeoJSON`, `heatmapEnabled`, `heatmapData`, `flyToLocation`, `userCoords`, `mapStyle`
+- Props: `onLocationSelect`, `filter`, `searchResultsGeoJSON`, `heatmapEnabled`, `heatmapData`, `flyToLocation`, `userCoords`, `mapStyle`, `trafficEnabled`
 
 > **Note:** deck.gl has been removed. All map layers use native Mapbox GL via react-map-gl `Source` + `Layer` to fix coordinate drift at low zoom with pitch.
+
+### `OnboardingModal.jsx`
+Card-tap survey shown once after first login. 3 steps: noise preference → lighting preference → crowd preference. Each step has 3 visual option cards (no form fields). Saves to `PUT /profiles/me` on completion. Seen state stored in `localStorage` key `sensorymap_onboarding_done`.
 
 ### `SubmitReview.jsx`
 Review form:
