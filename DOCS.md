@@ -1,6 +1,6 @@
 # SenseMap — Platform Documentation
 
-> Last updated: May 18, 2026
+> Last updated: May 19, 2026
 
 ---
 
@@ -225,7 +225,8 @@ Request
 | GET | `/locations` | No | All locations as GeoJSON |
 | GET | `/locations/heatmap` | No | Top 500 scored locations (filters default scores) |
 | GET | `/locations/match` | Required | Personalized matches sorted by match score |
-| GET | `/locations/search?q=` | No | Search by name/category/address |
+| GET | `/locations/search?q=` | No | Search by name/category/address; auto-normalizes plural/singular (e.g. "cafes" matches "cafe" records) |
+| GET | `/locations/:id/hours` | No | Opening hours from Google Places API using stored `googlePlaceId`; returns `{ available, open_now, weekday_text }` |
 | GET | `/locations/:id` | No | Single location + last 10 reviews (includes `user.username` and `user.email` for each review) |
 
 ### Reviews (`/reviews`)

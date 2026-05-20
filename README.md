@@ -18,6 +18,10 @@ Currently in beta, covering **Toronto**.
 - **Review list** — see individual reviews with author, date, and slider ratings; AI-seeded reviews labeled with a badge
 - **Check-in flow** — quick tap ratings when you're physically at a location
 - **Saved places** — bookmark spots that work for you
+- **Location details** — selecting any place shows its short address, open/closed status (via Google Places), and current weather (via Open-Meteo)
+- **Category filters** — filter the map by venue type: cafes, parks, libraries, restaurants, fitness; sensory filters (quiet, low crowds, soft lighting) also available
+- **Search sidebar** — search results populate the sidebar list; smart plural/singular matching so "cafe" and "cafes" return the same results
+- **Onboarding survey** — first-time users see a 3-step card-tap flow to set their noise, lighting, and crowd preferences before exploring
 - **No account needed to explore** — sign up only to review or save
 
 ---
