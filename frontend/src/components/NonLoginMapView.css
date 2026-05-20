@@ -1263,14 +1263,17 @@
   display: none;
 }
 
-/* ── Heatmap toggle (base — positioned here so media queries can override) ── */
+/* ── Heatmap toggle — floats centered above the search bar, clear of all sidebars and the close button ── */
 .nlm-heatmap-toggle {
   position: absolute;
-  top: 16px;
-  right: calc(320px + 80px); /* clear the right sidebar (320px wide + 48px offset + gap) */
+  bottom: 196px; /* above search bar (bottom: 24px + ~150px height + gap) */
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: row;
   gap: 8px;
+  white-space: nowrap;
+  z-index: 11;
 }
 
 /* ── Responsive ── */
@@ -1294,7 +1297,11 @@
     bottom: 36px;
   }
   .nlm-heatmap-toggle {
-    right: 16px; /* right sidebar hidden at this breakpoint, safe to use right edge */
+    bottom: 210px; /* search bar at bottom: 36px at this breakpoint */
+    left: 50%;
+    right: auto;
+    top: auto;
+    transform: translateX(-50%);
     flex-direction: row;
   }
   .nlm-sidebar-left {
@@ -1346,6 +1353,8 @@
     left: 16px;
     right: auto;
     top: 16px;
+    bottom: auto;
+    transform: none;
     flex-direction: column;
   }
   /* Close map button: move to top-right to avoid overlap with heatmap toggle */
