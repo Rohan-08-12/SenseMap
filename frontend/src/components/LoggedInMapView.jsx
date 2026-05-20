@@ -1267,7 +1267,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   <p className="lmv-section-desc">Estimated trend based on sensory scores — not real-time data.</p>
                 </div>
                 <div style={{ width: '100%', height: 120, minWidth: 0 }}>
-                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                  <ResponsiveContainer width="99%" height={120} debounce={50}>
                     <LineChart data={noiseChartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#edf3f8" />
                       <XAxis dataKey="time" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
@@ -1394,7 +1394,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
 
               <div className="lmv-radar-container">
                 <div style={{ width: 250, height: 200, minWidth: 0 }}>
-                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                  <ResponsiveContainer width={250} height={200} debounce={50}>
                     <RadarChart data={radarData} outerRadius={70}>
                       <PolarGrid stroke="#e5e7eb" />
                       <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
