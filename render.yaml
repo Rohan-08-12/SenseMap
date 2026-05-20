@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: sensemap-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false
+      - key: AUTH0_ISSUER_BASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_PLACES_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SYSTEM_BOT_AUTH0_ID
+        sync: false
+      - key: DB_SSL_CA
+        sync: false
