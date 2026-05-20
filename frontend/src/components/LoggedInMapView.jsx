@@ -10,10 +10,20 @@ import SensoryProfile from './SensoryProfile';
 import Settings from './Settings';
 import LogoutConfirmation from './LogoutConfirmation';
 import SubmitReview from './SubmitReview'; // NEW
-import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, updateSensoryProfile, getLocationById, getAIInsights, discoverLocations, getSavedPlaces, savePlace, removeSavedPlace, checkIn, submitReview, getSimilarLocations } from '../services/api';
+import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, updateSensoryProfile, getLocationById, getLocationHours, getAIInsights, discoverLocations, getSavedPlaces, savePlace, removeSavedPlace, checkIn, submitReview, getSimilarLocations } from '../services/api';
 import './LoggedInMapView.css';
 
 const SETTINGS_KEY = 'sensorysafe_settings';
+
+function weatherEmoji(code) {
+  if (code === 0) return '☀️';
+  if (code <= 2) return '⛅';
+  if (code <= 3) return '☁️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '❄️';
+  if (code <= 82) return '🌧️';
+  return '⛈️';
+}
 
 const MAP_STYLE_URLS = {
   default: 'mapbox://styles/mapbox/light-v11',
@@ -68,6 +78,9 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);
   const [heatmapOn, setHeatmapOn] = useState(true);
   const [trafficOn, setTrafficOn] = useState(false);
+  const [locationHours, setLocationHours] = useState(null);
+  const [locationWeather, setLocationWeather] = useState(null);
+  const [nearbyConstruction, setNearbyConstruction] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false); // NEW
 
@@ -248,6 +261,31 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
     setAvgRating(null);
     setShowReviewForm(false);
     setCheckedIn(false);
+    setLocationHours(null);
+    setLocationWeather(null);
+    setNearbyConstruction(false);
+
+    const lat = selectedLocation.latitude;
+    const lng = selectedLocation.longitude;
+
+    if (selectedLocation.id) {
+      getLocationHours(selectedLocation.id)
+        .then((res) => setLocationHours(res.data))
+        .catch(() => {});
+    }
+
+    if (lat != null && lng != null) {
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&temperature_unit=celsius&forecast_days=1`)
+        .then((r) => r.json())
+        .then((d) => { if (d.current) setLocationWeather({ temp: Math.round(d.current.temperature_2m), code: d.current.weather_code }); })
+        .catch(() => {});
+
+      const q = `[out:json][timeout:8];(way["highway"="construction"](around:600,${lat},${lng});way["construction"](around:600,${lat},${lng});way["landuse"="construction"](around:600,${lat},${lng}););out count;`;
+      fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => { if (parseInt(d.elements?.[0]?.tags?.total ?? '0', 10) > 0) setNearbyConstruction(true); })
+        .catch(() => {});
+    }
   }, [selectedLocation?.id]);
 
   // Fetch detail + AI (also re-runs when refreshLocationData stabilizes after auth)
@@ -891,6 +929,34 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   <h2>{locName}</h2>
                   <p>{reviewCount > 0 ? `${reviewCount} reviews` : 'No reviews yet'}</p>
                 </div>
+                {(locationDetail?.address || locationHours?.available || locationWeather || nearbyConstruction) && (
+                  <div className="lmv-location-meta">
+                    {locationDetail?.address && (
+                      <div className="lmv-meta-chip">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1C4.34 1 3 2.34 3 4c0 2.25 3 7 3 7s3-4.75 3-7c0-1.66-1.34-3-3-3zm0 4.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" fill="currentColor" /></svg>
+                        <span>{locationDetail.address.split(',').slice(0, 2).join(',')}</span>
+                      </div>
+                    )}
+                    {locationHours?.available && (
+                      <div className={`lmv-meta-chip lmv-meta-chip--${locationHours.open_now ? 'open' : 'closed'}`}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" /><path d="M6 3.5V6l1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
+                        <span>{locationHours.open_now ? 'Open now' : 'Closed'}</span>
+                      </div>
+                    )}
+                    {locationWeather && (
+                      <div className="lmv-meta-chip">
+                        <span>{weatherEmoji(locationWeather.code)}</span>
+                        <span>{locationWeather.temp}°C</span>
+                      </div>
+                    )}
+                    {nearbyConstruction && (
+                      <div className="lmv-meta-chip lmv-meta-chip--construction">
+                        <span>🚧</span>
+                        <span>Construction nearby</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span className="lmv-match-badge">
                     {matchPercent !== null ? `${matchPercent}% match` : (userProfile ? '—' : 'Set up profile')}

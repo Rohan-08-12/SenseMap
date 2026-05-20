@@ -1471,3 +1471,43 @@
     padding: 6px 10px;
   }
 }
+
+/* Location meta chips row (address, hours, weather, construction) */
+.lmv-location-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+
+.lmv-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--theme-border, #e5e7eb);
+  background: var(--theme-surface, #fff);
+  color: var(--theme-text, #0f1720);
+  white-space: nowrap;
+}
+
+.lmv-meta-chip--open {
+  color: #065f46;
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.lmv-meta-chip--closed {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.lmv-meta-chip--construction {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
