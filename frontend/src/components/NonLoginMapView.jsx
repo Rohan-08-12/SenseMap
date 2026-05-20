@@ -205,8 +205,8 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
           if (Array.isArray(data)) {
             const nearby = data.some(
               (p) => p.Latitude && p.Longitude &&
-                Math.abs(p.Latitude - lat) < 0.009 &&
-                Math.abs(p.Longitude - lng) < 0.012
+                Math.abs(p.Latitude - lat) < 0.018 &&
+                Math.abs(p.Longitude - lng) < 0.025
             );
             setNearbyConstruction(nearby);
           }
