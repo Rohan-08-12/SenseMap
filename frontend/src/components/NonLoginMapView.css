@@ -106,12 +106,11 @@
 
 .nlm-sidebar-left-header {
   flex-shrink: 0;
-  padding: 21px 21px 16px;
+  padding: 16px 16px 16px 21px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-height: 0;
 }
 
@@ -121,13 +120,8 @@
 }
 
 .nlm-sidebar-left-header .nlm-theme-switcher {
-  order: 3;
-  width: 100%;
-  flex-basis: 100%;
-  justify-content: flex-start;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--theme-border);
+  order: 2;
+  margin-left: auto;
 }
 
 .nlm-sidebar-left--collapsed .nlm-sidebar-left-header {

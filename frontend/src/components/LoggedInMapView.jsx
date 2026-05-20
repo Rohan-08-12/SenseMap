@@ -541,7 +541,6 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
           </div>
           <div className="lmv-nav-logo-text">
             <h1>SenseMap</h1>
-            <p>Personal comfort dashboard</p>
           </div>
         </div>
 
