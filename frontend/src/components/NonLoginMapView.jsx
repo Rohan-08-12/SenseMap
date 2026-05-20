@@ -336,7 +336,7 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
         />
       </div>
 
-      <div className="nlm-heatmap-toggle" style={{ display: 'flex', flexDirection: 'column', gap: 8, zIndex: 9999 }}>
+      <div className="nlm-heatmap-toggle" style={{ zIndex: 9999 }}>
         <button
           className="nlm-theme-btn nlm-theme-btn--text"
           onClick={() => setHeatmapOn((prev) => !prev)}

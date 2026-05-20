@@ -1267,7 +1267,10 @@
 .nlm-heatmap-toggle {
   position: absolute;
   top: 16px;
-  right: 16px;
+  right: calc(320px + 80px); /* clear the right sidebar (320px wide + 48px offset + gap) */
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
 }
 
 /* ── Responsive ── */
@@ -1291,7 +1294,8 @@
     bottom: 36px;
   }
   .nlm-heatmap-toggle {
-    right: 16px;
+    right: 16px; /* right sidebar hidden at this breakpoint, safe to use right edge */
+    flex-direction: row;
   }
   .nlm-sidebar-left {
     width: 280px;
@@ -1337,11 +1341,12 @@
   .nlm-hero-card {
     display: none;
   }
-  /* Heatmap toggle: compact on left, so it doesn't collide with close button (center) */
+  /* Heatmap toggle: move to top-left on mobile so it clears the close button */
   .nlm-heatmap-toggle {
     left: 16px;
     right: auto;
     top: 16px;
+    flex-direction: column;
   }
   /* Close map button: move to top-right to avoid overlap with heatmap toggle */
   .nlm-close-map-btn {
