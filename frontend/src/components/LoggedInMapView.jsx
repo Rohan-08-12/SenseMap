@@ -691,10 +691,12 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                     Low noise nearby
                   </span>
                 )}
-                <span className="lmv-tag gray">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.25" stroke="#0f1720" strokeWidth="1.2" /><path d="M7 3.5V7L9.25 8.25" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  Best: {snapshot?.bestWindow ?? '—'}
-                </span>
+                {snapshot && snapshot.noiseTrend !== 'Low' && (
+                  <span className="lmv-tag gray">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75L8.75 5.25L12.25 5.83L9.625 8.4L10.25 12.25L7 10.5L3.75 12.25L4.375 8.4L1.75 5.83L5.25 5.25Z" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Best time: {snapshot.bestWindow}
+                  </span>
+                )}
               </div>
             </div>
 

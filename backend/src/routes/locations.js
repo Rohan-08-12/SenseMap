@@ -156,15 +156,29 @@ router.get("/search", async (req, res) => {
         const { q } = req.query;
         if (!q) return res.status(400).json({ error: "Query parameter q is required" });
 
+        // Build a set of search terms covering common plural/singular variations
+        // so "cafes" matches "cafe" records and "cafe" matches "cafes" records.
+        const terms = new Set([q]);
+        const lower = q.toLowerCase();
+        if (lower.endsWith('ies') && lower.length > 4) {
+            terms.add(q.slice(0, -3) + 'y');   // libraries → library
+        } else if (lower.endsWith('es') && lower.length > 3) {
+            terms.add(q.slice(0, -2));           // cafes → cafe
+        } else if (lower.endsWith('s') && lower.length > 2) {
+            terms.add(q.slice(0, -1));           // parks → park
+        } else {
+            terms.add(q + 's');                  // cafe → cafes
+        }
+
+        const orClauses = [...terms].flatMap((term) => [
+            { name: { contains: term, mode: "insensitive" } },
+            { category: { contains: term, mode: "insensitive" } },
+            { address: { contains: term, mode: "insensitive" } },
+            { description: { contains: term, mode: "insensitive" } },
+        ]);
+
         const locations = await prisma.location.findMany({
-            where: {
-                OR: [
-                    { name: { contains: q, mode: "insensitive" } },
-                    { category: { contains: q, mode: "insensitive" } },
-                    { address: { contains: q, mode: "insensitive" } },
-                    { description: { contains: q, mode: "insensitive" } },
-                ]
-            },
+            where: { OR: orClauses },
             take: 100,
             include: { sensoryScores: true }
         });

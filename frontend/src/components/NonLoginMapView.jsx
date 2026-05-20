@@ -607,7 +607,7 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
                   </div>
                   <div className="nlm-score-badge">
                     <span className="score-value">{overallScore}</span>
-                    <span className="score-label">{reviewCount} reviews</span>
+                    <span className="score-label">{reviewCount > 0 ? `${reviewCount} reviews` : 'AI estimate'}</span>
                   </div>
                 </div>
 
