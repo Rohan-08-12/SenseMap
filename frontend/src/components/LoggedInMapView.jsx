@@ -925,39 +925,12 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               </div>
 
               <div className="lmv-loc-header">
-                <div className="lmv-loc-title">
-                  <h2>{locName}</h2>
-                  <p>{reviewCount > 0 ? `${reviewCount} reviews` : 'No reviews yet'}</p>
-                </div>
-                {(locationDetail?.address || locationHours?.available || locationWeather || nearbyConstruction) && (
-                  <div className="lmv-location-meta">
-                    {locationDetail?.address && (
-                      <div className="lmv-meta-chip">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1C4.34 1 3 2.34 3 4c0 2.25 3 7 3 7s3-4.75 3-7c0-1.66-1.34-3-3-3zm0 4.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" fill="currentColor" /></svg>
-                        <span>{locationDetail.address.split(',').slice(0, 2).join(',')}</span>
-                      </div>
-                    )}
-                    {locationHours?.available && (
-                      <div className={`lmv-meta-chip lmv-meta-chip--${locationHours.open_now ? 'open' : 'closed'}`}>
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" /><path d="M6 3.5V6l1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
-                        <span>{locationHours.open_now ? 'Open now' : 'Closed'}</span>
-                      </div>
-                    )}
-                    {locationWeather && (
-                      <div className="lmv-meta-chip">
-                        <span>{weatherEmoji(locationWeather.code)}</span>
-                        <span>{locationWeather.temp}°C</span>
-                      </div>
-                    )}
-                    {nearbyConstruction && (
-                      <div className="lmv-meta-chip lmv-meta-chip--construction">
-                        <span>🚧</span>
-                        <span>Construction nearby</span>
-                      </div>
-                    )}
+                <div className="lmv-loc-header-row">
+                  <div className="lmv-loc-title">
+                    <h2>{locName}</h2>
+                    <p>{reviewCount > 0 ? `${reviewCount} reviews` : 'No reviews yet'}</p>
                   </div>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span className="lmv-match-badge">
                     {matchPercent !== null ? `${matchPercent}% match` : (userProfile ? '—' : 'Set up profile')}
                   </span>
@@ -1128,6 +1101,35 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                     </div>
                   )}
                 </div>
+                </div>{/* end lmv-loc-header-row */}
+                {(locationDetail?.address || locationHours?.available || locationWeather || nearbyConstruction) && (
+                  <div className="lmv-location-meta">
+                    {locationDetail?.address && (
+                      <div className="lmv-meta-chip">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1C4.34 1 3 2.34 3 4c0 2.25 3 7 3 7s3-4.75 3-7c0-1.66-1.34-3-3-3zm0 4.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" fill="currentColor" /></svg>
+                        <span>{locationDetail.address.split(',').slice(0, 2).join(',')}</span>
+                      </div>
+                    )}
+                    {locationHours?.available && (
+                      <div className={`lmv-meta-chip lmv-meta-chip--${locationHours.open_now ? 'open' : 'closed'}`}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" /><path d="M6 3.5V6l1.5 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
+                        <span>{locationHours.open_now ? 'Open now' : 'Closed'}</span>
+                      </div>
+                    )}
+                    {locationWeather && (
+                      <div className="lmv-meta-chip">
+                        <span>{weatherEmoji(locationWeather.code)}</span>
+                        <span>{locationWeather.temp}°C</span>
+                      </div>
+                    )}
+                    {nearbyConstruction && (
+                      <div className="lmv-meta-chip lmv-meta-chip--construction">
+                        <span>🚧</span>
+                        <span>Construction nearby</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Stars */}

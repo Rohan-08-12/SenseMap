@@ -746,8 +746,15 @@
 
 .lmv-loc-header {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lmv-loc-header-row {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .lmv-loc-title h2 {
