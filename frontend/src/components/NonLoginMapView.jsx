@@ -196,7 +196,7 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
         })
         .catch(() => { });
 
-      const overpassQuery = `[out:json][timeout:8];(way["highway"="construction"](around:600,${lat},${lng});way["construction"](around:600,${lat},${lng});way["landuse"="construction"](around:600,${lat},${lng}););out count;`;
+      const overpassQuery = `[out:json][timeout:10];(way["highway"="construction"](around:1000,${lat},${lng});way["construction"](around:1000,${lat},${lng});way["landuse"="construction"](around:1000,${lat},${lng});node["barrier"="construction"](around:1000,${lat},${lng});way["under_construction"](around:1000,${lat},${lng}););out count;`;
       fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`)
         .then((r) => r.json())
         .then((data) => {

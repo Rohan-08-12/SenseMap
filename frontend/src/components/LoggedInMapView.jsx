@@ -280,7 +280,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
         .then((d) => { if (d.current) setLocationWeather({ temp: Math.round(d.current.temperature_2m), code: d.current.weather_code }); })
         .catch(() => {});
 
-      const q = `[out:json][timeout:8];(way["highway"="construction"](around:600,${lat},${lng});way["construction"](around:600,${lat},${lng});way["landuse"="construction"](around:600,${lat},${lng}););out count;`;
+      const q = `[out:json][timeout:10];(way["highway"="construction"](around:1000,${lat},${lng});way["construction"](around:1000,${lat},${lng});way["landuse"="construction"](around:1000,${lat},${lng});node["barrier"="construction"](around:1000,${lat},${lng});way["under_construction"](around:1000,${lat},${lng}););out count;`;
       fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`)
         .then((r) => r.json())
         .then((d) => { if (parseInt(d.elements?.[0]?.tags?.total ?? '0', 10) > 0) setNearbyConstruction(true); })
