@@ -4,6 +4,7 @@ import { setTokenGetter } from './services/api';
 import LaunchScreen from './components/LaunchScreen';
 import NonLoginMapView from './components/NonLoginMapView';
 import LoggedInMapView from './components/LoggedInMapView';
+import OnboardingModal, { hasSeenOnboarding } from './components/OnboardingModal';
 
 /**
  * Main Application Component
@@ -15,10 +16,14 @@ function App() {
   const { isAuthenticated, isLoading, getAccessTokenSilently, loginWithRedirect, logout } = useAuth0();
   const [showMap, setShowMap] = useState(false);
   const [exploreParams, setExploreParams] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
       setTokenGetter(() => getAccessTokenSilently());
+      if (!hasSeenOnboarding()) {
+        setShowOnboarding(true);
+      }
     } else {
       setTokenGetter(null);
     }
@@ -43,12 +48,17 @@ function App() {
 
   if (isAuthenticated) {
     return (
-      <LoggedInMapView
-        onBackToHome={handleBackToHome}
-        initialSearchQuery={exploreParams?.searchQuery}
-        initialFilter={exploreParams?.filter}
-        onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-      />
+      <>
+        <LoggedInMapView
+          onBackToHome={handleBackToHome}
+          initialSearchQuery={exploreParams?.searchQuery}
+          initialFilter={exploreParams?.filter}
+          onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+        />
+        {showOnboarding && (
+          <OnboardingModal onDone={() => setShowOnboarding(false)} />
+        )}
+      </>
     );
   }
 
