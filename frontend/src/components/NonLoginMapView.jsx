@@ -15,6 +15,14 @@ const QUICK_FILTERS = [
   { label: 'Nearby', filter: 'nearby' },
 ];
 
+const PLACE_FILTERS = [
+  { emoji: '☕', label: 'Cafes', filter: 'cafes' },
+  { emoji: '🌿', label: 'Parks', filter: 'parks' },
+  { emoji: '📚', label: 'Libraries', filter: 'libraries' },
+  { emoji: '🍽️', label: 'Restaurants', filter: 'restaurants' },
+  { emoji: '🏋️', label: 'Fitness', filter: 'fitness' },
+];
+
 const CATEGORY_CHIPS = [
   { emoji: '🤫', title: 'Quiet', desc: 'Low-noise spots', filter: 'quiet-now' },
   { emoji: '💡', title: 'Soft light', desc: 'Gentler lighting', filter: 'soft-lighting' },
@@ -387,6 +395,20 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
                   className={`nlm-filter-chip${activeFilter === f.filter ? ' active' : ''}`}
                   onClick={() => handleFilterClick(f.filter)}
                 >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <h3 style={{ marginTop: 12 }}>Place type</h3>
+            <div className="nlm-filter-chips">
+              {PLACE_FILTERS.map((f) => (
+                <button
+                  key={f.filter}
+                  className={`nlm-filter-chip nlm-filter-chip--place${activeFilter === f.filter ? ' active' : ''}`}
+                  onClick={() => handleFilterClick(f.filter)}
+                >
+                  <span aria-hidden>{f.emoji}</span>
                   {f.label}
                 </button>
               ))}
