@@ -196,9 +196,12 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
         })
         .catch(() => { });
 
-      fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en')
+      const constructionCtrl = new AbortController();
+      const constructionTimer = setTimeout(() => constructionCtrl.abort(), 6000);
+      fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en', { signal: constructionCtrl.signal })
         .then((r) => r.json())
         .then((data) => {
+          clearTimeout(constructionTimer);
           if (Array.isArray(data)) {
             const nearby = data.some(
               (p) => p.Latitude && p.Longitude &&
@@ -208,7 +211,7 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
             setNearbyConstruction(nearby);
           }
         })
-        .catch(() => { });
+        .catch(() => { clearTimeout(constructionTimer); });
     }
   }, [selectedLocation]);
 

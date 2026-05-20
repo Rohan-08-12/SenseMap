@@ -280,9 +280,12 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
         .then((d) => { if (d.current) setLocationWeather({ temp: Math.round(d.current.temperature_2m), code: d.current.weather_code }); })
         .catch(() => {});
 
-      fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en')
+      const constructionCtrl = new AbortController();
+      const constructionTimer = setTimeout(() => constructionCtrl.abort(), 6000);
+      fetch('https://511on.ca/api/v2/get/constructionprojects?format=json&lang=en', { signal: constructionCtrl.signal })
         .then((r) => r.json())
         .then((data) => {
+          clearTimeout(constructionTimer);
           if (Array.isArray(data)) {
             const nearby = data.some(
               (p) => p.Latitude && p.Longitude &&
@@ -292,7 +295,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
             if (nearby) setNearbyConstruction(true);
           }
         })
-        .catch(() => {});
+        .catch(() => { clearTimeout(constructionTimer); });
     }
   }, [selectedLocation?.id]);
 
