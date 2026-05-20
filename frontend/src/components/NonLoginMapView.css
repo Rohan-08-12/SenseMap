@@ -419,6 +419,13 @@
   color: var(--theme-accent);
 }
 
+.nlm-filter-chip--place {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+}
+
 /* Top Ranked section */
 .nlm-ranked {
   background: var(--theme-card-soft);
