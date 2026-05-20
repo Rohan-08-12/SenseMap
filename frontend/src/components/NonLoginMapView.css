@@ -1244,6 +1244,7 @@
     width: auto;
     transform: none;
     min-width: unset;
+    bottom: 36px;
   }
   .nlm-heatmap-toggle {
     right: 16px;

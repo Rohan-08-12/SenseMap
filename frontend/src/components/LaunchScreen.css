@@ -854,7 +854,16 @@ html[data-theme='calm'] {
 
   .ls-map-section { padding: 0 16px 48px; }
   .ls-map-wrap { height: 210px; }
-  .ls-map-legend { display: none; }
+  .ls-map-legend {
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+    padding: 7px 12px;
+  }
 
   .ls-who-section { padding: 48px 20px; }
   .ls-who-grid { grid-template-columns: repeat(2, 1fr); }
