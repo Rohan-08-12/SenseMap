@@ -1476,6 +1476,11 @@
     font-size: 11px;
     padding: 6px 10px;
   }
+
+  /* Hide map toggle buttons when location detail sheet is open */
+  .lmv--has-detail .lmv-map-toggle {
+    display: none;
+  }
 }
 
 /* Location meta chips row (address, hours, weather, construction) */
