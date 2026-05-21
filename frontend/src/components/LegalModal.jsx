@@ -31,7 +31,7 @@ const PRIVACY_CONTENT = {
         },
         {
             heading: 'Contact',
-            body: 'For privacy questions contact: rohannayyer8@gmail.com',
+            body: 'For privacy questions contact: hello@sensemap.app',
         },
     ],
 };
@@ -58,7 +58,7 @@ const TERMS_CONTENT = {
         },
         {
             heading: 'Changes',
-            body: 'We may update these terms as the platform evolves. Continued use after updates constitutes acceptance. For questions contact: rohannayyer8@gmail.com',
+            body: 'We may update these terms as the platform evolves. Continued use after updates constitutes acceptance. For questions contact: hello@sensemap.app',
         },
     ],
 };
