@@ -13,7 +13,7 @@ posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
   api_host: 'https://us.i.posthog.com',
   capture_pageview: true,
   capture_pageleave: true,
-  session_recording: { maskAllInputs: false },
+  session_recording: { maskAllInputs: true },
 });
 
 const AUTH0_DOMAIN = import.meta.env.VITE_AUTH0_DOMAIN || '';

@@ -18,8 +18,8 @@ const PRIVACY_CONTENT = {
             body: 'We use Auth0 for authentication (stores your email and session tokens), Supabase/PostgreSQL to store your account data and reviews, Google Places API to discover locations, Cloudinary to host place photos, and Google Gemini to analyse review text for sensory signals. Each service processes data under their own privacy policies. Your data may be processed on servers outside your country of residence.',
         },
         {
-            heading: 'Cookies and local storage',
-            body: 'We use browser localStorage to save your theme preference and onboarding status. Auth0 uses cookies and localStorage to maintain your login session. We do not use advertising or tracking cookies.',
+            heading: 'Cookies, local storage, and analytics',
+            body: 'We use browser localStorage to save your theme preference and onboarding status. Auth0 uses cookies and localStorage to maintain your login session. We use PostHog to collect product analytics including page views, feature interactions, and session recordings. PostHog may store cookies or localStorage entries in your browser; data is processed on servers in the United States. Session recordings may capture on-screen interactions but do not record passwords or sensitive form inputs. We do not use advertising or tracking cookies. You can opt out of analytics by enabling "Do Not Track" in your browser settings.',
         },
         {
             heading: 'Data retention',
