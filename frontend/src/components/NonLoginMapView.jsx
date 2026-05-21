@@ -873,7 +873,7 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
                 </div>
                 <div className="nlm-score-badge">
                   <span className="score-value">{overallScore}</span>
-                  <span className="score-label">{reviewCount} reviews</span>
+                  <span className="score-label">{reviewCount > 0 ? `${reviewCount} reviews` : 'AI estimate'}</span>
                 </div>
                 <button
                   className="nlm-mobile-detail-close"
@@ -883,6 +883,36 @@ function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initi
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
                 </button>
               </div>
+
+              {/* Address / hours / weather / construction chips */}
+              {(locationDetail?.address || locationHours?.available || locationWeather || nearbyConstruction) && (
+                <div className="nlm-location-meta">
+                  {locationDetail?.address && (
+                    <div className="nlm-meta-chip">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                      <span>{locationDetail.address.split(',').slice(0, 2).join(',')}</span>
+                    </div>
+                  )}
+                  {locationHours?.available && (
+                    <div className={`nlm-meta-chip nlm-meta-chip--${locationHours.open_now ? 'open' : 'closed'}`}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      <span>{locationHours.open_now ? 'Open now' : 'Closed'}</span>
+                    </div>
+                  )}
+                  {locationWeather && (
+                    <div className="nlm-meta-chip">
+                      <span aria-hidden>{weatherEmoji(locationWeather.code)}</span>
+                      <span>{locationWeather.temp}°C</span>
+                    </div>
+                  )}
+                  {nearbyConstruction && (
+                    <div className="nlm-meta-chip nlm-meta-chip--construction">
+                      <span aria-hidden>🚧</span>
+                      <span>Construction nearby</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Stars */}
               <div className="nlm-stars">

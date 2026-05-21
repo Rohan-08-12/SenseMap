@@ -420,6 +420,17 @@
   color: #4a0f00;
 }
 
+/* Toggle button group — positioned over the map, hidden by CSS on mobile when detail sheet opens */
+.lmv-map-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+}
+
 .lmv-map-time-filter {
   display: flex;
   align-items: center;
@@ -1479,7 +1490,8 @@
 
   /* Hide map toggle buttons when location detail sheet is open */
   .lmv--has-detail .lmv-map-toggle {
-    display: none;
+    visibility: hidden;
+    pointer-events: none;
   }
 }
 
