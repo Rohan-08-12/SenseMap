@@ -15,7 +15,11 @@ const PRIVACY_CONTENT = {
         },
         {
             heading: 'Third-party services',
-            body: 'We use Auth0 for authentication, Google Places API to discover locations, Cloudinary to host place photos, and Google Gemini to analyse review text for sensory signals. Each service processes data under their own privacy policies.',
+            body: 'We use Auth0 for authentication (stores your email and session tokens), Supabase/PostgreSQL to store your account data and reviews, Google Places API to discover locations, Cloudinary to host place photos, and Google Gemini to analyse review text for sensory signals. Each service processes data under their own privacy policies. Your data may be processed on servers outside your country of residence.',
+        },
+        {
+            heading: 'Cookies and local storage',
+            body: 'We use browser localStorage to save your theme preference and onboarding status. Auth0 uses cookies and localStorage to maintain your login session. We do not use advertising or tracking cookies.',
         },
         {
             heading: 'Data retention',
@@ -23,7 +27,7 @@ const PRIVACY_CONTENT = {
         },
         {
             heading: 'Your rights',
-            body: 'You can view, update, or delete your sensory profile at any time. You can remove saved places and reviews individually. For a full data export or any other privacy request, contact us at the address below.',
+            body: 'You can view, update, or delete your sensory profile at any time. You can remove saved places and reviews individually. If you are in the EU or California, you have the right to request a copy of your data, request deletion, or restrict processing — contact us at the address below. We do not sell your personal data.',
         },
         {
             heading: 'Contact',
@@ -42,7 +46,7 @@ const TERMS_CONTENT = {
         },
         {
             heading: 'Your reviews',
-            body: 'Reviews you submit become part of the community dataset and are used to calculate aggregate sensory scores. Please submit honest, first-hand sensory observations. Do not include personally identifiable information about individuals, offensive content, or deliberate misinformation.',
+            body: 'Reviews you submit become part of the community dataset and are used to calculate aggregate sensory scores. Please submit honest, first-hand sensory observations. Do not include personally identifiable information about individuals, offensive content, or deliberate misinformation. SenseMap reserves the right to remove any content that violates these guidelines without notice.',
         },
         {
             heading: 'Accuracy',
