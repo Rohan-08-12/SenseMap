@@ -683,7 +683,6 @@ html[data-theme='calm'] {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  filter: brightness(0) invert(1);
 }
 
 .ls-footer-name {
