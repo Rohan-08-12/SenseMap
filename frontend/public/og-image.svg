@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e8f5ee"/>
+      <stop offset="100%" stop-color="#dceef8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f4faf7" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4b8cf7"/>
+      <stop offset="100%" stop-color="#3ecf8e"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="8" stdDeviation="24" flood-color="#0f1720" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle grid dots -->
+  <pattern id="dots" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+    <circle cx="20" cy="20" r="1.5" fill="#4b8cf7" opacity="0.12"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+
+  <!-- Decorative map pin circles — background -->
+  <circle cx="980" cy="140" r="180" fill="#4b8cf7" opacity="0.06"/>
+  <circle cx="1050" cy="500" r="120" fill="#3ecf8e" opacity="0.07"/>
+  <circle cx="160" cy="520" r="100" fill="#4b8cf7" opacity="0.05"/>
+
+  <!-- Main card -->
+  <rect x="80" y="80" width="1040" height="470" rx="28" ry="28" fill="url(#card)" filter="url(#shadow)"/>
+
+  <!-- Top accent bar -->
+  <rect x="80" y="80" width="1040" height="6" rx="3" fill="url(#accent)"/>
+
+  <!-- Logo icon -->
+  <rect x="140" y="168" width="72" height="72" rx="18" fill="#4b8cf7" opacity="0.12"/>
+  <text x="176" y="220" font-family="system-ui, sans-serif" font-size="36" text-anchor="middle" fill="#4b8cf7">🗺</text>
+
+  <!-- App name -->
+  <text x="234" y="196" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="44" font-weight="700" fill="#0f1720" letter-spacing="-1">SenseMap</text>
+
+  <!-- Beta badge -->
+  <rect x="236" y="210" width="64" height="26" rx="13" fill="#4b8cf7" opacity="0.12"/>
+  <text x="268" y="228" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="600" text-anchor="middle" fill="#4b8cf7">BETA</text>
+
+  <!-- Divider -->
+  <rect x="140" y="278" width="920" height="1.5" fill="#e5e7eb"/>
+
+  <!-- Tagline -->
+  <text x="140" y="348" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="48" font-weight="700" fill="#0f1720" letter-spacing="-1.5">Find places that feel</text>
+  <text x="140" y="408" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="48" font-weight="700" fill="#4b8cf7" letter-spacing="-1.5">right for you.</text>
+
+  <!-- Subtitle -->
+  <text x="140" y="464" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-size="24" font-weight="400" fill="#6b7280">Community sensory ratings for noise, lighting &amp; crowds · Toronto</text>
+
+  <!-- Feature pills -->
+  <rect x="140" y="494" width="148" height="36" rx="18" fill="#ecfdf5"/>
+  <text x="214" y="518" font-family="-apple-system, sans-serif" font-size="15" font-weight="500" text-anchor="middle" fill="#065f46">🔇 Quiet spots</text>
+
+  <rect x="300" y="494" width="168" height="36" rx="18" fill="#eff6ff"/>
+  <text x="384" y="518" font-family="-apple-system, sans-serif" font-size="15" font-weight="500" text-anchor="middle" fill="#1d4ed8">💡 Soft lighting</text>
+
+  <rect x="480" y="494" width="168" height="36" rx="18" fill="#fef9c3"/>
+  <text x="564" y="518" font-family="-apple-system, sans-serif" font-size="15" font-weight="500" text-anchor="middle" fill="#713f12">🌿 Low crowds</text>
+
+  <!-- URL -->
+  <text x="1060" y="526" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="18" font-weight="500" text-anchor="end" fill="#9ca3af">sensemap.app</text>
+</svg>

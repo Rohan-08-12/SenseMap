@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { setTokenGetter } from './services/api';
 import LaunchScreen from './components/LaunchScreen';
 import NonLoginMapView from './components/NonLoginMapView';
 import LoggedInMapView from './components/LoggedInMapView';
 import OnboardingModal, { hasSeenOnboarding } from './components/OnboardingModal';
+import NotFound from './components/NotFound';
 
 /**
  * Main Application Component
@@ -14,6 +16,8 @@ import OnboardingModal, { hasSeenOnboarding } from './components/OnboardingModal
  */
 function App() {
   const { isAuthenticated, isLoading, getAccessTokenSilently, loginWithRedirect, logout } = useAuth0();
+  const location = useLocation();
+  const isRoot = location.pathname === '/';
   const [showMap, setShowMap] = useState(false);
   const [exploreParams, setExploreParams] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -37,6 +41,14 @@ function App() {
   const handleBackToHome = () => {
     setShowMap(false);
   };
+
+  if (!isRoot) {
+    return (
+      <Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    );
+  }
 
   if (isLoading) {
     return (

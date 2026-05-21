@@ -1,0 +1,61 @@
+.nf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--theme-bg, #f4f7f4);
+  font-family: 'Inter', sans-serif;
+  padding: 24px;
+}
+
+.nf-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  max-width: 400px;
+  background: var(--theme-surface, #fff);
+  border: 1px solid var(--theme-border, #e5e7eb);
+  border-radius: 20px;
+  padding: 48px 40px;
+  box-shadow: 0 16px 40px rgba(15, 23, 32, 0.08);
+}
+
+.nf-icon {
+  font-size: 52px;
+  line-height: 1;
+}
+
+.nf-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--theme-text, #0f1720);
+  letter-spacing: -0.5px;
+}
+
+.nf-desc {
+  margin: 0;
+  font-size: 15px;
+  color: var(--theme-text-muted, #6b7280);
+  line-height: 1.6;
+}
+
+.nf-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 24px;
+  border-radius: 999px;
+  background: var(--theme-accent, #4b8cf7);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: 8px;
+  transition: background 0.15s;
+}
+
+.nf-btn:hover {
+  background: #3a7af0;
+}
