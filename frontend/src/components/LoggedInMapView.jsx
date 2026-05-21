@@ -66,7 +66,7 @@ function SkeletonBlock({ width = '100%', height = 16 }) {
   return <div className="animate-pulse" style={{ width, height, background: '#e5e7eb', borderRadius: 6 }} />;
 }
 
-function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLogout }) {
+function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLogout, hideControls }) {
   const { user, getAccessTokenSilently } = useAuth0();
   const { theme, setTheme } = useTheme();
 
@@ -782,7 +782,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </span>
               </div>
 
-              <div className="lmv-map-toggle">
+              {!hideControls && <div className="lmv-map-toggle">
                 <button
                   className="lmv-map-time-filter"
                   onClick={() => setActiveFilter((prev) => prev === 'before-noon' ? null : 'before-noon')}
@@ -813,7 +813,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   </svg>
                   Traffic
                 </button>
-              </div>
+              </div>}
 
               <div className="lmv-nearby-overlay">
                 <span className="lmv-nearby-label">Top nearby places</span>

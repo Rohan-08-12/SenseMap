@@ -66,6 +66,7 @@ function App() {
           initialSearchQuery={exploreParams?.searchQuery}
           initialFilter={exploreParams?.filter}
           onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+          hideControls={showOnboarding}
         />
         {showOnboarding && (
           <OnboardingModal onDone={() => setShowOnboarding(false)} />
