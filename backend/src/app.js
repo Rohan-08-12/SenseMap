@@ -64,10 +64,18 @@ const uploadLimiter = rateLimit({
     message: { error: "Upload limit reached. You can upload up to 10 images per hour." },
 });
 
+const discoverLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Search limit reached, please slow down." },
+});
+
 app.use(apiLimiter);
 
 app.get("/", (req, res) => {
-    res.json({ status: "SensorySafe backend running" });
+    res.json({ status: "ok" });
 });
 
 app.use("/locations", locationsRoutes);
@@ -77,7 +85,7 @@ app.use("/rankings", rankingsRoutes);
 app.use("/ai", aiLimiter, aiRoutes);
 app.use("/upload", uploadLimiter, uploadRoutes);
 app.use("/saved-places", savedPlacesRouter);
-app.use("/discover", discoverRouter);
+app.use("/discover", discoverLimiter, discoverRouter);
 app.use("/checkins", checkinsRouter);
 app.use("/users", usersRouter);
 
