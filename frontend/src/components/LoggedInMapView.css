@@ -421,10 +421,6 @@
 }
 
 .lmv-map-time-filter {
-  position: absolute;
-  top: 18px;
-  right: 8px;
-  z-index: 5;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -436,6 +432,9 @@
   font-size: 14px;
   font-weight: 500;
   color: var(--theme-text);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
 }
 
 .lmv-map-time-filter svg {
