@@ -128,7 +128,9 @@ AutisticAI/
 | [Railway](https://railway.app) | Backend (`AutisticAI/backend`) |
 | [Vercel](https://vercel.com) | Frontend (`AutisticAI/frontend`) |
 
-Set `ALLOWED_ORIGINS` on Railway to your Vercel URL. Add your Vercel URL to Auth0's Allowed Callback URLs, Logout URLs, and Web Origins.
+Live at **[sensemap.app](https://sensemap.app)**.
+
+Set `ALLOWED_ORIGINS` on Railway to `https://sensemap.app`. Add `https://sensemap.app` to Auth0's Allowed Callback URLs, Logout URLs, and Web Origins.
 
 ---
 
