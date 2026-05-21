@@ -782,7 +782,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </span>
               </div>
 
-              {!hideControls && <div className="lmv-map-toggle">
+              {!hideControls && !showLogoutModal && <div className="lmv-map-toggle">
                 <button
                   className="lmv-map-time-filter"
                   onClick={() => setActiveFilter((prev) => prev === 'before-noon' ? null : 'before-noon')}
