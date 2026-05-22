@@ -278,6 +278,8 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
                             src="/assets/images/map-preview.jpg"
                             alt="Sensory map preview of Toronto"
                             className="ls-map-bg-img"
+                            loading="lazy"
+                            decoding="async"
                         />
                         <div className="ls-map-legend">
                             {[['#2d6a4f','Comfortable'],['#d4a017','Moderate'],['#c05e3c','Overwhelming']].map(([color,label]) => (

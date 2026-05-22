@@ -62,6 +62,11 @@ function NavIcon({ type, active }) {
   return icons[type] || null;
 }
 
+function optimizeCloudinaryUrl(url) {
+  if (!url || !url.includes('res.cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/f_auto,q_auto,w_800/');
+}
+
 function SkeletonBlock({ width = '100%', height = 16 }) {
   return <div className="animate-pulse" style={{ width, height, background: '#e5e7eb', borderRadius: 6 }} />;
 }
@@ -914,7 +919,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
             <div className="lmv-detail-card">
               <div className="lmv-loc-photo">
                 {(locationDetail?.imageUrl || locationDetail?.reviews?.find((r) => r.imageUrl)?.imageUrl) ? (
-                  <img src={locationDetail.imageUrl || locationDetail.reviews.find((r) => r.imageUrl).imageUrl} alt={locName} />
+                  <img src={optimizeCloudinaryUrl(locationDetail.imageUrl || locationDetail.reviews.find((r) => r.imageUrl).imageUrl)} alt={locName} loading="lazy" decoding="async" />
                 ) : (
                   <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, var(--theme-tag-soft), var(--theme-tag-strong))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--theme-text-muted)', fontSize: 13 }}>
                     {locName}
