@@ -140,6 +140,25 @@ See [DOCS.md](./DOCS.md) for full API reference, data models, architecture, and 
 
 ---
 
+## Monitoring
+
+| Tool | Purpose |
+|---|---|
+| [UptimeRobot](https://uptimerobot.com) | Pings sensemap.app every 5 min; emails on downtime |
+| [Sentry](https://sentry.io) | Frontend JS error tracking via Loader Script in `frontend/index.html` |
+| [PostHog](https://posthog.com) | Product analytics, session replay, web vitals (`VITE_POSTHOG_KEY`) |
+
+---
+
+## Auth Notes
+
+- Auth0 domain: `dev-nx7sf078z0lxwgez.us.auth0.com`
+- Google OAuth uses production keys (not Auth0 dev keys) — configured in Auth0 → Authentication → Social → Google
+- Google Cloud OAuth redirect URI: `https://dev-nx7sf078z0lxwgez.us.auth0.com/login/callback`
+- In-app browser warning shown automatically when users open the app via LinkedIn, Instagram, or Twitter — prompts them to open in Safari/Chrome for Google sign-in
+
+---
+
 ## Status
 
 **Beta** — Toronto only. Active development.
