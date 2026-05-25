@@ -96,6 +96,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [aiInsights, setAiInsights] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiNoTextReviews, setAiNoTextReviews] = useState(false);
+  const [aiError, setAiError] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
   const [userCoords, setUserCoords] = useState(null);
   const [avgRating, setAvgRating] = useState(null);
@@ -250,6 +251,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
       .catch(() => { });
 
     setAiNoTextReviews(false);
+    setAiError(false);
     try {
       setAiLoading(true);
       await getAccessTokenSilently({ authorizationParams: { audience: import.meta.env.VITE_AUTH0_AUDIENCE } });
@@ -257,6 +259,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
       setAiInsights(res.data);
     } catch (err) {
       if (err?.response?.status === 400) setAiNoTextReviews(true);
+      else setAiError(true);
     }
     finally { setAiLoading(false); }
   }, [getAccessTokenSilently]);
@@ -267,6 +270,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
     if (!selectedLocation) return;
     setAiInsights(null);
     setAiNoTextReviews(false);
+    setAiError(false);
     setLocationDetail(null);
     setAvgRating(null);
     setShowReviewForm(false);
@@ -1364,6 +1368,8 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                     </div>
                   </div>
                 </>
+              ) : aiError ? (
+                <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>AI insights unavailable right now. Try again later.</p>
               ) : (
                 <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>Select a location to see AI insights.</p>
               )}
