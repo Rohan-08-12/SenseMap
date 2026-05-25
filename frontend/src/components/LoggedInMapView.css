@@ -654,6 +654,24 @@
   flex-shrink: 0;
 }
 
+.lmv-search-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--theme-accent);
+  border: none;
+  cursor: pointer;
+  color: white;
+  flex-shrink: 0;
+}
+.lmv-search-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .lmv-bottom-actions {
   display: flex;
   gap: 10px;
