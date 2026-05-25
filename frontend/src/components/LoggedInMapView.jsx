@@ -95,6 +95,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [locationDetail, setLocationDetail] = useState(null);
   const [aiInsights, setAiInsights] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiNoTextReviews, setAiNoTextReviews] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
   const [userCoords, setUserCoords] = useState(null);
   const [avgRating, setAvgRating] = useState(null);
@@ -248,12 +249,15 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
       })
       .catch(() => { });
 
+    setAiNoTextReviews(false);
     try {
       setAiLoading(true);
       await getAccessTokenSilently({ authorizationParams: { audience: import.meta.env.VITE_AUTH0_AUDIENCE } });
       const res = await getAIInsights(locId);
       setAiInsights(res.data);
-    } catch { /* AI not available */ }
+    } catch (err) {
+      if (err?.response?.status === 400) setAiNoTextReviews(true);
+    }
     finally { setAiLoading(false); }
   }, [getAccessTokenSilently]);
 
@@ -262,6 +266,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   useEffect(() => {
     if (!selectedLocation) return;
     setAiInsights(null);
+    setAiNoTextReviews(false);
     setLocationDetail(null);
     setAvgRating(null);
     setShowReviewForm(false);
@@ -1299,6 +1304,10 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               {reviewCount === 0 ? (
                 <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>
                   AI insights will appear once this place has been visited.
+                </p>
+              ) : aiNoTextReviews ? (
+                <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>
+                  Write a review describing your experience to unlock AI insights for this place.
                 </p>
               ) : aiLoading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
