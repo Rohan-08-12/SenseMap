@@ -1398,15 +1398,13 @@
     display: none;
   }
   .lmv-bottom-bar {
-    flex-direction: column;
+    flex-direction: row;
     gap: 8px;
+    padding: 10px 12px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
   .lmv-bottom-actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-  .lmv-btn-outline, .lmv-btn-primary {
-    flex: 1;
+    display: none;
   }
 
   /* Mobile bottom sheet for detail panel */
