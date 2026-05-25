@@ -127,7 +127,7 @@ router.get("/", async (req, res) => {
     const GOOGLE_TIMEOUT_MS = 12000;
     const googlePromise = (async () => {
         const results = await searchGooglePlaces(q, parsedLat, parsedLng);
-        const top5 = results.slice(0, 5);
+        const top5 = results.slice(0, 10);
 
         const settled = await Promise.allSettled(
             top5.map((place) => quickCachePlace(place))
