@@ -101,6 +101,7 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [avgRating, setAvgRating] = useState(null);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
   const [savedPlaceIds, setSavedPlaceIds] = useState(new Set());
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [savedPlacesList, setSavedPlacesList] = useState([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [flyToLocation, setFlyToLocation] = useState(null);
@@ -693,10 +694,71 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
         />
       ) : (
         <>
+          {/* Mobile sidebar overlay */}
+          {mobileSidebarOpen && (
+            <div className="lmv-mobile-overlay" onClick={() => setMobileSidebarOpen(false)} />
+          )}
+
+          {/* Mobile sidebar drawer */}
+          <div className={`lmv-mobile-sidebar${mobileSidebarOpen ? ' open' : ''}`}>
+            <button className="lmv-mobile-sidebar-close" onClick={() => setMobileSidebarOpen(false)}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </button>
+            {/* Comfort Snapshot inside drawer */}
+            <div className="lmv-snapshot">
+              <div className="lmv-snapshot-header">
+                <div className="lmv-snapshot-title">
+                  <span>Today</span>
+                  <h2>Comfort snapshot</h2>
+                </div>
+                {snapshot && snapshot.avgComfort > 3 && (
+                  <span className="lmv-calm-badge">Calm now</span>
+                )}
+              </div>
+              <div className="lmv-snapshot-stats">
+                <div className="lmv-snapshot-big">
+                  {snapshot ? (
+                    <>
+                      <span className="big-number">{snapshot.calmCount}</span>
+                      <span className="big-label">calm places nearby</span>
+                    </>
+                  ) : (
+                    <SkeletonBlock width={120} height={38} />
+                  )}
+                </div>
+                <div className="lmv-snapshot-divider" />
+                <div className="lmv-snapshot-cards">
+                  <div className="lmv-stat-card">
+                    <div className="stat-label">Best window</div>
+                    <div className="stat-value">{snapshot?.bestWindow ?? '—'}</div>
+                  </div>
+                  <div className="lmv-stat-card">
+                    <div className="stat-label">Noise trend</div>
+                    <div className="stat-value">{snapshot?.noiseTrend ?? '—'}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="lmv-snapshot-tags">
+                {snapshot && snapshot.noiseTrend === 'Low' && (
+                  <span className="lmv-tag green">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    Low noise nearby
+                  </span>
+                )}
+                {snapshot && snapshot.noiseTrend !== 'Low' && (
+                  <span className="lmv-tag gray">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75L8.75 5.25L12.25 5.83L9.625 8.4L10.25 12.25L7 10.5L3.75 12.25L4.375 8.4L1.75 5.83L5.25 5.25Z" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Best time: {snapshot.bestWindow}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Center Main */}
           <main className="lmv-main">
-            {/* Comfort Snapshot */}
-            <div className="lmv-snapshot">
+            {/* Comfort Snapshot — desktop only */}
+            <div className="lmv-snapshot lmv-snapshot--desktop">
               <div className="lmv-snapshot-header">
                 <div className="lmv-snapshot-title">
                   <span>Today</span>
@@ -746,6 +808,11 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 )}
               </div>
             </div>
+
+            {/* Mobile sidebar toggle button */}
+            <button className="lmv-mobile-sidebar-toggle" onClick={() => setMobileSidebarOpen(true)} aria-label="Open snapshot">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="8.25" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="12.5" width="12" height="1.5" rx="0.75" fill="currentColor"/></svg>
+            </button>
 
             {/* Map */}
             <div className="lmv-map-section">
