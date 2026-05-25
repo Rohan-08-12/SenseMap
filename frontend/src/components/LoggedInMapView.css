@@ -1398,15 +1398,30 @@
     display: none;
   }
   .lmv-bottom-bar {
-    flex-direction: column;
+    flex-direction: row;
     gap: 8px;
+    padding: 10px 12px;
+    min-height: 60px;
+  }
+  .lmv-search-pill {
+    min-width: 0;
+    margin-right: 6px;
+  }
+  .lmv-search-pill input {
+    font-size: 14px;
   }
   .lmv-bottom-actions {
-    width: 100%;
-    justify-content: stretch;
+    flex-shrink: 0;
+    gap: 6px;
   }
   .lmv-btn-outline, .lmv-btn-primary {
-    flex: 1;
+    padding: 0 10px;
+    font-size: 12px;
+    gap: 4px;
+    height: 36px;
+  }
+  .lmv-btn-outline svg, .lmv-btn-primary svg {
+    display: none;
   }
 
   /* Mobile bottom sheet for detail panel */
