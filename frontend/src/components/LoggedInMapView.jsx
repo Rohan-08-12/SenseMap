@@ -101,7 +101,6 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [avgRating, setAvgRating] = useState(null);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
   const [savedPlaceIds, setSavedPlaceIds] = useState(new Set());
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [savedPlacesList, setSavedPlacesList] = useState([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [flyToLocation, setFlyToLocation] = useState(null);
@@ -694,38 +693,10 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
         />
       ) : (
         <>
-          {/* Mobile nav overlay */}
-          {mobileSidebarOpen && (
-            <div className="lmv-mobile-overlay" onClick={() => setMobileSidebarOpen(false)} />
-          )}
-
-          {/* Mobile nav drawer */}
-          <div className={`lmv-mobile-sidebar${mobileSidebarOpen ? ' open' : ''}`}>
-            <div className="lmv-mobile-sidebar-header">
-              <img src="/assets/icons/logo.png" alt="SenseMap" className="lmv-mobile-sidebar-logo" />
-              <span>SenseMap</span>
-            </div>
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.id}
-                className={`lmv-mobile-sidebar-item${activeNav === item.id ? ' active' : ''}`}
-                onClick={() => { handleNavClick(item); setMobileSidebarOpen(false); }}
-              >
-                <NavIcon type={item.icon} active={activeNav === item.id} />
-                {item.label}
-              </button>
-            ))}
-            <div className="lmv-mobile-sidebar-divider" />
-            <button className="lmv-mobile-sidebar-item" onClick={() => { setMobileSidebarOpen(false); setShowLogoutModal(true); }}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M6.75 15.75H3.75A1.5 1.5 0 012.25 14.25V3.75A1.5 1.5 0 013.75 2.25h3M12 12.75L15.75 9 12 5.25M15.75 9H6.75" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Sign out
-            </button>
-          </div>
-
           {/* Center Main */}
           <main className="lmv-main">
-            {/* Comfort Snapshot — desktop only */}
-            <div className="lmv-snapshot lmv-snapshot--desktop">
+            {/* Comfort Snapshot */}
+            <div className="lmv-snapshot">
               <div className="lmv-snapshot-header">
                 <div className="lmv-snapshot-title">
                   <span>Today</span>
@@ -775,11 +746,6 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 )}
               </div>
             </div>
-
-            {/* Mobile sidebar toggle button */}
-            <button className="lmv-mobile-sidebar-toggle" onClick={() => setMobileSidebarOpen(true)} aria-label="Open snapshot">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="8.25" width="10" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="12.5" width="12" height="1.5" rx="0.75" fill="currentColor"/></svg>
-            </button>
 
             {/* Map */}
             <div className="lmv-map-section">
