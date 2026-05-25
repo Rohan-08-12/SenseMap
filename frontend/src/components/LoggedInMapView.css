@@ -1357,19 +1357,19 @@
 }
 
 @media (max-width: 768px) {
-  /* Mobile sidebar drawer */
+  /* Mobile nav drawer */
   .lmv-mobile-sidebar {
     display: flex;
     flex-direction: column;
     position: fixed;
     top: 0;
-    left: -280px;
-    width: 280px;
+    left: -260px;
+    width: 260px;
     height: 100%;
     background: var(--theme-surface);
     z-index: 60;
-    padding: 56px 16px 24px;
-    gap: 16px;
+    padding: 0 0 32px;
+    gap: 4px;
     overflow-y: auto;
     transition: left 0.25s ease;
     box-shadow: 4px 0 24px rgba(0,0,0,0.12);
@@ -1377,20 +1377,48 @@
   .lmv-mobile-sidebar.open {
     left: 0;
   }
-  .lmv-mobile-sidebar-close {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    background: var(--theme-surface-soft);
-    border: 1px solid var(--theme-border);
-    border-radius: 8px;
-    width: 36px;
-    height: 36px;
+  .lmv-mobile-sidebar-header {
     display: flex;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
+    gap: 10px;
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid var(--theme-border);
+    margin-bottom: 8px;
+    font-size: 16px;
+    font-weight: 600;
     color: var(--theme-text);
+  }
+  .lmv-mobile-sidebar-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+  .lmv-mobile-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    margin: 0 8px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--theme-text-muted);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+  }
+  .lmv-mobile-sidebar-item.active,
+  .lmv-mobile-sidebar-item:hover {
+    background: var(--theme-surface-soft);
+    color: var(--theme-text);
+  }
+  .lmv-mobile-sidebar-divider {
+    height: 1px;
+    background: var(--theme-border);
+    margin: 8px 16px;
   }
   .lmv-mobile-overlay {
     display: block;
@@ -1419,6 +1447,10 @@
   /* Hide desktop snapshot on mobile */
   .lmv-snapshot--desktop {
     display: none;
+  }
+  /* Hide bottom tab nav on mobile — replaced by sidebar */
+  .lmv-nav {
+    display: none !important;
   }
 }
 
@@ -1479,12 +1511,13 @@
   }
   .lmv-bottom-bar {
     position: fixed;
-    bottom: 57px; /* above mobile tab nav */
+    bottom: 8px;
     left: 8px;
     right: 8px;
     flex-direction: row;
     gap: 8px;
     padding: 10px 12px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
     min-height: 56px;
     border-radius: 14px;
     z-index: 20;

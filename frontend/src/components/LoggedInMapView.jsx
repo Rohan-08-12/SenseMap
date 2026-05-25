@@ -694,65 +694,32 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
         />
       ) : (
         <>
-          {/* Mobile sidebar overlay */}
+          {/* Mobile nav overlay */}
           {mobileSidebarOpen && (
             <div className="lmv-mobile-overlay" onClick={() => setMobileSidebarOpen(false)} />
           )}
 
-          {/* Mobile sidebar drawer */}
+          {/* Mobile nav drawer */}
           <div className={`lmv-mobile-sidebar${mobileSidebarOpen ? ' open' : ''}`}>
-            <button className="lmv-mobile-sidebar-close" onClick={() => setMobileSidebarOpen(false)}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-            </button>
-            {/* Comfort Snapshot inside drawer */}
-            <div className="lmv-snapshot">
-              <div className="lmv-snapshot-header">
-                <div className="lmv-snapshot-title">
-                  <span>Today</span>
-                  <h2>Comfort snapshot</h2>
-                </div>
-                {snapshot && snapshot.avgComfort > 3 && (
-                  <span className="lmv-calm-badge">Calm now</span>
-                )}
-              </div>
-              <div className="lmv-snapshot-stats">
-                <div className="lmv-snapshot-big">
-                  {snapshot ? (
-                    <>
-                      <span className="big-number">{snapshot.calmCount}</span>
-                      <span className="big-label">calm places nearby</span>
-                    </>
-                  ) : (
-                    <SkeletonBlock width={120} height={38} />
-                  )}
-                </div>
-                <div className="lmv-snapshot-divider" />
-                <div className="lmv-snapshot-cards">
-                  <div className="lmv-stat-card">
-                    <div className="stat-label">Best window</div>
-                    <div className="stat-value">{snapshot?.bestWindow ?? '—'}</div>
-                  </div>
-                  <div className="lmv-stat-card">
-                    <div className="stat-label">Noise trend</div>
-                    <div className="stat-value">{snapshot?.noiseTrend ?? '—'}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="lmv-snapshot-tags">
-                {snapshot && snapshot.noiseTrend === 'Low' && (
-                  <span className="lmv-tag green">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    Low noise nearby
-                  </span>
-                )}
-                {snapshot && snapshot.noiseTrend !== 'Low' && (
-                  <span className="lmv-tag gray">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75L8.75 5.25L12.25 5.83L9.625 8.4L10.25 12.25L7 10.5L3.75 12.25L4.375 8.4L1.75 5.83L5.25 5.25Z" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    Best time: {snapshot.bestWindow}
-                  </span>
-                )}
-              </div>
+            <div className="lmv-mobile-sidebar-header">
+              <img src="/assets/icons/logo.png" alt="SenseMap" className="lmv-mobile-sidebar-logo" />
+              <span>SenseMap</span>
             </div>
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                className={`lmv-mobile-sidebar-item${activeNav === item.id ? ' active' : ''}`}
+                onClick={() => { handleNavClick(item); setMobileSidebarOpen(false); }}
+              >
+                <NavIcon type={item.icon} active={activeNav === item.id} />
+                {item.label}
+              </button>
+            ))}
+            <div className="lmv-mobile-sidebar-divider" />
+            <button className="lmv-mobile-sidebar-item" onClick={() => { setMobileSidebarOpen(false); setShowLogoutModal(true); }}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M6.75 15.75H3.75A1.5 1.5 0 012.25 14.25V3.75A1.5 1.5 0 013.75 2.25h3M12 12.75L15.75 9 12 5.25M15.75 9H6.75" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Sign out
+            </button>
           </div>
 
           {/* Center Main */}
