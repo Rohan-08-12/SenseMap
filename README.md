@@ -134,6 +134,21 @@ Set `ALLOWED_ORIGINS` on Railway to `https://sensemap.app`. Add `https://sensema
 
 ---
 
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full contribution guide.
+
+The `main` branch is protected — all changes go through a pull request:
+
+```bash
+git checkout -b fix/your-change
+# make changes
+git push origin fix/your-change
+gh pr create --fill
+```
+
+---
+
 ## Documentation
 
 See [DOCS.md](./DOCS.md) for full API reference, data models, architecture, and data flow diagrams.
