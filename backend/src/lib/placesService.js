@@ -31,12 +31,14 @@ export function classifyCategory(types) {
     return "other";
 }
 
+const TORONTO_LAT = 43.6532;
+const TORONTO_LNG = -79.3832;
+
 export async function searchGooglePlaces(query, lat, lng) {
     const key = process.env.GOOGLE_PLACES_KEY;
-    let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${key}`;
-    if (lat != null && lng != null) {
-        url += `&location=${lat},${lng}&radius=10000`;
-    }
+    const searchLat = lat ?? TORONTO_LAT;
+    const searchLng = lng ?? TORONTO_LNG;
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${searchLat},${searchLng}&radius=30000&strictbounds&key=${key}`;
     const res = await fetch(url);
     const data = await res.json();
     return data.results || [];
