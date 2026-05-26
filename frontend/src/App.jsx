@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { setTokenGetter } from './services/api';
+import { isInAppBrowser } from './utils';
 import LaunchScreen from './components/LaunchScreen';
 import NonLoginMapView from './components/NonLoginMapView';
 import LoggedInMapView from './components/LoggedInMapView';
 import OnboardingModal, { hasSeenOnboarding } from './components/OnboardingModal';
 import LoginModal from './components/LoginModal';
+import LegalModal from './components/LegalModal';
 import NotFound from './components/NotFound';
 
 /**
@@ -15,7 +17,6 @@ import NotFound from './components/NotFound';
  * Depending on the Auth0 login status, it directs the user to either the Full (LoggedIn) Map
  * or the Public (NonLogin) Map.
  */
-const isInAppBrowser = /LinkedIn|Instagram|FBAN|FBAV|FB_IAB|Twitter|Line|WhatsApp/i.test(navigator.userAgent);
 
 function InAppBrowserBanner() {
   const [dismissed, setDismissed] = useState(false);
@@ -44,6 +45,7 @@ function App() {
   const [exploreParams, setExploreParams] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [legalModal, setLegalModal] = useState(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -96,6 +98,8 @@ function App() {
       onGoogle={handleGoogleLogin}
       onEmail={handleEmailLogin}
       onClose={() => setShowLoginModal(false)}
+      onShowTerms={() => { setShowLoginModal(false); setLegalModal('terms'); }}
+      onShowPrivacy={() => { setShowLoginModal(false); setLegalModal('privacy'); }}
     />
   );
 
@@ -153,6 +157,7 @@ function App() {
         onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })}
       />
       {loginModal}
+      {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
     </>
   );
 }

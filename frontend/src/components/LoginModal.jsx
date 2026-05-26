@@ -1,9 +1,8 @@
 import { useState } from 'react';
+import { isInAppBrowser } from '../utils';
 import './LoginModal.css';
 
-const isInAppBrowser = /LinkedIn|Instagram|FBAN|FBAV|FB_IAB|Twitter|Line|WhatsApp/i.test(navigator.userAgent);
-
-export default function LoginModal({ onGoogle, onEmail, onClose }) {
+export default function LoginModal({ onGoogle, onEmail, onClose, onShowTerms, onShowPrivacy }) {
     const [step, setStep] = useState('choose'); // 'choose' | 'email'
     const [email, setEmail] = useState('');
     const [error, setError] = useState('');
@@ -77,7 +76,7 @@ export default function LoginModal({ onGoogle, onEmail, onClose }) {
                 </div>
 
                 <p className="lm-terms">
-                    By continuing, you agree to our <button className="lm-link">Terms</button> and <button className="lm-link">Privacy Policy</button>.
+                    By continuing, you agree to our <button className="lm-link" onClick={onShowTerms}>Terms</button> and <button className="lm-link" onClick={onShowPrivacy}>Privacy Policy</button>.
                 </p>
             </div>
         </div>
