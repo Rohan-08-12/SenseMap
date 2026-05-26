@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { setTokenGetter } from './services/api';
+import { isInAppBrowser } from './utils';
 import LaunchScreen from './components/LaunchScreen';
 import NonLoginMapView from './components/NonLoginMapView';
 import LoggedInMapView from './components/LoggedInMapView';
 import OnboardingModal, { hasSeenOnboarding } from './components/OnboardingModal';
+import LoginModal from './components/LoginModal';
+import LegalModal from './components/LegalModal';
 import NotFound from './components/NotFound';
 
 /**
@@ -14,7 +17,6 @@ import NotFound from './components/NotFound';
  * Depending on the Auth0 login status, it directs the user to either the Full (LoggedIn) Map
  * or the Public (NonLogin) Map.
  */
-const isInAppBrowser = /LinkedIn|Instagram|FBAN|FBAV|FB_IAB|Twitter|Line|WhatsApp/i.test(navigator.userAgent);
 
 function InAppBrowserBanner() {
   const [dismissed, setDismissed] = useState(false);
@@ -26,7 +28,7 @@ function InAppBrowserBanner() {
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       fontFamily: 'Inter, sans-serif', fontSize: '14px', gap: '12px',
     }}>
-      <span>For Google sign-in, open this page in Safari or Chrome.</span>
+      <span>Google sign-in is unavailable here — use <strong>Sign in with Email</strong> instead.</span>
       <button onClick={() => setDismissed(true)} style={{
         background: 'transparent', border: '1px solid rgba(255,255,255,0.5)',
         color: '#fff', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap',
@@ -42,6 +44,8 @@ function App() {
   const [showMap, setShowMap] = useState(false);
   const [exploreParams, setExploreParams] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [legalModal, setLegalModal] = useState(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -64,6 +68,23 @@ function App() {
     setShowMap(false);
   };
 
+  const handleOpenLogin = () => setShowLoginModal(true);
+
+  const handleGoogleLogin = () => {
+    setShowLoginModal(false);
+    loginWithRedirect();
+  };
+
+  const handleEmailLogin = (email) => {
+    setShowLoginModal(false);
+    loginWithRedirect({
+      authorizationParams: {
+        connection: 'email',
+        login_hint: email,
+      },
+    });
+  };
+
   if (!isRoot) {
     return (
       <Routes>
@@ -71,6 +92,16 @@ function App() {
       </Routes>
     );
   }
+
+  const loginModal = showLoginModal && (
+    <LoginModal
+      onGoogle={handleGoogleLogin}
+      onEmail={handleEmailLogin}
+      onClose={() => setShowLoginModal(false)}
+      onShowTerms={() => { setShowLoginModal(false); setLegalModal('terms'); }}
+      onShowPrivacy={() => { setShowLoginModal(false); setLegalModal('privacy'); }}
+    />
+  );
 
   if (isLoading) {
     return (
@@ -110,8 +141,9 @@ function App() {
           onBackToHome={handleBackToHome}
           initialSearchQuery={exploreParams?.searchQuery}
           initialFilter={exploreParams?.filter}
-          onLogin={() => loginWithRedirect()}
+          onLogin={handleOpenLogin}
         />
+        {loginModal}
       </>
     );
   }
@@ -121,9 +153,11 @@ function App() {
       <InAppBrowserBanner />
       <LaunchScreen
         onExploreMap={handleExploreMap}
-        onLogin={() => loginWithRedirect()}
+        onLogin={handleOpenLogin}
         onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })}
       />
+      {loginModal}
+      {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
     </>
   );
 }

@@ -1,5 +1,7 @@
 export const scoreToLabel = (s) => s < 2 ? 'Low' : s < 3.5 ? 'Medium' : 'High';
 
+export const isInAppBrowser = /LinkedIn|Instagram|FBAN|FBAV|FB_IAB|Twitter|Line|WhatsApp/i.test(navigator.userAgent);
+
 export const haversineDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
