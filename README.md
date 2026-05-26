@@ -170,7 +170,9 @@ See [DOCS.md](./DOCS.md) for full API reference, data models, architecture, and 
 - Auth0 domain: `dev-nx7sf078z0lxwgez.us.auth0.com`
 - Google OAuth uses production keys (not Auth0 dev keys) — configured in Auth0 → Authentication → Social → Google
 - Google Cloud OAuth redirect URI: `https://dev-nx7sf078z0lxwgez.us.auth0.com/login/callback`
-- In-app browser warning shown automatically when users open the app via LinkedIn, Instagram, or Twitter — prompts them to open in Safari/Chrome for Google sign-in
+- **Email OTP login** — passwordless sign-in via Auth0 email connection; enabled in Auth0 → Authentication → Passwordless → Email; promoted to domain level so all apps can use it
+- In in-app browsers (LinkedIn, Instagram, Twitter), Google sign-in is hidden and only email OTP is shown — detected via `isInAppBrowser` in `frontend/src/utils.js`
+- Login modal (`LoginModal.jsx`) gates all sign-in entry points — replaces direct `loginWithRedirect()` calls throughout the app
 
 ---
 

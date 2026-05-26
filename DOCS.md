@@ -90,7 +90,7 @@ All production deployments must set `ALLOWED_ORIGINS` to the frontend domain.
 | CORS | Restricted to `ALLOWED_ORIGINS` env var |
 | Body size | `express.json({ limit: "1mb" })` |
 | Rate limiting | API: 200/15min · Reviews: 20/hr · AI: 30/min |
-| Auth | Auth0 JWT validation on all write endpoints |
+| Auth | Auth0 JWT validation on all write endpoints; supports Google OAuth and email OTP (passwordless) |
 | Input validation | Length + type checks on reviews, AI, upload, discover routes |
 | Error responses | Global error handler — never returns stack traces |
 | File uploads | Images only, 5MB max (Multer) |
@@ -212,7 +212,17 @@ Request
 |---|---|---|
 | `middleware/auth.js` | `requireAuth` | Validates Auth0 Bearer token, attaches `req.auth` |
 | `middleware/optionalAuth.js` | `optionalAuth` | Like requireAuth but never blocks (public routes) |
-| `middleware/syncUser.js` | `syncUser` | Auto-creates/updates User in Prisma after auth |
+| `middleware/syncUser.js` | `syncUser` | Auto-creates/updates User in Prisma after auth; handles both Google OAuth and email OTP users |
+
+### Authentication Flow
+
+Two sign-in methods are supported, both via Auth0:
+
+**Google OAuth** — standard redirect flow; blocked in LinkedIn/Instagram/Twitter in-app browsers due to Google's `disallowed_useragent` policy.
+
+**Email OTP (passwordless)** — user enters email → Auth0 sends 6-digit code → user enters code → authenticated. Works in all browsers including in-app browsers. Configured in Auth0 → Authentication → Passwordless → Email (promoted to domain level).
+
+In-app browser detection lives in `frontend/src/utils.js` (`isInAppBrowser`). The `LoginModal` component gates all sign-in entry points and automatically hides the Google button in in-app browsers.
 
 ---
 
