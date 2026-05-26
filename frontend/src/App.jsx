@@ -81,6 +81,7 @@ function App() {
       authorizationParams: {
         connection: 'email',
         login_hint: email,
+        prompt: 'login',
       },
     });
   };

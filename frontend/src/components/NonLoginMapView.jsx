@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { AnimatePresence, useReducedMotion } from 'framer-motion';
+// eslint-disable-next-line no-unused-vars
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel } from '../utils.js';
 import MapView from './MapView';
