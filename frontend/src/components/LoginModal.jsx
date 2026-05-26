@@ -18,13 +18,13 @@ export default function LoginModal({ onGoogle, onEmail, onClose, onShowTerms, on
 
     return (
         <div className="lm-overlay" onClick={onClose}>
-            <div className="lm-card" onClick={e => e.stopPropagation()}>
+            <div className="lm-card" role="dialog" aria-modal="true" aria-labelledby="lm-title" onClick={e => e.stopPropagation()}>
                 <button className="lm-close" onClick={onClose} aria-label="Close">✕</button>
 
                 <div className="lm-logo">
                     <img src="/favicon.png" alt="" aria-hidden="true" />
                 </div>
-                <h2 className="lm-title">Sign in to SenseMap</h2>
+                <h2 className="lm-title" id="lm-title">Sign in to SenseMap</h2>
                 <p className="lm-sub">Save places, submit reviews, and get personalised matches.</p>
 
                 {isInAppBrowser && (
