@@ -6,3 +6,5 @@ dist/
 .cursor/
 .DS_Store
 *.log
+auth0-custom-login.html
+prisma.config.ts.old
