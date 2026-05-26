@@ -71,7 +71,7 @@ function SkeletonBlock({ width = '100%', height = 16 }) {
   return <div className="animate-pulse" style={{ width, height, background: '#e5e7eb', borderRadius: 6 }} />;
 }
 
-function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLogout, hideControls }) {
+function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideControls }) {
   const { user, getAccessTokenSilently } = useAuth0();
   const { theme, setTheme } = useTheme();
 
@@ -265,7 +265,6 @@ function LoggedInMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   }, [getAccessTokenSilently]);
 
   // Reset UI state only when the selected location actually changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!selectedLocation) return;
     setAiInsights(null);

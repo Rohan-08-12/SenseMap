@@ -16,6 +16,7 @@ export function ThemeProvider({ children }) {
     try {
       const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
       if (stored === 'calm' || stored === 'nature') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setThemeState(stored);
         document.documentElement.setAttribute('data-theme', stored);
         return;
@@ -58,6 +59,7 @@ export function ThemeProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   return useContext(ThemeContext);
 }

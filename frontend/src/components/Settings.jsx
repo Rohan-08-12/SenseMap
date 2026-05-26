@@ -54,6 +54,7 @@ function Settings({ user, userProfile, onLogout, onSettingsChange }) {
     if (!mountedRef.current) { mountedRef.current = true; return; }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     onSettingsChange?.(settings);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     showSaved();
   }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps
 

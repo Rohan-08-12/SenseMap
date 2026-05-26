@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { updateSensoryProfile } from '../services/api';
 import './OnboardingModal.css';
 
@@ -38,6 +38,7 @@ const STEPS = [
 
 const ONBOARDING_KEY = 'sensorymap_onboarding_done';
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function hasSeenOnboarding() {
     return localStorage.getItem(ONBOARDING_KEY) === 'true';
 }
@@ -49,7 +50,6 @@ function OnboardingModal({ onDone }) {
 
     const currentStep = STEPS[step];
     const isWelcome = step === -1;
-    const isDone = step >= STEPS.length;
 
     const handleSelect = async (value) => {
         const updated = { ...selections, [currentStep.id]: value };
