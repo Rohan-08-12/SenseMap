@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import LogoutConfirmation from './LogoutConfirmation';
 import LegalModal from './LegalModal';

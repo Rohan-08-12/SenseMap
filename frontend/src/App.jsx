@@ -47,6 +47,7 @@ function App() {
     if (isAuthenticated) {
       setTokenGetter(() => getAccessTokenSilently());
       if (!hasSeenOnboarding()) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setShowOnboarding(true);
       }
     } else {

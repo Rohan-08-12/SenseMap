@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel } from '../utils.js';
 import MapView from './MapView';
@@ -47,7 +47,7 @@ function weatherEmoji(code) {
   return '⛈️';
 }
 
-function NonLoginMapView({ onExploreMap, onBackToHome, initialSearchQuery, initialFilter, onLogin }) {
+function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLogin }) {
   const loginWithRedirect = () => onLogin();
   const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);
   const [heatmapOn, setHeatmapOn] = useState(true);

@@ -39,6 +39,7 @@ function Dashboard({
   const bestMatchLocationId = bestMatch?.locationId ?? bestMatch?.id;
   useEffect(() => {
     if (!bestMatchLocationId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAiInsights(null);
       setAiError(false);
       return;

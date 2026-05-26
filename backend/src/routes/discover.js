@@ -13,6 +13,13 @@ import {
 
 const router = express.Router();
 
+// Serialize Gemini enrichment calls to avoid blowing the free-tier quota (20 req/day)
+// when a search returns multiple new locations simultaneously.
+let enrichmentQueue = Promise.resolve();
+function queueEnrichment(fn) {
+    enrichmentQueue = enrichmentQueue.then(() => fn().catch(() => {}));
+}
+
 async function quickCachePlace(googlePlace) {
     const gpid = googlePlace.place_id;
 
@@ -43,60 +50,58 @@ async function quickCachePlace(googlePlace) {
     const googleReviews = (details.reviews || []).slice(0, 5);
 
     if (photoRef || googleReviews.length > 0) {
-        enrichLocationInBackground(location.id, photoRef, details.name, category, googleReviews);
+        queueEnrichment(() => enrichLocationInBackground(location.id, photoRef, details.name, category, googleReviews));
     }
 
     return { ...location, sensoryScores: null };
 }
 
-function enrichLocationInBackground(locationId, photoRef, name, category, googleReviews) {
-    (async () => {
-        try {
-            if (photoRef) {
-                const imageUrl = await uploadPlacePhoto(photoRef);
-                if (imageUrl) {
-                    await prisma.location.update({ where: { id: locationId }, data: { imageUrl } });
-                }
+async function enrichLocationInBackground(locationId, photoRef, name, category, googleReviews) {
+    try {
+        if (photoRef) {
+            const imageUrl = await uploadPlacePhoto(photoRef);
+            if (imageUrl) {
+                await prisma.location.update({ where: { id: locationId }, data: { imageUrl } });
             }
+        }
 
-            if (googleReviews.length > 0) {
-                const analysis = await analyzeWithGemini(name, category, googleReviews);
+        if (googleReviews.length > 0) {
+            const analysis = await analyzeWithGemini(name, category, googleReviews);
 
-                const existingScore = await prisma.sensoryScore.findUnique({ where: { locationId } });
-                if (!existingScore) {
-                    await prisma.sensoryScore.create({
+            const existingScore = await prisma.sensoryScore.findUnique({ where: { locationId } });
+            if (!existingScore) {
+                await prisma.sensoryScore.create({
+                    data: {
+                        locationId,
+                        noiseScore: analysis.noiseScore,
+                        lightingScore: analysis.lightingScore,
+                        crowdScore: analysis.crowdScore,
+                        comfortScore: analysis.comfortScore,
+                        reviewCount: analysis.reviews.length,
+                    },
+                });
+
+                const systemUser = await getSystemUser();
+
+                for (const review of analysis.reviews) {
+                    await prisma.review.create({
                         data: {
+                            userId: systemUser.id,
                             locationId,
-                            noiseScore: analysis.noiseScore,
-                            lightingScore: analysis.lightingScore,
-                            crowdScore: analysis.crowdScore,
-                            comfortScore: analysis.comfortScore,
-                            reviewCount: analysis.reviews.length,
+                            bodyText: review.bodyText,
+                            rating: review.rating,
+                            noiseLevel: review.noiseLevel,
+                            lightingLevel: review.lightingLevel,
+                            crowdLevel: review.crowdLevel,
                         },
                     });
-
-                    const systemUser = await getSystemUser();
-
-                    for (const review of analysis.reviews) {
-                        await prisma.review.create({
-                            data: {
-                                userId: systemUser.id,
-                                locationId,
-                                bodyText: review.bodyText,
-                                rating: review.rating,
-                                noiseLevel: review.noiseLevel,
-                                lightingLevel: review.lightingLevel,
-                                crowdLevel: review.crowdLevel,
-                            },
-                        });
-                    }
                 }
             }
-            console.log(`[discover] Background enrichment done for: ${name}`);
-        } catch (err) {
-            console.error(`[discover] Background enrichment failed for ${name}: ${err.message}`);
         }
-    })();
+        console.log(`[discover] Background enrichment done for: ${name}`);
+    } catch (err) {
+        console.error(`[discover] Background enrichment failed for ${name}: ${err.message}`);
+    }
 }
 
 // GET /discover?q=cafes&lat=43.46&lng=-80.52
