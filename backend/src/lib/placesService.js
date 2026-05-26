@@ -31,15 +31,27 @@ export function classifyCategory(types) {
     return "other";
 }
 
+const TORONTO_LAT = 43.6532;
+const TORONTO_LNG = -79.3832;
+
+// Bounding box for Greater Toronto Area
+const TORONTO_BOUNDS = { latMin: 43.4, latMax: 43.9, lngMin: -79.75, lngMax: -79.0 };
+
+function inToronto(lat, lng) {
+    return lat >= TORONTO_BOUNDS.latMin && lat <= TORONTO_BOUNDS.latMax &&
+           lng >= TORONTO_BOUNDS.lngMin && lng <= TORONTO_BOUNDS.lngMax;
+}
+
 export async function searchGooglePlaces(query, lat, lng) {
     const key = process.env.GOOGLE_PLACES_KEY;
-    let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${key}`;
-    if (lat != null && lng != null) {
-        url += `&location=${lat},${lng}&radius=10000`;
-    }
+    const searchLat = lat ?? TORONTO_LAT;
+    const searchLng = lng ?? TORONTO_LNG;
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${searchLat},${searchLng}&radius=30000&key=${key}`;
     const res = await fetch(url);
     const data = await res.json();
-    return data.results || [];
+    return (data.results || []).filter(p =>
+        inToronto(p.geometry?.location?.lat, p.geometry?.location?.lng)
+    );
 }
 
 export async function getGooglePlaceDetails(placeId) {
