@@ -30,6 +30,13 @@ createRoot(document.getElementById('root')).render(
           redirect_uri: window.location.origin,
           ...(AUTH0_AUDIENCE && { audience: AUTH0_AUDIENCE }),
         }}
+        onRedirectCallback={(appState) => {
+          window.history.replaceState(
+            {},
+            document.title,
+            appState?.returnTo || window.location.pathname
+          );
+        }}
       >
         <ThemeProvider>
           <ErrorBoundary>
