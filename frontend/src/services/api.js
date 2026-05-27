@@ -154,4 +154,8 @@ export const checkNearbyConstruction = (lat, lng) =>
 export const deleteAccount = () =>
     api.delete('/users/me');
 
+// ─── Audio Summaries ─────────────────────────────────────────
+export const getLocationAudio = (locationId) =>
+    api.get(`/audio/${locationId}`, { timeout: 30000 });
+
 export default api;
