@@ -10,7 +10,7 @@ import SensoryProfile from './SensoryProfile';
 import Settings from './Settings';
 import LogoutConfirmation from './LogoutConfirmation';
 import SubmitReview from './SubmitReview'; // NEW
-import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, updateSensoryProfile, getLocationById, getLocationHours, getAIInsights, discoverLocations, getSavedPlaces, savePlace, removeSavedPlace, checkIn, submitReview, getSimilarLocations, checkNearbyConstruction } from '../services/api';
+import { getRankings, getLocationHeatmap, getLocationMatch, getSensoryProfile, updateSensoryProfile, getLocationById, getLocationHours, getAIInsights, discoverLocations, getSavedPlaces, savePlace, removeSavedPlace, checkIn, submitReview, getSimilarLocations, checkNearbyConstruction, getLocationAudio } from '../services/api';
 import './LoggedInMapView.css';
 
 const SETTINGS_KEY = 'sensorysafe_settings';
@@ -118,6 +118,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const [showQuickRating, setShowQuickRating] = useState(false);
   const [quickRatingSubmitted, setQuickRatingSubmitted] = useState(false);
   const [quickSelections, setQuickSelections] = useState({ noise: null, lighting: null, crowd: null });
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioError, setAudioError] = useState(false);
 
   // Apply accessibility + appearance settings from localStorage on mount
   useEffect(() => {
@@ -580,6 +583,25 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     if (lat == null || lng == null) return '— km away';
     return haversineDistance(userCoords.lat, userCoords.lng, lat, lng);
   }, [userCoords]);
+
+  const handlePlayAudio = useCallback(async () => {
+    if (!selectedLocation?.id || audioLoading || audioPlaying) return;
+    setAudioError(false);
+    setAudioLoading(true);
+    try {
+      const { data } = await getLocationAudio(selectedLocation.id);
+      if (!data?.audioUrl) throw new Error('No audio URL');
+      const audio = new Audio(data.audioUrl);
+      audio.onended = () => setAudioPlaying(false);
+      audio.onerror = () => { setAudioPlaying(false); setAudioError(true); };
+      setAudioLoading(false);
+      setAudioPlaying(true);
+      audio.play();
+    } catch {
+      setAudioLoading(false);
+      setAudioError(true);
+    }
+  }, [selectedLocation?.id, audioLoading, audioPlaying]);
 
   return (
     <div className={`lmv${selectedLocation ? ' lmv--has-detail' : ''}`}>
@@ -1271,6 +1293,34 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
                   Write a Review
+                </button>
+              )}
+
+              {/* Audio summary pill */}
+              {selectedLocation?.id && (
+                <button
+                  type="button"
+                  onClick={handlePlayAudio}
+                  disabled={audioLoading || audioPlaying}
+                  style={{
+                    marginTop: 8,
+                    width: '100%',
+                    padding: '7px 0',
+                    borderRadius: 100,
+                    border: '1px solid var(--theme-accent)',
+                    background: 'transparent',
+                    color: 'var(--theme-accent)',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: audioLoading || audioPlaying ? 'default' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    opacity: audioLoading ? 0.6 : 1,
+                  }}
+                >
+                  {audioLoading ? '⏳ Loading…' : audioPlaying ? '🔊 Playing…' : audioError ? '⚠️ Audio unavailable' : '🔊 Hear this place'}
                 </button>
               )}
             </div>

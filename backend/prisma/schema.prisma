@@ -40,6 +40,8 @@ model Location {
   longitude      Float
   latitude       Float
   embedding      Float[]
+  audioUrl          String?
+  audioGeneratedAt  DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

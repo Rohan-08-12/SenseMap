@@ -14,6 +14,7 @@ import savedPlacesRouter from "./routes/savedPlaces.js";
 import discoverRouter from "./routes/discover.js";
 import checkinsRouter from "./routes/checkins.js";
 import usersRouter from "./routes/users.js";
+import audioRouter from "./routes/audio.js";
 
 dotenv.config();
 
@@ -83,6 +84,15 @@ const claudeLimiter = rateLimit({
     message: { error: "AI request limit reached, please slow down." },
 });
 
+// ElevenLabs TTS is billed per character — limit per IP
+const audioLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Audio generation limit reached. Try again later." },
+});
+
 app.use(apiLimiter);
 
 app.get("/", (req, res) => {
@@ -99,6 +109,7 @@ app.use("/saved-places", savedPlacesRouter);
 app.use("/discover", discoverLimiter, discoverRouter);
 app.use("/checkins", checkinsRouter);
 app.use("/users", usersRouter);
+app.use("/audio", audioLimiter, audioRouter);
 
 // Global error handler — converts auth errors and uncaught throws to clean JSON
 app.use((err, req, res, _next) => {
