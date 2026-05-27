@@ -1,5 +1,6 @@
 import express from "express";
 import { model } from "../lib/gemini.js";
+import { validateWithClaude } from "../lib/anthropic.js";
 import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
@@ -20,6 +21,31 @@ const analyzeSchema = {
   required: ["noise_score", "lighting_score", "crowd_score", "sentiment", "tags", "summary"],
 };
 
+function blendScores(geminiScores, claudeScores) {
+  if (!claudeScores) return { ...geminiScores, validationSource: "gemini" };
+
+  const dims = ["noise_score", "lighting_score", "crowd_score"];
+  const blended = { ...geminiScores, validationSource: "gemini+claude" };
+
+  for (const dim of dims) {
+    const g = geminiScores[dim];
+    const c = claudeScores[dim];
+    if (g == null || c == null) continue;
+
+    if (Math.abs(g - c) > 2) {
+      const claudeConf = claudeScores.confidence ?? 5;
+      const geminiConf = 7;
+      const totalConf = claudeConf + geminiConf;
+      blended[dim] = (g * geminiConf + c * claudeConf) / totalConf;
+    } else {
+      blended[dim] = (g + c) / 2;
+    }
+  }
+
+  blended.confidence = claudeScores.confidence ?? null;
+  return blended;
+}
+
 // POST /ai/analyze — analyze review text for sensory signals (protected)
 router.post("/analyze", requireAuth, syncUser, async (req, res) => {
   try {
@@ -34,11 +60,19 @@ Analyze this review and extract structured sensory scores (1-10 scales), sentime
 Review:
 ${text}`;
 
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
-    });
-    res.json(JSON.parse(result.response.text()));
+    // Run Gemini and Claude in parallel
+    const [geminiResult, claudeResult] = await Promise.all([
+      model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
+      }),
+      validateWithClaude(text),
+    ]);
+
+    const geminiParsed = JSON.parse(geminiResult.response.text());
+    const blended = blendScores(geminiParsed, claudeResult);
+
+    res.json(blended);
   } catch (error) {
     console.error("AI analyze error:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -50,7 +84,6 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
   try {
     const { locationId } = req.params;
 
-    // get locations + all reviews
     const location = await prisma.location.findUnique({
       where: { id: locationId },
       include: { reviews: true }
@@ -59,7 +92,6 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
     if (!location) return res.status(404).json({ error: "Location not found" });
     if (location.reviews.length === 0) return res.status(400).json({ error: "Location has no reviews" });
 
-    // Only include reviews that have actual text — blank quick-ratings add no signal
     const reviewsWithText = location.reviews.filter((r) => r.bodyText && r.bodyText.trim().length > 0);
     if (reviewsWithText.length === 0) return res.status(400).json({ error: "No text reviews yet" });
 
@@ -111,13 +143,44 @@ Analyze these reviews for "${location.name}" and produce a structured sensory pr
 Reviews:
 ${reviewTexts}`;
 
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: insightsSchema },
-    });
-    const parsed = JSON.parse(result.response.text());
+    // Run Gemini and Claude cross-validation in parallel
+    const [geminiResult, claudeResult] = await Promise.all([
+      model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: insightsSchema },
+      }),
+      validateWithClaude(reviewTexts),
+    ]);
 
-    // Generate and store embedding in the background — non-fatal if it fails
+    const parsed = JSON.parse(geminiResult.response.text());
+
+    if (claudeResult) {
+      const dims = [
+        { geminiKey: "noise",     claudeKey: "noise_score"     },
+        { geminiKey: "lighting",  claudeKey: "lighting_score"  },
+        { geminiKey: "crowd",     claudeKey: "crowd_score"     },
+      ];
+
+      for (const { geminiKey, claudeKey } of dims) {
+        if (!parsed[geminiKey] || claudeResult[claudeKey] == null) continue;
+        const g = parsed[geminiKey].score;
+        const c = claudeResult[claudeKey] / 2;
+        if (Math.abs(g - c) > 1) {
+          const claudeConf = (claudeResult.confidence ?? 5) / 10;
+          const geminiConf = 0.7;
+          const total = claudeConf + geminiConf;
+          parsed[geminiKey].score = (g * geminiConf + c * claudeConf) / total;
+        } else {
+          parsed[geminiKey].score = (g + c) / 2;
+        }
+      }
+
+      parsed.validationSource = "gemini+claude";
+      parsed.claudeConfidence = claudeResult.confidence ?? null;
+    } else {
+      parsed.validationSource = "gemini";
+    }
+
     generateLocationEmbedding(location, parsed)
       .then((embedding) => prisma.location.update({ where: { id: locationId }, data: { embedding } }))
       .catch((e) => console.error("Embedding generation failed:", e));

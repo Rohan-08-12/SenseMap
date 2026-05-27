@@ -74,6 +74,15 @@ const discoverLimiter = rateLimit({
     message: { error: "Search limit reached, please slow down." },
 });
 
+// Claude cross-validation adds ~$0.003/call — cap tightly
+const claudeLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "AI request limit reached, please slow down." },
+});
+
 app.use(apiLimiter);
 
 app.get("/", (req, res) => {
@@ -84,7 +93,7 @@ app.use("/locations", locationsRoutes);
 app.use("/reviews", reviewLimiter, reviewsRoutes);
 app.use("/profiles", profilesRoutes);
 app.use("/rankings", rankingsRoutes);
-app.use("/ai", aiLimiter, aiRoutes);
+app.use("/ai", aiLimiter, claudeLimiter, aiRoutes);
 app.use("/upload", uploadLimiter, uploadRoutes);
 app.use("/saved-places", savedPlacesRouter);
 app.use("/discover", discoverLimiter, discoverRouter);
