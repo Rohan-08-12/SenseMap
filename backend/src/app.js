@@ -84,14 +84,6 @@ const claudeLimiter = rateLimit({
     message: { error: "AI request limit reached, please slow down." },
 });
 
-// ElevenLabs TTS is billed per character — limit per IP
-const audioLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000,
-    max: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Audio generation limit reached. Try again later." },
-});
 
 app.use(apiLimiter);
 
@@ -109,7 +101,7 @@ app.use("/saved-places", savedPlacesRouter);
 app.use("/discover", discoverLimiter, discoverRouter);
 app.use("/checkins", checkinsRouter);
 app.use("/users", usersRouter);
-app.use("/audio", audioLimiter, audioRouter);
+app.use("/audio", audioRouter);
 
 // Global error handler — converts auth errors and uncaught throws to clean JSON
 app.use((err, req, res, _next) => {

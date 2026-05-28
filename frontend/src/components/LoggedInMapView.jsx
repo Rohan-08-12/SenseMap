@@ -122,6 +122,13 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioError, setAudioError] = useState(false);
 
+  // Reset audio state when the selected location changes
+  useEffect(() => {
+    setAudioLoading(false);
+    setAudioPlaying(false);
+    setAudioError(false);
+  }, [selectedLocation?.id]);
+
   // Apply accessibility + appearance settings from localStorage on mount
   useEffect(() => {
     try {
@@ -596,7 +603,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
       audio.onerror = () => { setAudioPlaying(false); setAudioError(true); };
       setAudioLoading(false);
       setAudioPlaying(true);
-      audio.play();
+      await audio.play().catch(() => { setAudioPlaying(false); setAudioError(true); });
     } catch {
       setAudioLoading(false);
       setAudioError(true);
