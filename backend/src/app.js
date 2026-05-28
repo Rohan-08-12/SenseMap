@@ -86,6 +86,16 @@ const claudeLimiter = rateLimit({
     message: { error: "AI request limit reached, please slow down." },
 });
 
+// Each enrichment call hits Yelp + Foursquare + Reddit + Gemini + Claude —
+// cap at 20/min to stay within Yelp free tier (500/day) and avoid AI cost spikes
+const enrichmentLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Enrichment limit reached, please slow down." },
+});
+
 
 app.use(apiLimiter);
 
@@ -104,8 +114,8 @@ app.use("/discover", discoverLimiter, discoverRouter);
 app.use("/checkins", checkinsRouter);
 app.use("/users", usersRouter);
 app.use("/audio", audioRouter);
-app.use("/enrichment", enrichmentRouter);
-app.use("/scraper", scraperRouter);
+app.use("/enrichment", enrichmentLimiter, enrichmentRouter);
+app.use("/scraper", enrichmentLimiter, scraperRouter);
 
 // Global error handler — converts auth errors and uncaught throws to clean JSON
 app.use((err, req, res, _next) => {
