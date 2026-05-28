@@ -34,7 +34,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.SENSEMAP_API_URL }}/enrichment/stale",
+        "url": "https://sensemap-production.up.railway.app/enrichment/stale",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -69,7 +69,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SENSEMAP_API_URL }}/enrichment/location",
+        "url": "https://sensemap-production.up.railway.app/enrichment/location",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
