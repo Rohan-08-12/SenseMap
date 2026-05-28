@@ -15,6 +15,7 @@ import discoverRouter from "./routes/discover.js";
 import checkinsRouter from "./routes/checkins.js";
 import usersRouter from "./routes/users.js";
 import audioRouter from "./routes/audio.js";
+import enrichmentRouter from "./routes/enrichment.js";
 
 dotenv.config();
 
@@ -102,6 +103,7 @@ app.use("/discover", discoverLimiter, discoverRouter);
 app.use("/checkins", checkinsRouter);
 app.use("/users", usersRouter);
 app.use("/audio", audioRouter);
+app.use("/enrichment", enrichmentRouter);
 
 // Global error handler — converts auth errors and uncaught throws to clean JSON
 app.use((err, req, res, _next) => {

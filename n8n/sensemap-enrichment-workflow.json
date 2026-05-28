@@ -1,0 +1,200 @@
+{
+  "name": "SenseMap Enrichment Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger (4am Toronto)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sensemap-enrichment",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SENSEMAP_API_URL }}/enrichment/stale",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "get-stale-locations",
+      "name": "GET Stale Locations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "n8n-secret-header",
+          "name": "SenseMap N8N Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "locations",
+        "options": {
+          "batchSize": 10
+        }
+      },
+      "id": "split-in-batches",
+      "name": "Split in Batches (10)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [600, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SENSEMAP_API_URL }}/enrichment/location",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "locationId": "={{ $json.id }}"
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "enrich-location",
+      "name": "POST Enrich Location",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "n8n-secret-header",
+          "name": "SenseMap N8N Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 500,
+        "unit": "milliseconds"
+      },
+      "id": "wait-500ms",
+      "name": "Wait 500ms",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1200, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "updated-check",
+              "leftValue": "={{ $json.updated }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-updated",
+      "name": "IF Updated",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 100]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO \"EnrichmentLog\" (id, \"locationId\", scores) VALUES (gen_random_uuid()::text, '{{ $json.locationId }}', '{{ JSON.stringify({noise: $json.noise, lighting: $json.lighting, crowd: $json.crowd, source: \"yelp\"}) }}'::jsonb) ON CONFLICT DO NOTHING;",
+        "options": {}
+      },
+      "id": "postgres-log",
+      "name": "Postgres Log",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1800, 0],
+      "credentials": {
+        "postgres": {
+          "id": "sensemap-postgres",
+          "name": "SenseMap Postgres"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (4am Toronto)": {
+      "main": [
+        [{ "node": "GET Stale Locations", "type": "main", "index": 0 }]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [{ "node": "GET Stale Locations", "type": "main", "index": 0 }]
+      ]
+    },
+    "GET Stale Locations": {
+      "main": [
+        [{ "node": "Split in Batches (10)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split in Batches (10)": {
+      "main": [
+        [{ "node": "POST Enrich Location", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST Enrich Location": {
+      "main": [
+        [{ "node": "Wait 500ms", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait 500ms": {
+      "main": [
+        [{ "node": "IF Updated", "type": "main", "index": 0 }]
+      ]
+    },
+    "IF Updated": {
+      "main": [
+        [{ "node": "Postgres Log", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Toronto"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

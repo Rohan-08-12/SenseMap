@@ -53,3 +53,27 @@ export const recalculateScores = async (locationId) => {
         create: { locationId, noiseScore, lightingScore, crowdScore, comfortScore, reviewCount: reviews.length },
     });
 };
+
+export function getDisplayScore(location) {
+    const {
+        reviewCount,
+        noiseScore, lightingScore, crowdScore,
+        estimatedNoiseScore, estimatedLightingScore, estimatedCrowdScore,
+    } = location;
+
+    if (reviewCount >= 5) {
+        return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, source: "community" };
+    }
+    if (reviewCount >= 1 && estimatedNoiseScore != null) {
+        return {
+            noise:    (noiseScore    * 0.7) + (estimatedNoiseScore    * 0.3),
+            lighting: (lightingScore * 0.7) + (estimatedLightingScore * 0.3),
+            crowd:    (crowdScore    * 0.7) + (estimatedCrowdScore    * 0.3),
+            source: "community",
+        };
+    }
+    if (estimatedNoiseScore != null) {
+        return { noise: estimatedNoiseScore, lighting: estimatedLightingScore, crowd: estimatedCrowdScore, source: "estimated" };
+    }
+    return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, source: "category" };
+}

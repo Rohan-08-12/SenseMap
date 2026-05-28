@@ -1,0 +1,232 @@
+import express from "express";
+import axios from "axios";
+import prisma from "../lib/prisma.js";
+import { model } from "../lib/gemini.js";
+import { validateWithClaude } from "../lib/anthropic.js";
+
+const router = express.Router();
+
+const YELP_API_BASE = "https://api.yelp.com/v3";
+const STALE_THRESHOLD_HOURS = 24;
+
+function requireN8nSecret(req, res, next) {
+    const secret = req.headers["x-n8n-secret"];
+    if (!process.env.N8N_WEBHOOK_SECRET || secret !== process.env.N8N_WEBHOOK_SECRET) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    next();
+}
+
+const analyzeSchema = {
+    type: "object",
+    properties: {
+        noise_score:    { type: "number", description: "Noise level 1-10, where 1=silent and 10=extremely loud" },
+        lighting_score: { type: "number", description: "Lighting intensity 1-10, where 1=dim and 10=harsh/bright" },
+        crowd_score:    { type: "number", description: "Crowd density 1-10, where 1=empty and 10=packed" },
+        sentiment:      { type: "string", enum: ["positive", "neutral", "negative"] },
+        tags:           { type: "array",  items: { type: "string" } },
+        summary:        { type: "string" },
+    },
+    required: ["noise_score", "lighting_score", "crowd_score", "sentiment", "tags", "summary"],
+};
+
+async function searchYelp(name, lat, lng) {
+    const res = await axios.get(`${YELP_API_BASE}/businesses/search`, {
+        headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
+        params: { term: name, latitude: lat, longitude: lng, limit: 1 },
+        timeout: 8000,
+    });
+    return res.data.businesses?.[0] ?? null;
+}
+
+async function getYelpReviews(yelpId) {
+    const res = await axios.get(`${YELP_API_BASE}/businesses/${yelpId}/reviews`, {
+        headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
+        params: { limit: 10, sort_by: "newest" },
+        timeout: 8000,
+    });
+    return res.data.reviews ?? [];
+}
+
+async function analyzeReviews(name, reviewTexts) {
+    const combined = reviewTexts.join("\n");
+    if (!combined.trim()) return null;
+
+    const prompt = `You are a sensory analysis assistant for autistic and sensory-sensitive people.
+
+Analyze these Yelp reviews for "${name}" and extract structured sensory scores.
+
+Reviews:
+${combined}`;
+
+    const [geminiResult, claudeResult] = await Promise.all([
+        model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
+        }),
+        validateWithClaude(combined),
+    ]);
+
+    const gemini = JSON.parse(geminiResult.response.text());
+    if (!claudeResult) return gemini;
+
+    const dims = ["noise_score", "lighting_score", "crowd_score"];
+    const blended = { ...gemini };
+    for (const dim of dims) {
+        const g = gemini[dim];
+        const c = claudeResult[dim];
+        if (g == null || c == null) continue;
+        if (Math.abs(g - c) > 2) {
+            const claudeConf = claudeResult.confidence ?? 5;
+            blended[dim] = (g * 7 + c * claudeConf) / (7 + claudeConf);
+        } else {
+            blended[dim] = (g + c) / 2;
+        }
+    }
+    blended.confidence = claudeResult.confidence ?? null;
+    return blended;
+}
+
+function scoresDiffer(current, newNoise, newLighting, newCrowd, threshold = 0.5) {
+    if (current.estimatedNoiseScore == null) return true;
+    return (
+        Math.abs((current.estimatedNoiseScore ?? 0) - newNoise) > threshold ||
+        Math.abs((current.estimatedLightingScore ?? 0) - newLighting) > threshold ||
+        Math.abs((current.estimatedCrowdScore ?? 0) - newCrowd) > threshold
+    );
+}
+
+// POST /enrichment/location — called by n8n for each location
+router.post("/location", requireN8nSecret, async (req, res) => {
+    try {
+        const { locationId } = req.body;
+        if (!locationId) return res.status(400).json({ error: "locationId required" });
+
+        const location = await prisma.location.findUnique({ where: { id: locationId } });
+        if (!location) return res.status(404).json({ error: "Location not found" });
+
+        // Find or confirm Yelp business
+        let yelpId = location.externalYelpId;
+        let yelpBusiness = null;
+        if (!yelpId) {
+            yelpBusiness = await searchYelp(location.name, location.latitude, location.longitude);
+            yelpId = yelpBusiness?.id ?? null;
+        }
+
+        if (!yelpId) {
+            await prisma.location.update({
+                where: { id: locationId },
+                data: { lastEnrichedAt: new Date(), dataSource: "category" },
+            });
+            return res.json({ updated: false, reason: "no_yelp_match" });
+        }
+
+        const reviews = await getYelpReviews(yelpId);
+        const reviewTexts = reviews.map((r) => r.text).filter(Boolean);
+        const analysis = await analyzeReviews(location.name, reviewTexts);
+
+        if (!analysis) {
+            await prisma.location.update({
+                where: { id: locationId },
+                data: { externalYelpId: yelpId, lastEnrichedAt: new Date() },
+            });
+            return res.json({ updated: false, reason: "no_review_text" });
+        }
+
+        // Convert 1-10 scores to 1-5
+        const newNoise    = analysis.noise_score    / 2;
+        const newLighting = analysis.lighting_score / 2;
+        const newCrowd    = analysis.crowd_score    / 2;
+
+        const needsUpdate = !location.lastEnrichedAt || scoresDiffer(location, newNoise, newLighting, newCrowd);
+
+        if (!needsUpdate) {
+            await prisma.location.update({
+                where: { id: locationId },
+                data: { externalYelpId: yelpId, lastEnrichedAt: new Date() },
+            });
+            return res.json({ updated: false, reason: "scores_unchanged" });
+        }
+
+        const confidence = analysis.confidence ?? null;
+        await prisma.location.update({
+            where: { id: locationId },
+            data: {
+                externalYelpId:         yelpId,
+                estimatedNoiseScore:    newNoise,
+                estimatedLightingScore: newLighting,
+                estimatedCrowdScore:    newCrowd,
+                enrichmentConfidence:   confidence,
+                dataSource:             "yelp",
+                lastEnrichedAt:         new Date(),
+            },
+        });
+
+        await prisma.enrichmentLog.create({
+            data: {
+                locationId,
+                scores: { noise: newNoise, lighting: newLighting, crowd: newCrowd, confidence, source: "yelp" },
+            },
+        });
+
+        res.json({ updated: true, noise: newNoise, lighting: newLighting, crowd: newCrowd });
+    } catch (error) {
+        console.error("Enrichment error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// GET /enrichment/stale — returns locations due for enrichment
+router.get("/stale", requireN8nSecret, async (req, res) => {
+    try {
+        const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
+
+        const locations = await prisma.location.findMany({
+            where: {
+                OR: [
+                    { lastEnrichedAt: null },
+                    { lastEnrichedAt: { lt: cutoff } },
+                ],
+            },
+            take: 450,
+            orderBy: [
+                { lastEnrichedAt: { sort: "asc", nulls: "first" } },
+            ],
+            select: {
+                id: true,
+                name: true,
+                latitude: true,
+                longitude: true,
+                category: true,
+                lastEnrichedAt: true,
+                externalYelpId: true,
+            },
+        });
+
+        res.json({ count: locations.length, locations });
+    } catch (error) {
+        console.error("Stale locations error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// POST /enrichment/trigger — kicks off an n8n enrichment run
+router.post("/trigger", requireN8nSecret, async (req, res) => {
+    try {
+        const webhookUrl = process.env.N8N_WEBHOOK_URL;
+        if (!webhookUrl) return res.status(503).json({ error: "N8N_WEBHOOK_URL not configured" });
+
+        const response = await axios.post(
+            webhookUrl,
+            { triggeredAt: new Date().toISOString(), source: "manual" },
+            { timeout: 10000 }
+        );
+
+        res.json({ triggered: true, n8nStatus: response.status });
+    } catch (error) {
+        console.error("Trigger error:", error);
+        res.status(500).json({ error: "Failed to trigger n8n webhook" });
+    }
+});
+
+export default router;

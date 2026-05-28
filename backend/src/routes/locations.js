@@ -4,6 +4,7 @@ import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
+import { getDisplayScore } from "../lib/scores.js";
 
 
 const router = express.Router()
@@ -330,7 +331,19 @@ router.get("/:id", async (req, res) => {
 
         if (!location) return res.status(404).json({ error: "Location not found" });
 
-        res.json(location);
+        const displayScores = location.sensoryScores
+            ? getDisplayScore({
+                reviewCount:            location.sensoryScores.reviewCount,
+                noiseScore:             location.sensoryScores.noiseScore,
+                lightingScore:          location.sensoryScores.lightingScore,
+                crowdScore:             location.sensoryScores.crowdScore,
+                estimatedNoiseScore:    location.estimatedNoiseScore,
+                estimatedLightingScore: location.estimatedLightingScore,
+                estimatedCrowdScore:    location.estimatedCrowdScore,
+            })
+            : null;
+
+        res.json({ ...location, displayScores });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });
