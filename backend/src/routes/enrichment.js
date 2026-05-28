@@ -7,7 +7,7 @@ import { requireN8nSecret } from "../middleware/n8nAuth.js";
 
 const router = express.Router();
 
-const STALE_THRESHOLD_HOURS = 24;
+const STALE_THRESHOLD_HOURS = 24 * 7; // weekly — stays within Yelp 5000/month limit
 
 const analyzeSchema = {
     type: "object",
