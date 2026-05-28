@@ -1,10 +1,20 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import prisma from "../lib/prisma.js";
 import cloudinary from "../lib/cloudinary.js";
 import { generateAudioSummary } from "../lib/elevenlabs.js";
 import { buildAudioScript } from "../lib/audioScript.js";
 
 const router = express.Router();
+
+// Only counts against the limit when ElevenLabs is actually called (not cache hits)
+const generationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Audio generation limit reached. Try again later." },
+});
 
 // GET /audio/:locationId — return cached or freshly generated audio URL
 router.get("/:locationId", async (req, res) => {
@@ -27,6 +37,11 @@ router.get("/:locationId", async (req, res) => {
       return res.json({ audioUrl: location.audioUrl });
     }
 
+    // Apply rate limit only for generation calls (not cache hits)
+    const limited = await new Promise((resolve) => generationLimiter(req, res, resolve));
+    if (res.headersSent) return;
+    void limited;
+
     // Generate fresh audio
     const script = buildAudioScript(location, location.sensoryScores, null);
 
@@ -35,7 +50,7 @@ router.get("/:locationId", async (req, res) => {
       audioBuffer = await generateAudioSummary(script);
     } catch (err) {
       console.error("ElevenLabs generation failed:", err);
-      return res.json({ audioUrl: null, error: "Audio unavailable" });
+      return res.status(503).json({ audioUrl: null, error: "Audio unavailable" });
     }
 
     // Upload to Cloudinary as audio (resource_type: "video" handles audio files)
@@ -63,7 +78,7 @@ router.get("/:locationId", async (req, res) => {
     res.json({ audioUrl: uploadResult.secure_url });
   } catch (error) {
     console.error("Audio route error:", error);
-    res.json({ audioUrl: null, error: "Audio unavailable" });
+    res.status(503).json({ audioUrl: null, error: "Audio unavailable" });
   }
 });
 

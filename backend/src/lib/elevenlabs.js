@@ -1,4 +1,4 @@
-import { ElevenLabsClient } from "elevenlabs";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 // Rachel voice ID
 const RACHEL_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
