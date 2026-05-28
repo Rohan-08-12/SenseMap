@@ -3,29 +3,50 @@ import axios from "axios";
 const YELP_API_BASE = "https://api.yelp.com/v3";
 const FOURSQUARE_API_BASE = "https://api.foursquare.com/v3";
 
-async function fetchYelp(name, lat, lng) {
-    try {
-        if (!process.env.YELP_API_KEY) return { text: "", yelpId: null };
+function yelpBusinessToText(business) {
+    const categories = (business.categories ?? []).map((c) => c.title).join(", ");
+    const price = business.price ?? "";
+    const rating = business.rating ?? "";
+    const reviewCount = business.review_count ?? 0;
+    const parts = [];
+    if (categories) parts.push(`${business.name} is a ${categories} establishment.`);
+    if (price) parts.push(`Price level: ${price}.`);
+    if (rating) parts.push(`Yelp rating: ${rating}/5 stars based on ${reviewCount} reviews.`);
+    return parts.join(" ");
+}
 
+async function fetchYelp(name, lat, lng) {
+    if (!process.env.YELP_API_KEY) return { text: "", yelpId: null };
+
+    let business = null;
+    try {
         const searchRes = await axios.get(`${YELP_API_BASE}/businesses/search`, {
             headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
             params: { term: name, latitude: lat, longitude: lng, limit: 1 },
             timeout: 8000,
         });
-        const business = searchRes.data.businesses?.[0];
-        if (!business) return { text: "", yelpId: null };
-
-        const reviewsRes = await axios.get(`${YELP_API_BASE}/businesses/${business.id}/reviews`, {
-            headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
-            params: { limit: 10, sort_by: "newest" },
-            timeout: 8000,
-        });
-        const reviews = reviewsRes.data.reviews ?? [];
-        const text = reviews.map((r) => r.text).filter(Boolean).join("\n");
-        return { text, yelpId: business.id };
+        business = searchRes.data.businesses?.[0] ?? null;
     } catch {
         return { text: "", yelpId: null };
     }
+
+    if (!business) return { text: "", yelpId: null };
+
+    // Try reviews endpoint — may be blocked on Base plan, fall back to business metadata
+    try {
+        const reviewsRes = await axios.get(`${YELP_API_BASE}/businesses/${business.id}/reviews`, {
+            headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
+            params: { limit: 10, sort_by: "newest" },
+            timeout: 6000,
+        });
+        const reviews = reviewsRes.data.reviews ?? [];
+        const reviewText = reviews.map((r) => r.text).filter(Boolean).join("\n");
+        if (reviewText) return { text: reviewText, yelpId: business.id };
+    } catch {
+        // Reviews endpoint blocked — use business metadata instead
+    }
+
+    return { text: yelpBusinessToText(business), yelpId: business.id };
 }
 
 async function fetchFoursquare(name, lat, lng) {
@@ -113,13 +134,24 @@ export async function fetchAllSources({ name, latitude, longitude, existingYelpI
 
 async function fetchYelpById(yelpId) {
     try {
-        const res = await axios.get(`${YELP_API_BASE}/businesses/${yelpId}/reviews`, {
+        const reviewsRes = await axios.get(`${YELP_API_BASE}/businesses/${yelpId}/reviews`, {
             headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
             params: { limit: 10, sort_by: "newest" },
+            timeout: 6000,
+        });
+        const reviews = reviewsRes.data.reviews ?? [];
+        const reviewText = reviews.map((r) => r.text).filter(Boolean).join("\n");
+        if (reviewText) return reviewText;
+    } catch {
+        // Reviews endpoint blocked — fall back to business details
+    }
+
+    try {
+        const detailsRes = await axios.get(`${YELP_API_BASE}/businesses/${yelpId}`, {
+            headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
             timeout: 8000,
         });
-        const reviews = res.data.reviews ?? [];
-        return reviews.map((r) => r.text).filter(Boolean).join("\n");
+        return yelpBusinessToText(detailsRes.data);
     } catch {
         return "";
     }
