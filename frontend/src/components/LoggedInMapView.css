@@ -911,7 +911,6 @@
 }
 
 .lmv-stat-box {
-  padding: 13px;
   background: linear-gradient(to bottom, #fff, #f5faff);
   border: 1px solid var(--theme-border);
   border-radius: 8px;
@@ -1513,6 +1512,48 @@
   .lmv--has-detail .lmv-map-toggle {
     visibility: hidden;
     pointer-events: none;
+  }
+
+  /* Keep all three items in one row, share width equally */
+  .lmv-snapshot-stats {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .lmv-snapshot-big {
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .lmv-snapshot-big .big-number {
+    font-size: 24px;
+    line-height: 28px;
+    letter-spacing: -0.5px;
+  }
+  .lmv-snapshot-big .big-label {
+    font-size: 11px;
+  }
+  .lmv-snapshot-cards {
+    display: contents;
+  }
+  .lmv-stat-card {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+  .lmv-stat-card .stat-value {
+    font-size: 14px;
+  }
+  .lmv-stat-card .stat-label {
+    font-size: 11px;
+  }
+
+  /* Score bars: flex instead of fixed width so they don't overflow the detail sheet */
+  .lmv-score-row .sr-bar {
+    width: auto;
+    flex: 1;
   }
 }
 

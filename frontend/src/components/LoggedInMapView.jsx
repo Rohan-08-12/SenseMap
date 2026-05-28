@@ -1449,7 +1449,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                           )}
                           <span style={{ fontSize: 11, color: 'var(--theme-text-muted)', marginLeft: 'auto' }}>{date}</span>
                         </div>
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
                           <span style={{ fontSize: 11, background: 'var(--theme-tag-soft)', borderRadius: 4, padding: '2px 6px', color: 'var(--theme-text-muted)' }}>🔇 {review.noiseLevel}/10</span>
                           <span style={{ fontSize: 11, background: 'var(--theme-tag-soft)', borderRadius: 4, padding: '2px 6px', color: 'var(--theme-text-muted)' }}>💡 {review.lightingLevel}/10</span>
                           <span style={{ fontSize: 11, background: 'var(--theme-tag-soft)', borderRadius: 4, padding: '2px 6px', color: 'var(--theme-text-muted)' }}>👥 {review.crowdLevel}/10</span>
