@@ -2,7 +2,6 @@ import express from "express";
 import axios from "axios";
 import prisma from "../lib/prisma.js";
 import { model } from "../lib/gemini.js";
-import { validateWithClaude } from "../lib/anthropic.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
 
@@ -23,6 +22,8 @@ const analyzeSchema = {
     required: ["noise_score", "lighting_score", "crowd_score", "sentiment", "tags", "summary"],
 };
 
+// Gemini-only for background enrichment — Claude validation reserved for
+// user-submitted reviews in /ai/analyze where accuracy matters most
 async function analyzeText(name, reviewText) {
     if (!reviewText.trim()) return null;
 
@@ -33,32 +34,12 @@ Analyze these reviews for "${name}" and extract structured sensory scores.
 Reviews:
 ${reviewText}`;
 
-    const [geminiResult, claudeResult] = await Promise.all([
-        model.generateContent({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
-        }),
-        validateWithClaude(reviewText),
-    ]);
+    const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
+    });
 
-    const gemini = JSON.parse(geminiResult.response.text());
-    if (!claudeResult) return gemini;
-
-    const dims = ["noise_score", "lighting_score", "crowd_score"];
-    const blended = { ...gemini };
-    for (const dim of dims) {
-        const g = gemini[dim];
-        const c = claudeResult[dim];
-        if (g == null || c == null) continue;
-        if (Math.abs(g - c) > 2) {
-            const claudeConf = claudeResult.confidence ?? 5;
-            blended[dim] = (g * 7 + c * claudeConf) / (7 + claudeConf);
-        } else {
-            blended[dim] = (g + c) / 2;
-        }
-    }
-    blended.confidence = claudeResult.confidence ?? null;
-    return blended;
+    return JSON.parse(result.response.text());
 }
 
 function scoresDiffer(current, newNoise, newLighting, newCrowd, threshold = 0.5) {
