@@ -149,16 +149,19 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
         const safeScore = (score) => score != null ? score : 3;
 
         const matches = locations
-            .filter(loc => loc.sensoryScores)
             .map(loc => {
                 const s = loc.sensoryScores;
+                // Use community scores if available, fall back to AI-estimated
+                const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
+                const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
+                const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
 
-                // Both location scores (stored /2) and user tolerances are on 1-5 scale.
-                // Clamp to [0,100] to guard against out-of-range DB values.
-                const noiseMatch   = Math.max(0, 100 - Math.abs(safeScore(s.noiseScore)   - noiseTolerance)   * 25);
-                const lightingMatch = Math.max(0, 100 - Math.abs(safeScore(s.lightingScore) - lightingTolerance) * 25);
-                const crowdMatch    = Math.max(0, 100 - Math.abs(safeScore(s.crowdScore)    - crowdTolerance)   * 25);
-                const matchScore   = Math.min(100, Math.max(0, Math.round((noiseMatch + lightingMatch + crowdMatch) / 3)));
+                if (noise == null && lighting == null && crowd == null) return null;
+
+                const noiseMatch    = Math.max(0, 100 - Math.abs(safeScore(noise)    - noiseTolerance)    * 25);
+                const lightingMatch = Math.max(0, 100 - Math.abs(safeScore(lighting) - lightingTolerance) * 25);
+                const crowdMatch    = Math.max(0, 100 - Math.abs(safeScore(crowd)    - crowdTolerance)    * 25);
+                const matchScore    = Math.min(100, Math.max(0, Math.round((noiseMatch + lightingMatch + crowdMatch) / 3)));
 
                 return {
                     locationId: loc.id,
@@ -168,12 +171,13 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
                     longitude: loc.longitude,
                     latitude: loc.latitude,
                     matchScore,
-                    noiseScore: s.noiseScore,
-                    lightingScore: s.lightingScore,
-                    crowdScore: s.crowdScore,
-                    comfortScore: s.comfortScore,
+                    noiseScore:    noise,
+                    lightingScore: lighting,
+                    crowdScore:    crowd,
+                    comfortScore:  s?.comfortScore ?? null,
                 };
             })
+            .filter(Boolean)
             .sort((a, b) => b.matchScore - a.matchScore);
 
         res.json(matches);

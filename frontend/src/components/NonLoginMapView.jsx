@@ -245,7 +245,12 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   };
 
   // --- Derived values from real API data ---
-  const sensory = locationDetail?.sensoryScores || selectedLocation || {};
+  // Prefer backend-computed displayScores (blends community + AI-estimated); fall back to raw sensoryScores
+  const _ds = locationDetail?.displayScores;
+  const sensory = _ds
+    ? { noiseScore: _ds.noise, lightingScore: _ds.lighting, crowdScore: _ds.crowd, comfortScore: _ds.comfort ?? (_ds.noise + _ds.lighting + _ds.crowd) / 3 }
+    : (locationDetail?.sensoryScores || selectedLocation || {});
+  const dataSource = _ds?.source ?? 'category';
   const locationName = selectedLocation?.name || 'Select a location';
   const reviewCount = locationDetail?.sensoryScores?.reviewCount ?? locationDetail?.reviews?.length ?? 0;
 
@@ -628,7 +633,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   </div>
                   <div className="nlm-score-badge">
                     <span className="score-value">{overallScore}</span>
-                    <span className="score-label">{reviewCount > 0 ? `${reviewCount} reviews` : 'AI estimate'}</span>
+                    <span className="score-label">{dataSource === 'community' ? `${reviewCount} reviews` : 'AI estimate'}</span>
                   </div>
                 </div>
 
@@ -874,7 +879,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </div>
                 <div className="nlm-score-badge">
                   <span className="score-value">{overallScore}</span>
-                  <span className="score-label">{reviewCount > 0 ? `${reviewCount} reviews` : 'AI estimate'}</span>
+                  <span className="score-label">{dataSource === 'community' ? `${reviewCount} reviews` : 'AI estimate'}</span>
                 </div>
                 <button
                   className="nlm-mobile-detail-close"
