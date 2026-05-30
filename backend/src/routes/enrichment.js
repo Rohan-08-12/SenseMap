@@ -181,10 +181,15 @@ router.post("/trigger", requireN8nSecret, async (req, res) => {
         const webhookUrl = process.env.N8N_WEBHOOK_URL;
         if (!webhookUrl) return res.status(503).json({ error: "N8N_WEBHOOK_URL not configured" });
 
+        const headers = {};
+        if (process.env.N8N_WEBHOOK_SECRET) {
+            headers["x-n8n-secret"] = process.env.N8N_WEBHOOK_SECRET;
+        }
+
         const response = await axios.post(
             webhookUrl,
             { triggeredAt: new Date().toISOString(), source: "manual" },
-            { timeout: 10000 }
+            { timeout: 10000, headers }
         );
 
         res.json({ triggered: true, n8nStatus: response.status });
