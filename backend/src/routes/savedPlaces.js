@@ -16,7 +16,13 @@ router.get("/", requireAuth, syncUser, async (req, res) => {
             where: { userId: user.id },
             include: {
                 location: {
-                    include: { sensoryScores: true }
+                    include: { sensoryScores: true },
+                    select: {
+                        id: true, name: true, category: true, address: true,
+                        description: true, imageUrl: true, latitude: true, longitude: true,
+                        estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true,
+                        sensoryScores: true,
+                    }
                 }
             },
             orderBy: { createdAt: "desc" }

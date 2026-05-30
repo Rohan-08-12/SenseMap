@@ -264,7 +264,8 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
 
   // Rating tags
   const ratingTags = (() => {
-    if (reviewCount === 0) return ['No visits yet — be the first'];
+    if (reviewCount === 0 && dataSource === 'category') return ['No visits yet — be the first'];
+    if (reviewCount === 0 && dataSource === 'estimated') return ['AI-estimated profile'];
     const tags = [];
     const revisit = Math.round(comfortScore / 5 * 100);
     tags.push(`${revisit}% would revisit`);
@@ -689,9 +690,9 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </div>
 
                 {/* Score Bars */}
-                {reviewCount === 0 ? (
+                {dataSource === 'category' ? (
                   <div style={{ padding: 12, background: 'var(--theme-tag-soft)', borderRadius: 8, color: 'var(--theme-text-muted)', fontSize: 13, marginTop: 8 }}>
-                    Default category estimates — no community data yet.
+                    No data yet — be the first to visit and review.
                   </div>
                 ) : (
                   <div className="nlm-score-bars">

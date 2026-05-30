@@ -80,13 +80,13 @@ function Dashboard({
       ? haversineDistance(userCoords.lat, userCoords.lng, bestMatch.latitude, bestMatch.longitude)
       : null;
 
-  // Normalize saved places for list (backend: { location: { name, address, sensoryScores }, locationId } )
+  // Normalize saved places for list (backend: { location: { name, address, sensoryScores, estimatedScores }, locationId } )
   const savedPlaces = savedPlacesList.map((s) => {
     const loc = s.location || {};
-    const scores = loc.sensoryScores || {};
-    const comfort = scores.comfortScore ?? scores.comfort ?? 0;
-    const noise = scores.noiseScore ?? scores.noise ?? 0;
-    const light = scores.lightingScore ?? scores.lighting ?? 0;
+    const cs = loc.sensoryScores || {};
+    const comfort = cs.comfortScore ?? (6 - ((loc.estimatedNoiseScore ?? 3) + (loc.estimatedLightingScore ?? 3) + (loc.estimatedCrowdScore ?? 3)) / 3);
+    const noise = cs.noiseScore ?? loc.estimatedNoiseScore ?? 0;
+    const light = cs.lightingScore ?? loc.estimatedLightingScore ?? 0;
 
     const parts = [];
     if (userCoords && loc.latitude != null && loc.longitude != null) {

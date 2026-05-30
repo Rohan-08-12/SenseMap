@@ -66,11 +66,16 @@ function SavedPlaces({ savedPlacesList = [], userCoords, userProfile, matchScore
 
   const places = savedPlacesList.map((s) => {
     const loc = s.location || {};
-    const scores = loc.sensoryScores || {};
+    const cs = loc.sensoryScores || {};
     const locId = loc.id || s.locationId;
     const ms = matchScores.find((m) => m.locationId === locId);
     const matchPct = ms?.matchScore ?? null;
     const score10 = sensoryMatch10(matchPct);
+
+    const noise    = cs.noiseScore    ?? loc.estimatedNoiseScore    ?? 0;
+    const lighting = cs.lightingScore ?? loc.estimatedLightingScore ?? 0;
+    const crowd    = cs.crowdScore    ?? loc.estimatedCrowdScore    ?? 0;
+    const comfort  = cs.comfortScore  ?? (noise > 0 ? 6 - (noise + lighting + crowd) / 3 : 0);
 
     let km = null;
     if (userCoords && loc.latitude != null && loc.longitude != null) {
@@ -86,11 +91,8 @@ function SavedPlaces({ savedPlacesList = [], userCoords, userProfile, matchScore
       imageUrl: loc.imageUrl || null,
       latitude: loc.latitude,
       longitude: loc.longitude,
-      comfort: scores.comfortScore ?? 0,
-      noise: scores.noiseScore ?? 0,
-      lighting: scores.lightingScore ?? 0,
-      crowd: scores.crowdScore ?? 0,
-      reviewCount: scores.reviewCount ?? 0,
+      comfort, noise, lighting, crowd,
+      reviewCount: cs.reviewCount ?? 0,
       matchPct,
       score10: score10 != null ? parseFloat(score10) : null,
       km,
@@ -388,7 +390,7 @@ function SavedPlaceDetail({ place, onBack, onRemove }) {
             <div className="spd-card-header">
               <div>
                 <h3>AI Review Insights</h3>
-                <p className="spd-card-desc">Analyzed from {reviews.length} recent community reviews matching your sensory needs.</p>
+                <p className="spd-card-desc">{reviews.length > 0 ? `Analyzed from ${reviews.length} recent community reviews` : 'AI-estimated from Yelp, Foursquare & Reddit'}</p>
               </div>
               <span className="spd-ai-badge">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.25" stroke="var(--theme-accent)" strokeWidth="1.2"/><path d="M5.25 7h3.5M7 5.25v3.5" stroke="var(--theme-accent)" strokeWidth="1.2" strokeLinecap="round"/></svg>
