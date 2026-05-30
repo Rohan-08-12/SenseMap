@@ -1,9 +1,9 @@
 import express from "express";
-import axios from "axios";
 import prisma from "../lib/prisma.js";
 import { model } from "../lib/gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
+import { runEnrichment } from "../lib/enrichmentCron.js";
 
 const router = express.Router();
 
@@ -175,28 +175,10 @@ router.get("/stale", requireN8nSecret, async (req, res) => {
     }
 });
 
-// POST /enrichment/trigger — kicks off an n8n enrichment run
-router.post("/trigger", requireN8nSecret, async (req, res) => {
-    try {
-        const webhookUrl = process.env.N8N_WEBHOOK_URL;
-        if (!webhookUrl) return res.status(503).json({ error: "N8N_WEBHOOK_URL not configured" });
-
-        const headers = {};
-        if (process.env.N8N_WEBHOOK_SECRET) {
-            headers["x-n8n-secret"] = process.env.N8N_WEBHOOK_SECRET;
-        }
-
-        const response = await axios.post(
-            webhookUrl,
-            { triggeredAt: new Date().toISOString(), source: "manual" },
-            { timeout: 10000, headers }
-        );
-
-        res.json({ triggered: true, n8nStatus: response.status });
-    } catch (error) {
-        console.error("Trigger error:", error);
-        res.status(500).json({ error: "Failed to trigger n8n webhook" });
-    }
+// POST /enrichment/trigger — kicks off a background enrichment run
+router.post("/trigger", requireN8nSecret, (req, res) => {
+    runEnrichment().catch(err => console.error("[Enrichment] Trigger error:", err.message));
+    res.json({ triggered: true, message: "Enrichment started in background" });
 });
 
 export default router;
