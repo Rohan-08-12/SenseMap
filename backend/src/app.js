@@ -86,11 +86,10 @@ const claudeLimiter = rateLimit({
     message: { error: "AI request limit reached, please slow down." },
 });
 
-// Each enrichment call hits Yelp + Foursquare + Reddit + Gemini —
-// 60/min allows n8n to run at 1 req/sec; Yelp quota managed by 7-day stale threshold
+// Internal n8n endpoint protected by requireN8nSecret; Yelp self-rate-limits
 const enrichmentLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 60,
+    max: 500,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Enrichment limit reached, please slow down." },
