@@ -61,47 +61,59 @@ router.get("/", async (req, res) => {
  */
 router.get("/heatmap", async (req, res) => {
     try {
-        // Prioritise locations with real user reviews, fall back to Gemini-seeded scores
-        // The two values 2.8 and 3.8 are OSM-import defaults with no meaningful signal
-        const DEFAULT_SCORES = [2.8, 3.8];
+        const clamp = (v) => v != null ? Math.min(5, Math.max(1, v)) : null;
 
-        const scored = await prisma.sensoryScore.findMany({
-            where: {
-                comfortScore: { notIn: DEFAULT_SCORES },
-            },
+        // Pull all locations with either community scores or AI-estimated scores
+        const locations = await prisma.location.findMany({
             take: 500,
-            orderBy: { reviewCount: "desc" },
+            where: {
+                OR: [
+                    { sensoryScores: { isNot: null } },
+                    { estimatedNoiseScore: { not: null } },
+                ],
+            },
             select: {
-                reviewCount: true,
-                noiseScore: true,
-                lightingScore: true,
-                crowdScore: true,
-                comfortScore: true,
-                location: {
+                id: true,
+                name: true,
+                category: true,
+                latitude: true,
+                longitude: true,
+                estimatedNoiseScore: true,
+                estimatedLightingScore: true,
+                estimatedCrowdScore: true,
+                sensoryScores: {
                     select: {
-                        id: true,
-                        name: true,
-                        category: true,
-                        latitude: true,
-                        longitude: true,
+                        noiseScore: true,
+                        lightingScore: true,
+                        crowdScore: true,
+                        comfortScore: true,
+                        reviewCount: true,
                     }
                 }
             }
         });
 
-        const heatMapData = scored.map(({ location: loc, ...s }) => ({
-            locationId: loc.id,
-            longitude: loc.longitude,
-            latitude: loc.latitude,
-            name: loc.name,
-            category: loc.category,
-            // clamp scores to valid 1-5 range
-            noiseScore: s.noiseScore != null ? Math.min(5, Math.max(1, s.noiseScore)) : null,
-            lightingScore: s.lightingScore != null ? Math.min(5, Math.max(1, s.lightingScore)) : null,
-            crowdScore: s.crowdScore != null ? Math.min(5, Math.max(1, s.crowdScore)) : null,
-            comfortScore: s.comfortScore != null ? Math.min(5, Math.max(1, s.comfortScore)) : null,
-            reviewCount: s.reviewCount ?? 0,
-        }));
+        const heatMapData = locations.map((loc) => {
+            const s = loc.sensoryScores;
+            // Prefer community scores; fall back to AI-estimated
+            const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
+            const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
+            const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
+            const comfort  = s?.comfortScore  ?? (noise != null ? (noise + lighting + crowd) / 3 : null);
+
+            return {
+                locationId: loc.id,
+                longitude: loc.longitude,
+                latitude: loc.latitude,
+                name: loc.name,
+                category: loc.category,
+                noiseScore:    clamp(noise),
+                lightingScore: clamp(lighting),
+                crowdScore:    clamp(crowd),
+                comfortScore:  clamp(comfort),
+                reviewCount:   s?.reviewCount ?? 0,
+            };
+        });
 
         res.json(heatMapData);
     } catch (error) {
