@@ -20,6 +20,13 @@ function queueEnrichment(fn) {
     enrichmentQueue = enrichmentQueue.then(() => fn().catch(() => {}));
 }
 
+const TORONTO_BOUNDS = { minLat: 43.58, maxLat: 43.86, minLng: -79.64, maxLng: -79.11 };
+
+function isInToronto(lat, lng) {
+    return lat >= TORONTO_BOUNDS.minLat && lat <= TORONTO_BOUNDS.maxLat &&
+           lng >= TORONTO_BOUNDS.minLng && lng <= TORONTO_BOUNDS.maxLng;
+}
+
 async function quickCachePlace(googlePlace) {
     const gpid = googlePlace.place_id;
 
@@ -28,6 +35,10 @@ async function quickCachePlace(googlePlace) {
         include: { sensoryScores: true },
     });
     if (existing) return existing;
+
+    const lat = googlePlace.geometry?.location?.lat;
+    const lng = googlePlace.geometry?.location?.lng;
+    if (!isInToronto(lat, lng)) return null;
 
     const details = await getGooglePlaceDetails(gpid);
     if (!details) return null;

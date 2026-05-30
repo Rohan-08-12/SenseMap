@@ -22,7 +22,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "sensemap-enrichment",
-        "responseMode": "responseNode",
+        "responseMode": "lastNode",
         "options": {}
       },
       "id": "webhook-trigger",
@@ -33,7 +33,6 @@
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "https://sensemap-production.up.railway.app/enrichment/stale",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
@@ -48,7 +47,7 @@
       "position": [300, 100],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "n8n-secret-header",
+          "id": "6QtIn3Xxzx6RJoAX",
           "name": "SenseMap N8N Secret"
         }
       }
@@ -56,14 +55,12 @@
     {
       "parameters": {
         "fieldToSplitOut": "locations",
-        "options": {
-          "batchSize": 10
-        }
+        "options": {}
       },
-      "id": "split-in-batches",
-      "name": "Split in Batches (10)",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
+      "id": "split-out",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
       "position": [600, 100]
     },
     {
@@ -73,36 +70,35 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
-        "contentType": "json",
-        "body": {
-          "locationId": "={{ $json.id }}"
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "locationId",
+              "value": "={{ $json.id }}"
+            }
+          ]
         },
         "options": {
-          "timeout": 20000
+          "timeout": 20000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          }
         }
       },
-      "id": "enrich-location",
+      "id": "post-enrich-location",
       "name": "POST Enrich Location",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [900, 100],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "n8n-secret-header",
+          "id": "6QtIn3Xxzx6RJoAX",
           "name": "SenseMap N8N Secret"
         }
       }
-    },
-    {
-      "parameters": {
-        "amount": 500,
-        "unit": "milliseconds"
-      },
-      "id": "wait-500ms",
-      "name": "Wait 500ms",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [1200, 100]
     },
     {
       "parameters": {
@@ -110,7 +106,8 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 1
           },
           "conditions": [
             {
@@ -131,25 +128,7 @@
       "name": "IF Updated",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1500, 100]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO \"EnrichmentLog\" (id, \"locationId\", scores) VALUES (gen_random_uuid()::text, '{{ $json.locationId }}', '{{ JSON.stringify({noise: $json.noise, lighting: $json.lighting, crowd: $json.crowd, source: \"yelp\"}) }}'::jsonb) ON CONFLICT DO NOTHING;",
-        "options": {}
-      },
-      "id": "postgres-log",
-      "name": "Postgres Log",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.5,
-      "position": [1800, 0],
-      "credentials": {
-        "postgres": {
-          "id": "sensemap-postgres",
-          "name": "SenseMap Postgres"
-        }
-      }
+      "position": [1200, 100]
     }
   ],
   "connections": {
@@ -165,27 +144,22 @@
     },
     "GET Stale Locations": {
       "main": [
-        [{ "node": "Split in Batches (10)", "type": "main", "index": 0 }]
+        [{ "node": "Split Out", "type": "main", "index": 0 }]
       ]
     },
-    "Split in Batches (10)": {
+    "Split Out": {
       "main": [
         [{ "node": "POST Enrich Location", "type": "main", "index": 0 }]
       ]
     },
     "POST Enrich Location": {
       "main": [
-        [{ "node": "Wait 500ms", "type": "main", "index": 0 }]
-      ]
-    },
-    "Wait 500ms": {
-      "main": [
         [{ "node": "IF Updated", "type": "main", "index": 0 }]
       ]
     },
     "IF Updated": {
       "main": [
-        [{ "node": "Postgres Log", "type": "main", "index": 0 }],
+        [],
         []
       ]
     }
@@ -195,6 +169,6 @@
     "timezone": "America/Toronto"
   },
   "meta": {
-    "templateCredsSetupCompleted": false
+    "templateCredsSetupCompleted": true
   }
 }

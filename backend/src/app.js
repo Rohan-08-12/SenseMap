@@ -114,7 +114,11 @@ app.use("/discover", discoverLimiter, discoverRouter);
 app.use("/checkins", checkinsRouter);
 app.use("/users", usersRouter);
 app.use("/audio", audioRouter);
-app.use("/enrichment", enrichmentLimiter, enrichmentRouter);
+const enrichmentPostLimiter = (req, res, next) => {
+    if (req.method === "GET") return next();
+    return enrichmentLimiter(req, res, next);
+};
+app.use("/enrichment", enrichmentPostLimiter, enrichmentRouter);
 app.use("/scraper", enrichmentLimiter, scraperRouter);
 
 // Global error handler — converts auth errors and uncaught throws to clean JSON
