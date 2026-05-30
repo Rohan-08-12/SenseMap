@@ -1217,56 +1217,60 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 );
               })()}
 
-              <div className="lmv-stat-boxes" style={{ opacity: dataSource === 'category' ? 0.4 : 1 }}>
-                <div className="lmv-stat-box">
-                  <div className="box-label">Comfort</div>
-                  <div className="box-value">{comfortScore}</div>
-                </div>
-                <div className="lmv-stat-box">
-                  <div className="box-label">Noise</div>
-                  <div className="box-value small">{noiseLevel}</div>
-                </div>
-                <div className="lmv-stat-box">
-                  <div className="box-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    Best time
+              {dataSource !== 'category' && (
+                <>
+                  <div className="lmv-stat-boxes">
+                    <div className="lmv-stat-box">
+                      <div className="box-label">Comfort</div>
+                      <div className="box-value">{comfortScore}</div>
+                    </div>
+                    <div className="lmv-stat-box">
+                      <div className="box-label">Noise</div>
+                      <div className="box-value small">{noiseLevel}</div>
+                    </div>
+                    <div className="lmv-stat-box">
+                      <div className="box-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Best time
+                        {aiInsights?.bestTime && (
+                          <span style={{ fontSize: 10, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 4px', fontWeight: 600 }}>AI</span>
+                        )}
+                      </div>
+                      <div className="box-value small">{bestTimeText}</div>
+                    </div>
+                  </div>
+
+                  <div className="lmv-loc-tags">
+                    {aiInsights?.tags?.length > 0 && (
+                      <span className="lmv-loc-tag" style={{ background: '#ede9fe', color: '#5b21b6', fontSize: 11, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="#5b21b6" strokeWidth="1.2"/><path d="M5 3v2.5l1.5 1" stroke="#5b21b6" strokeWidth="1" strokeLinecap="round"/></svg>
+                        AI tags
+                      </span>
+                    )}
+                    {locationTags.map((tag) => (
+                      <span key={tag} className="lmv-loc-tag">{tag}</span>
+                    ))}
+                  </div>
+
+                  {/* Rating tags */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>
+                      {Math.round((sensory.comfortScore ?? sensory.comfort_score ?? 0) / 5 * 100)}% would revisit
+                    </span>
+                    {(sensory.noiseScore ?? sensory.noise_score ?? 5) < 2 && (
+                      <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-noise favorite</span>
+                    )}
+                    {(sensory.crowdScore ?? sensory.crowd_score ?? 5) < 2 && (
+                      <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-crowd spot</span>
+                    )}
                     {aiInsights?.bestTime && (
-                      <span style={{ fontSize: 10, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 4px', fontWeight: 600 }}>AI</span>
+                      <span className="lmv-loc-tag" style={{ background: '#ede9fe', color: '#5b21b6' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, marginRight: 2 }}>AI</span>
+                        Best: {aiInsights.bestTime.split(' ').slice(0, 3).join(' ')}
+                      </span>
                     )}
                   </div>
-                  <div className="box-value small">{bestTimeText}</div>
-                </div>
-              </div>
-
-              <div className="lmv-loc-tags">
-                {aiInsights?.tags?.length > 0 && (
-                  <span className="lmv-loc-tag" style={{ background: '#ede9fe', color: '#5b21b6', fontSize: 11, display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="#5b21b6" strokeWidth="1.2"/><path d="M5 3v2.5l1.5 1" stroke="#5b21b6" strokeWidth="1" strokeLinecap="round"/></svg>
-                    AI tags
-                  </span>
-                )}
-                {locationTags.map((tag) => (
-                  <span key={tag} className="lmv-loc-tag">{tag}</span>
-                ))}
-              </div>
-
-              {/* Rating tags */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>
-                  {Math.round((sensory.comfortScore ?? sensory.comfort_score ?? 0) / 5 * 100)}% would revisit
-                </span>
-                {(sensory.noiseScore ?? sensory.noise_score ?? 5) < 2 && (
-                  <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-noise favorite</span>
-                )}
-                {(sensory.crowdScore ?? sensory.crowd_score ?? 5) < 2 && (
-                  <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-crowd spot</span>
-                )}
-                {aiInsights?.bestTime && (
-                  <span className="lmv-loc-tag" style={{ background: '#ede9fe', color: '#5b21b6' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, marginRight: 2 }}>AI</span>
-                    Best: {aiInsights.bestTime.split(' ').slice(0, 3).join(' ')}
-                  </span>
-                )}
-              </div>
+                </>
+              )}
 
               {/* Write a Review button — only shown when a location is selected */}
               {selectedLocation?.id && (

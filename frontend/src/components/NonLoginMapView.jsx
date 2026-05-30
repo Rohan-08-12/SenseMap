@@ -633,8 +633,8 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                     <p>{locationName}</p>
                   </div>
                   <div className="nlm-score-badge">
-                    <span className="score-value">{overallScore}</span>
-                    <span className="score-label">{dataSource === 'community' ? `${reviewCount} reviews` : 'AI estimate'}</span>
+                    <span className="score-value">{dataSource === 'category' ? '—' : overallScore}</span>
+                    <span className="score-label">{dataSource === 'community' ? `${reviewCount} reviews` : dataSource === 'estimated' ? 'AI estimate' : 'No data'}</span>
                   </div>
                 </div>
 
