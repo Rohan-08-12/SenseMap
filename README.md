@@ -11,9 +11,9 @@ Currently in beta, covering **Toronto**.
 ## What it does
 
 - **Interactive map** — color-coded pins and heatmap showing sensory comfort at a glance
-- **Sensory scores** — noise, lighting, crowds, and overall comfort on a 1–5 scale; aggregated with exponential time-decay (6-month half-life) so fresh visits progressively outweigh older data
-- **Data transparency** — every location clearly labels whether scores come from community reviews, AI-seeded data, or a mix of both
-- **AI insights** — Gemini 2.5-flash analyzes community reviews and surfaces noise patterns, best visit times, and sensory tags
+- **Sensory scores for every location** — noise, lighting, and crowd ratings on a 1–5 scale. Every location has scores from day one via the AI enrichment pipeline (Yelp + Foursquare + Reddit → Gemini 2.5-flash). Community reviews layer on top and progressively take over as the primary source.
+- **Data transparency** — every location clearly labels its data source: community reviews, AI-estimated, mixed, or default
+- **AI insights** — Gemini 2.5-flash analyzes reviews and surfaces noise patterns, best visit times, and sensory tags
 - **Personalized matching** — set your own noise/lighting/crowd tolerance and get a % match for every location
 - **Review list** — see individual reviews with author, date, and slider ratings; AI-seeded reviews labeled with a badge
 - **Check-in flow** — quick tap ratings when you're physically at a location
@@ -35,7 +35,8 @@ Currently in beta, covering **Toronto**.
 | Backend | Node.js, Express 5 |
 | Database | PostgreSQL via Supabase, Prisma ORM |
 | Auth | Auth0 |
-| AI | Google Gemini 2.5-flash |
+| AI | Google Gemini 2.5-flash (paid tier) |
+| Enrichment | node-cron + Yelp + Foursquare + Reddit → Gemini |
 | Images | Cloudinary |
 | Security | helmet, express-rate-limit, CORS |
 
@@ -62,7 +63,7 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-**Backend** (`backend/.env`) requires: `DATABASE_URL`, `AUTH0_AUDIENCE`, `AUTH0_ISSUER_BASE_URL`, `GEMINI_API_KEY`, `GOOGLE_PLACES_KEY`, `CLOUDINARY_*`
+**Backend** (`backend/.env`) requires: `DATABASE_URL`, `AUTH0_AUDIENCE`, `AUTH0_ISSUER_BASE_URL`, `GEMINI_API_KEY`, `GOOGLE_PLACES_KEY`, `CLOUDINARY_*`, `YELP_API_KEY`, `FOURSQUARE_API_KEY`, `N8N_WEBHOOK_SECRET`
 
 **Frontend** (`frontend/.env`) requires: `VITE_MAPBOX_TOKEN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_AUDIENCE`, `VITE_API_URL`
 
@@ -110,8 +111,10 @@ AutisticAI/
 ├── backend/
 │   ├── src/
 │   │   ├── routes/         # Express route handlers
-│   │   ├── middleware/      # Auth, syncUser, optionalAuth
-│   │   └── lib/            # Prisma, Gemini, scores, systemBot
+│   │   ├── middleware/      # Auth, syncUser, optionalAuth, n8nAuth
+│   │   └── lib/            # Prisma, Gemini, scores, systemBot, enrichmentCron
+│   ├── scripts/
+│   │   └── trim_locations.js  # One-time DB trim utility
 │   ├── prisma/
 │   │   └── schema.prisma
 │   ├── seed_demo.js        # 15 showcase locations with human reviews
