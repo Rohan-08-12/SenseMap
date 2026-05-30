@@ -343,17 +343,15 @@ router.get("/:id", async (req, res) => {
 
         if (!location) return res.status(404).json({ error: "Location not found" });
 
-        const displayScores = location.sensoryScores
-            ? getDisplayScore({
-                reviewCount:            location.sensoryScores.reviewCount,
-                noiseScore:             location.sensoryScores.noiseScore,
-                lightingScore:          location.sensoryScores.lightingScore,
-                crowdScore:             location.sensoryScores.crowdScore,
-                estimatedNoiseScore:    location.estimatedNoiseScore,
-                estimatedLightingScore: location.estimatedLightingScore,
-                estimatedCrowdScore:    location.estimatedCrowdScore,
-            })
-            : null;
+        const displayScores = getDisplayScore({
+            reviewCount:            location.sensoryScores?.reviewCount    ?? 0,
+            noiseScore:             location.sensoryScores?.noiseScore     ?? null,
+            lightingScore:          location.sensoryScores?.lightingScore  ?? null,
+            crowdScore:             location.sensoryScores?.crowdScore     ?? null,
+            estimatedNoiseScore:    location.estimatedNoiseScore,
+            estimatedLightingScore: location.estimatedLightingScore,
+            estimatedCrowdScore:    location.estimatedCrowdScore,
+        });
 
         res.json({ ...location, displayScores });
     } catch (error) {
