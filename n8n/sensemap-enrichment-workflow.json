@@ -1,0 +1,174 @@
+{
+  "name": "SenseMap Enrichment Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger (4am Toronto)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sensemap-enrichment",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://sensemap-production.up.railway.app/enrichment/stale",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "get-stale-locations",
+      "name": "GET Stale Locations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6QtIn3Xxzx6RJoAX",
+          "name": "SenseMap N8N Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "locations",
+        "options": {}
+      },
+      "id": "split-out",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [600, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sensemap-production.up.railway.app/enrichment/location",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "locationId",
+              "value": "={{ $json.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          }
+        }
+      },
+      "id": "post-enrich-location",
+      "name": "POST Enrich Location",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6QtIn3Xxzx6RJoAX",
+          "name": "SenseMap N8N Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "updated-check",
+              "leftValue": "={{ $json.updated }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-updated",
+      "name": "IF Updated",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1200, 100]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (4am Toronto)": {
+      "main": [
+        [{ "node": "GET Stale Locations", "type": "main", "index": 0 }]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [{ "node": "GET Stale Locations", "type": "main", "index": 0 }]
+      ]
+    },
+    "GET Stale Locations": {
+      "main": [
+        [{ "node": "Split Out", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [{ "node": "POST Enrich Location", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST Enrich Location": {
+      "main": [
+        [{ "node": "IF Updated", "type": "main", "index": 0 }]
+      ]
+    },
+    "IF Updated": {
+      "main": [
+        [],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Toronto"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

@@ -1,12 +1,14 @@
 # SenseMap — Platform Documentation
 
-> Last updated: May 20, 2026
+> Last updated: May 30, 2026
 
 ---
 
 ## What is SenseMap?
 
-SenseMap helps autistic and sensory-sensitive individuals find comfortable public spaces. Users explore an interactive map, view community sensory ratings (noise, lighting, crowd), submit reviews, check in to locations, and receive AI-powered insights tailored to their personal sensory profile.
+SenseMap helps autistic and sensory-sensitive individuals find comfortable public spaces. Users explore an interactive map, view sensory ratings (noise, lighting, crowd), submit reviews, check in to locations, and receive AI-powered insights tailored to their personal sensory profile.
+
+**Every location has sensory data from day one.** A background enrichment pipeline (Yelp + Foursquare + Reddit → Gemini 2.5-flash) seeds AI-estimated scores for all locations automatically. Community reviews layer on top and progressively become the primary source as a location accumulates real visits.
 
 ---
 
@@ -71,10 +73,13 @@ cd backend && npm run dev
 | `GOOGLE_PLACES_KEY` | Google Places API key |
 | `AUTH0_AUDIENCE` | JWT audience validation |
 | `AUTH0_ISSUER_BASE_URL` | JWT issuer validation |
-| `GEMINI_API_KEY` | Google Generative AI (Gemini 2.5-flash) |
+| `GEMINI_API_KEY` | Google Generative AI (Gemini 2.5-flash) — paid tier required for enrichment pipeline |
 | `CLOUDINARY_CLOUD_NAME` | Image hosting |
 | `CLOUDINARY_API_KEY` | Image hosting |
 | `CLOUDINARY_API_SECRET` | Image hosting |
+| `YELP_API_KEY` | Yelp Fusion API — review text for enrichment |
+| `FOURSQUARE_API_KEY` | Foursquare Places API — tips for enrichment |
+| `N8N_WEBHOOK_SECRET` | Secret for protecting `/enrichment/*` endpoints (header: `x-n8n-secret`) |
 | `ALLOWED_ORIGINS` | Comma-separated allowed CORS origins (defaults to localhost) |
 | `PORT` | Server port (default 3000) |
 
@@ -254,6 +259,18 @@ In-app browser detection lives in `frontend/src/utils.js` (`isInAppBrowser`). Th
 | POST | `/ai/analyze` | Required | Extract sensory scores from review text (Gemini) |
 | POST | `/ai/insights/:locationId` | Required | Full AI summary of a location's sensory profile |
 
+### Enrichment (`/enrichment`)
+
+All endpoints protected by `x-n8n-secret` header matching `N8N_WEBHOOK_SECRET`.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/enrichment/stale` | Returns locations with no enrichment or enrichment older than 7 days |
+| POST | `/enrichment/location` | Enrich a single location by `locationId` (Yelp + Foursquare + Reddit → Gemini) |
+| POST | `/enrichment/trigger` | Kick off a full background enrichment run (responds immediately) |
+
+---
+
 ### Rankings (`/rankings`)
 
 | Method | Path | Auth | Description |
@@ -332,6 +349,25 @@ export const SYSTEM_BOT = {
 ```
 
 Bot-seeded reviews are labeled "AI-assisted" in the UI.
+
+### `enrichmentCron.js` — `startEnrichmentCron()` / `runEnrichment()`
+
+Background enrichment pipeline that seeds sensory scores for all locations using external review sources.
+
+**Schedule:** daily at 4am Toronto time via `node-cron`. Started automatically on server boot via `server.js`.
+
+**Flow:**
+1. Fetches all locations where `lastEnrichedAt` is null or older than 7 days
+2. For each location: fetches reviews from Yelp + Foursquare + Reddit in parallel
+3. Sends combined review text to Gemini 2.5-flash → extracts `noise_score`, `lighting_score`, `crowd_score` (1–10)
+4. Converts to 1–5 scale; skips DB write if scores are within 0.5 of existing values
+5. Updates `Location` with new scores, `dataSource`, and `lastEnrichedAt`; writes to `EnrichmentLog`
+
+**Manual trigger:** `POST /enrichment/trigger` (protected by `x-n8n-secret` header) — responds immediately and runs in background.
+
+> **Before this pipeline**, locations only had scores if real users submitted reviews — most locations showed no data. Now every location has an AI-estimated baseline from day one.
+
+---
 
 ### `placesService.js`
 Handles all Google Places integration + AI enrichment:
@@ -459,6 +495,22 @@ React class component — catches render errors and shows a graceful fallback wi
 ---
 
 ## Key Data Flows
+
+### 0. Background Enrichment (new — runs automatically)
+```
+node-cron fires at 4am Toronto (or POST /enrichment/trigger)
+  → Fetch all locations where lastEnrichedAt is null or > 7 days old
+  → For each location (1.5s gap):
+      Yelp + Foursquare + Reddit reviews fetched in parallel
+      → Combined review text sent to Gemini 2.5-flash
+      → noise_score, lighting_score, crowd_score extracted (1–10 → stored as 1–5)
+      → Location updated with scores + dataSource + lastEnrichedAt
+      → EnrichmentLog entry created
+  → [Enrichment] Done — updated: X, skipped: Y, failed: Z
+
+Before this pipeline: locations only had scores if users submitted reviews.
+After: every location has an AI-estimated baseline. Community reviews layer on top.
+```
 
 ### 1. Location Discovery
 ```

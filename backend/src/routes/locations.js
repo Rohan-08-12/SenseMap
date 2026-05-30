@@ -4,6 +4,7 @@ import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
+import { getDisplayScore } from "../lib/scores.js";
 
 
 const router = express.Router()
@@ -60,47 +61,59 @@ router.get("/", async (req, res) => {
  */
 router.get("/heatmap", async (req, res) => {
     try {
-        // Prioritise locations with real user reviews, fall back to Gemini-seeded scores
-        // The two values 2.8 and 3.8 are OSM-import defaults with no meaningful signal
-        const DEFAULT_SCORES = [2.8, 3.8];
+        const clamp = (v) => v != null ? Math.min(5, Math.max(1, v)) : null;
 
-        const scored = await prisma.sensoryScore.findMany({
-            where: {
-                comfortScore: { notIn: DEFAULT_SCORES },
-            },
+        // Pull all locations with either community scores or AI-estimated scores
+        const locations = await prisma.location.findMany({
             take: 500,
-            orderBy: { reviewCount: "desc" },
+            where: {
+                OR: [
+                    { sensoryScores: { isNot: null } },
+                    { estimatedNoiseScore: { not: null } },
+                ],
+            },
             select: {
-                reviewCount: true,
-                noiseScore: true,
-                lightingScore: true,
-                crowdScore: true,
-                comfortScore: true,
-                location: {
+                id: true,
+                name: true,
+                category: true,
+                latitude: true,
+                longitude: true,
+                estimatedNoiseScore: true,
+                estimatedLightingScore: true,
+                estimatedCrowdScore: true,
+                sensoryScores: {
                     select: {
-                        id: true,
-                        name: true,
-                        category: true,
-                        latitude: true,
-                        longitude: true,
+                        noiseScore: true,
+                        lightingScore: true,
+                        crowdScore: true,
+                        comfortScore: true,
+                        reviewCount: true,
                     }
                 }
             }
         });
 
-        const heatMapData = scored.map(({ location: loc, ...s }) => ({
-            locationId: loc.id,
-            longitude: loc.longitude,
-            latitude: loc.latitude,
-            name: loc.name,
-            category: loc.category,
-            // clamp scores to valid 1-5 range
-            noiseScore: s.noiseScore != null ? Math.min(5, Math.max(1, s.noiseScore)) : null,
-            lightingScore: s.lightingScore != null ? Math.min(5, Math.max(1, s.lightingScore)) : null,
-            crowdScore: s.crowdScore != null ? Math.min(5, Math.max(1, s.crowdScore)) : null,
-            comfortScore: s.comfortScore != null ? Math.min(5, Math.max(1, s.comfortScore)) : null,
-            reviewCount: s.reviewCount ?? 0,
-        }));
+        const heatMapData = locations.map((loc) => {
+            const s = loc.sensoryScores;
+            // Prefer community scores; fall back to AI-estimated
+            const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
+            const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
+            const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
+            const comfort  = s?.comfortScore  ?? (noise != null ? (noise + lighting + crowd) / 3 : null);
+
+            return {
+                locationId: loc.id,
+                longitude: loc.longitude,
+                latitude: loc.latitude,
+                name: loc.name,
+                category: loc.category,
+                noiseScore:    clamp(noise),
+                lightingScore: clamp(lighting),
+                crowdScore:    clamp(crowd),
+                comfortScore:  clamp(comfort),
+                reviewCount:   s?.reviewCount ?? 0,
+            };
+        });
 
         res.json(heatMapData);
     } catch (error) {
@@ -136,16 +149,19 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
         const safeScore = (score) => score != null ? score : 3;
 
         const matches = locations
-            .filter(loc => loc.sensoryScores)
             .map(loc => {
                 const s = loc.sensoryScores;
+                // Use community scores if available, fall back to AI-estimated
+                const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
+                const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
+                const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
 
-                // Both location scores (stored /2) and user tolerances are on 1-5 scale.
-                // Clamp to [0,100] to guard against out-of-range DB values.
-                const noiseMatch   = Math.max(0, 100 - Math.abs(safeScore(s.noiseScore)   - noiseTolerance)   * 25);
-                const lightingMatch = Math.max(0, 100 - Math.abs(safeScore(s.lightingScore) - lightingTolerance) * 25);
-                const crowdMatch    = Math.max(0, 100 - Math.abs(safeScore(s.crowdScore)    - crowdTolerance)   * 25);
-                const matchScore   = Math.min(100, Math.max(0, Math.round((noiseMatch + lightingMatch + crowdMatch) / 3)));
+                if (noise == null && lighting == null && crowd == null) return null;
+
+                const noiseMatch    = Math.max(0, 100 - Math.abs(safeScore(noise)    - noiseTolerance)    * 25);
+                const lightingMatch = Math.max(0, 100 - Math.abs(safeScore(lighting) - lightingTolerance) * 25);
+                const crowdMatch    = Math.max(0, 100 - Math.abs(safeScore(crowd)    - crowdTolerance)    * 25);
+                const matchScore    = Math.min(100, Math.max(0, Math.round((noiseMatch + lightingMatch + crowdMatch) / 3)));
 
                 return {
                     locationId: loc.id,
@@ -155,12 +171,13 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
                     longitude: loc.longitude,
                     latitude: loc.latitude,
                     matchScore,
-                    noiseScore: s.noiseScore,
-                    lightingScore: s.lightingScore,
-                    crowdScore: s.crowdScore,
-                    comfortScore: s.comfortScore,
+                    noiseScore:    noise,
+                    lightingScore: lighting,
+                    crowdScore:    crowd,
+                    comfortScore:  s?.comfortScore ?? null,
                 };
             })
+            .filter(Boolean)
             .sort((a, b) => b.matchScore - a.matchScore);
 
         res.json(matches);
@@ -330,7 +347,17 @@ router.get("/:id", async (req, res) => {
 
         if (!location) return res.status(404).json({ error: "Location not found" });
 
-        res.json(location);
+        const displayScores = getDisplayScore({
+            reviewCount:            location.sensoryScores?.reviewCount    ?? 0,
+            noiseScore:             location.sensoryScores?.noiseScore     ?? null,
+            lightingScore:          location.sensoryScores?.lightingScore  ?? null,
+            crowdScore:             location.sensoryScores?.crowdScore     ?? null,
+            estimatedNoiseScore:    location.estimatedNoiseScore,
+            estimatedLightingScore: location.estimatedLightingScore,
+            estimatedCrowdScore:    location.estimatedCrowdScore,
+        });
+
+        res.json({ ...location, displayScores });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });

@@ -15,6 +15,8 @@ import discoverRouter from "./routes/discover.js";
 import checkinsRouter from "./routes/checkins.js";
 import usersRouter from "./routes/users.js";
 import audioRouter from "./routes/audio.js";
+import enrichmentRouter from "./routes/enrichment.js";
+import scraperRouter from "./routes/scraper.js";
 
 dotenv.config();
 
@@ -84,6 +86,15 @@ const claudeLimiter = rateLimit({
     message: { error: "AI request limit reached, please slow down." },
 });
 
+// Internal n8n endpoint protected by requireN8nSecret; Yelp self-rate-limits
+const enrichmentLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 500,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Enrichment limit reached, please slow down." },
+});
+
 
 app.use(apiLimiter);
 
@@ -102,6 +113,12 @@ app.use("/discover", discoverLimiter, discoverRouter);
 app.use("/checkins", checkinsRouter);
 app.use("/users", usersRouter);
 app.use("/audio", audioRouter);
+const enrichmentPostLimiter = (req, res, next) => {
+    if (req.method === "GET") return next();
+    return enrichmentLimiter(req, res, next);
+};
+app.use("/enrichment", enrichmentPostLimiter, enrichmentRouter);
+app.use("/scraper", enrichmentLimiter, scraperRouter);
 
 // Global error handler — converts auth errors and uncaught throws to clean JSON
 app.use((err, req, res, _next) => {
