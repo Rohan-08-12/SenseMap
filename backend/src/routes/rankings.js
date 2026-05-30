@@ -14,38 +14,58 @@ const router = express.Router();
  */
 router.get("/", async (req, res) => {
     try {
-        const rankings = await prisma.sensoryScore.findMany({
-            orderBy: { comfortScore: "desc" },
-            take: 100,
-            include: {
-                location: {
+        const locations = await prisma.location.findMany({
+            take: 500,
+            select: {
+                id: true,
+                name: true,
+                category: true,
+                address: true,
+                latitude: true,
+                longitude: true,
+                estimatedNoiseScore: true,
+                estimatedLightingScore: true,
+                estimatedCrowdScore: true,
+                sensoryScores: {
                     select: {
-                        id: true,
-                        name: true,
-                        category: true,
-                        address: true,
-                        latitude: true,
-                        longitude: true,
+                        noiseScore: true,
+                        lightingScore: true,
+                        crowdScore: true,
+                        comfortScore: true,
+                        reviewCount: true,
                     }
                 }
-
-            },
+            }
         });
 
-        const result = rankings.map((r, index) => ({
-            rank: index + 1,
-            locationId: r.location.id,
-            name: r.location.name,
-            category: r.location.category,
-            address: r.location.address,
-            longitude: r.location.longitude,
-            latitude: r.location.latitude,
-            comfortScore: r.comfortScore,
-            noiseScore: r.noiseScore,
-            lightingScore: r.lightingScore,
-            crowdScore: r.crowdScore,
-            reviewCount: r.reviewCount,
-        }));
+        const result = locations
+            .map((loc) => {
+                const s = loc.sensoryScores;
+                const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
+                const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
+                const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
+                if (noise == null) return null;
+
+                // Community comfort score if available; otherwise invert avg sensory intensity (lower intensity = higher comfort)
+                const comfort = s?.comfortScore ?? (6 - (noise + lighting + crowd) / 3);
+
+                return {
+                    locationId: loc.id,
+                    name: loc.name,
+                    category: loc.category,
+                    address: loc.address,
+                    longitude: loc.longitude,
+                    latitude: loc.latitude,
+                    comfortScore: +comfort.toFixed(2),
+                    noiseScore: noise,
+                    lightingScore: lighting,
+                    crowdScore: crowd,
+                    reviewCount: s?.reviewCount ?? 0,
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.comfortScore - a.comfortScore)
+            .map((loc, index) => ({ rank: index + 1, ...loc }));
 
         res.json(result);
     } catch (error) {
