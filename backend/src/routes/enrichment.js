@@ -176,7 +176,7 @@ router.get("/stale", requireN8nSecret, async (req, res) => {
 });
 
 // POST /enrichment/trigger — kicks off a background enrichment run
-router.post("/trigger", requireN8nSecret, (req, res) => {
+router.post("/trigger", requireN8nSecret, (_req, res) => {
     runEnrichment().catch(err => console.error("[Enrichment] Trigger error:", err.message));
     res.json({ triggered: true, message: "Enrichment started in background" });
 });
