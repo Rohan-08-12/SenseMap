@@ -99,7 +99,8 @@ router.get("/heatmap", async (req, res) => {
             const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
             const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
             const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
-            const comfort  = s?.comfortScore  ?? (noise != null ? (noise + lighting + crowd) / 3 : null);
+            // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
+            const comfort  = (s?.reviewCount > 0 ? s?.comfortScore : null) ?? (noise != null ? (6 - (noise + lighting + crowd) / 3) : null);
 
             return {
                 locationId: loc.id,

@@ -46,8 +46,8 @@ router.get("/", async (req, res) => {
                 const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
                 if (noise == null) return null;
 
-                // Community comfort score if available; otherwise invert avg sensory intensity (lower intensity = higher comfort)
-                const comfort = s?.comfortScore ?? (6 - (noise + lighting + crowd) / 3);
+                // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
+                const comfort = (s?.reviewCount > 0 ? s?.comfortScore : null) ?? (6 - (noise + lighting + crowd) / 3);
 
                 return {
                     locationId: loc.id,
