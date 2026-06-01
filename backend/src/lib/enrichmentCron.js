@@ -139,7 +139,9 @@ export async function runPhotoEnrichment() {
 
     for (const loc of locations) {
         try {
-            let placeId = loc.googlePlaceId;
+            // OSM-imported locations store osm_ prefixed IDs — not valid Google Place IDs
+            const rawId = loc.googlePlaceId;
+            let placeId = (rawId && !rawId.startsWith('osm_')) ? rawId : null;
 
             if (!placeId) {
                 const results = await searchGooglePlaces(loc.name, loc.latitude, loc.longitude);
