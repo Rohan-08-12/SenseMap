@@ -97,7 +97,13 @@ function getBaselineScores(category) {
     };
 }
 
-// ── Overpass API fetch ────────────────────────────────────────────────────────
+// ── Overpass API fetch (with mirror fallback) ─────────────────────────────────
+const OVERPASS_MIRRORS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+
 async function fetchOSMPlaces(category) {
     const query = `
     [out:json][timeout:30];
@@ -107,19 +113,32 @@ async function fetchOSMPlaces(category) {
     out center tags;
   `;
 
-    const url = 'https://overpass-api.de/api/interpreter';
     console.log(`\n📡 Fetching ${category.label} locations from OSM...`);
 
-    const res = await fetch(url, {
-        method: 'POST',
-        body: query,
-        headers: { 'Content-Type': 'text/plain' },
-    });
+    for (const url of OVERPASS_MIRRORS) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 35000);
+            const res = await fetch(url, {
+                method: 'POST',
+                body: query.trim(),
+                headers: {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'Accept': 'application/json, text/plain, */*',
+                    'User-Agent': 'SenseMap/1.0 (sensory-mapping-app)',
+                },
+                signal: controller.signal,
+            });
+            clearTimeout(timer);
+            if (!res.ok) { console.log(`  ⚠️  Mirror ${url} returned ${res.status}, trying next...`); continue; }
+            const data = await res.json();
+            return data.elements || [];
+        } catch {
+            console.log(`  ⚠️  Mirror ${url} failed, trying next...`);
+        }
+    }
 
-    if (!res.ok) throw new Error(`Overpass API error: ${res.status}`);
-
-    const data = await res.json();
-    return data.elements || [];
+    throw new Error('All Overpass mirrors failed — try again later');
 }
 
 // ── Parse OSM element into a clean place object ───────────────────────────────
