@@ -36,7 +36,7 @@ Currently in beta, covering **Toronto**.
 | Database | PostgreSQL via Supabase, Prisma ORM |
 | Auth | Auth0 |
 | AI | Google Gemini 2.5-flash (paid tier) |
-| Enrichment | node-cron + Yelp + Foursquare + Reddit → Gemini |
+| Enrichment | node-cron + Yelp + Foursquare + Reddit + Google Places + City of Toronto → Gemini |
 | Images | Cloudinary |
 | Security | helmet, express-rate-limit, CORS |
 

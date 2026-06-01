@@ -4,7 +4,7 @@
 
 Every location on SenseMap has sensory scores (noise, lighting, crowd) from day one — even with zero community reviews. The enrichment pipeline is what makes this possible.
 
-It pulls reviews from Yelp, Foursquare, and Reddit, feeds them into Gemini 2.5-flash, and stores the extracted sensory scores against each location. Community reviews then layer on top and progressively become the primary source as real visits accumulate.
+It pulls data from five sources — Yelp, Foursquare, Reddit, Google Places, and City of Toronto Open Data — feeds the combined text into Gemini 2.5-flash, and stores the extracted sensory scores against each location. Community reviews then layer on top and progressively become the primary source as real visits accumulate.
 
 **Before enrichment:** most locations showed no data — scores only existed if a real user had submitted a review.
 
@@ -39,7 +39,9 @@ For each location (1.5s gap between calls):
   │
   ├── Fetch Yelp reviews by name + coordinates
   ├── Fetch Foursquare tips by name + coordinates
-  └── Fetch Reddit posts mentioning the location
+  ├── Fetch Reddit posts mentioning the location
+  ├── Fetch Google Places reviews by name + coordinates
+  └── Fetch City of Toronto Open Data (parks + libraries only)
           │
           ▼
       Combined review text → Gemini 2.5-flash
@@ -93,13 +95,15 @@ New locations added to the DB are automatically picked up on the next 4am run �
 
 ## Data sources
 
-| Source | What it provides | Fallback |
+| Source | What it provides | Best for |
 |---|---|---|
-| Yelp | Business metadata + up to 10 recent reviews | Business info only if reviews endpoint is blocked |
-| Foursquare | Up to 5 tips from locals | Skipped if no results |
-| Reddit | Posts mentioning the location + "noise OR crowd OR lighting" | Skipped if no relevant posts |
+| **Yelp** | Business metadata + up to 10 user reviews | Cafes, restaurants, bars |
+| **Foursquare** | Up to 5 local tips | Mixed venues |
+| **Reddit** | Posts mentioning the location + "noise OR crowd OR lighting" | Any popular place |
+| **Google Places** | Up to 5 Google Maps user reviews | Parks, libraries, museums, community centres |
+| **City of Toronto Open Data** | Park/library facility descriptions and amenities | Parks and libraries specifically |
 
-If all three sources return nothing, the location is still marked as enriched (with `dataSource: "category"`) so it doesn't get retried every day.
+All five sources are fetched in parallel per location. If all return nothing, the location is marked `dataSource: "category"` and not retried until the next weekly cycle.
 
 ---
 
@@ -149,7 +153,7 @@ When this returns `Still stale: 0`, every location has up-to-date scores.
 | Railway deploy logs | `[Enrichment] Starting — N locations` and `[Enrichment] Done — updated: X, skipped: Y, failed: Z` |
 | Prisma Studio → `EnrichmentLog` | Full history of every score update |
 | Prisma Studio → `Location.lastEnrichedAt` | When each location was last processed |
-| Prisma Studio → `Location.dataSource` | `"yelp"`, `"foursquare"`, `"reddit"` or combinations |
+| Prisma Studio → `Location.dataSource` | `"yelp"`, `"foursquare"`, `"reddit"`, `"google"`, `"toronto"` or comma-separated combinations |
 
 ---
 
@@ -169,6 +173,9 @@ When this returns `Still stale: 0`, every location has up-to-date scores.
 ```
 YELP_API_KEY=<yelp-fusion-api-key>
 FOURSQUARE_API_KEY=<foursquare-api-key>
-GEMINI_API_KEY=<google-gemini-key>        # must be paid tier (1000 RPM)
-N8N_WEBHOOK_SECRET=<secret>               # protects /enrichment/* endpoints
+GOOGLE_PLACES_KEY=<google-places-api-key>  # also used for photo enrichment
+GEMINI_API_KEY=<google-gemini-key>         # must be paid tier (1000 RPM)
+N8N_WEBHOOK_SECRET=<secret>                # protects /enrichment/* endpoints
 ```
+
+City of Toronto Open Data is a public API — no key required.

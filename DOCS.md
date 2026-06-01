@@ -77,8 +77,9 @@ cd backend && npm run dev
 | `CLOUDINARY_CLOUD_NAME` | Image hosting |
 | `CLOUDINARY_API_KEY` | Image hosting |
 | `CLOUDINARY_API_SECRET` | Image hosting |
-| `YELP_API_KEY` | Yelp Fusion API — review text for enrichment |
+| `YELP_API_KEY` | Yelp Fusion API — review text for enrichment (cafes, restaurants) |
 | `FOURSQUARE_API_KEY` | Foursquare Places API — tips for enrichment |
+| `GOOGLE_PLACES_KEY` | Google Places API — reviews for parks/libraries/museums + location photos |
 | `N8N_WEBHOOK_SECRET` | Secret for protecting `/enrichment/*` endpoints (header: `x-n8n-secret`) |
 | `ALLOWED_ORIGINS` | Comma-separated allowed CORS origins (defaults to localhost) |
 | `PORT` | Server port (default 3000) |
@@ -358,8 +359,8 @@ Background enrichment pipeline that seeds sensory scores for all locations using
 
 **Flow:**
 1. Fetches all locations where `lastEnrichedAt` is null or older than 7 days
-2. For each location: fetches reviews from Yelp + Foursquare + Reddit in parallel
-3. Sends combined review text to Gemini 2.5-flash → extracts `noise_score`, `lighting_score`, `crowd_score` (1–10)
+2. For each location: fetches data from 5 sources in parallel — Yelp, Foursquare, Reddit, Google Places, and City of Toronto Open Data (parks/libraries only)
+3. Sends combined text to Gemini 2.5-flash → extracts `noise_score`, `lighting_score`, `crowd_score` (1–10)
 4. Converts to 1–5 scale; skips DB write if scores are within 0.5 of existing values
 5. Updates `Location` with new scores, `dataSource`, and `lastEnrichedAt`; writes to `EnrichmentLog`
 
