@@ -60,11 +60,12 @@ router.post("/location", requireN8nSecret, async (req, res) => {
         const location = await prisma.location.findUnique({ where: { id: locationId } });
         if (!location) return res.status(404).json({ error: "Location not found" });
 
-        // Gather review text from all sources in parallel (Yelp + Foursquare + Reddit)
+        // Gather review text from all sources in parallel
         const { combinedText, sources, yelpId } = await fetchAllSources({
             name: location.name,
             latitude: location.latitude,
             longitude: location.longitude,
+            category: location.category,
             existingYelpId: location.externalYelpId,
         });
 

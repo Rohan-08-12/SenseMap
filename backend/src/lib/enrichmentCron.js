@@ -34,6 +34,7 @@ async function enrichLocation(location) {
         name: location.name,
         latitude: location.latitude,
         longitude: location.longitude,
+        category: location.category,
         existingYelpId: location.externalYelpId,
     });
 
