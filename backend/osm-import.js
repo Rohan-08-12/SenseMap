@@ -121,12 +121,16 @@ async function fetchOSMPlaces(category) {
             const timer = setTimeout(() => controller.abort(), 35000);
             const res = await fetch(url, {
                 method: 'POST',
-                body: query,
-                headers: { 'Content-Type': 'text/plain' },
+                body: query.trim(),
+                headers: {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'Accept': 'application/json, text/plain, */*',
+                    'User-Agent': 'SenseMap/1.0 (sensory-mapping-app)',
+                },
                 signal: controller.signal,
             });
             clearTimeout(timer);
-            if (!res.ok) continue;
+            if (!res.ok) { console.log(`  ⚠️  Mirror ${url} returned ${res.status}, trying next...`); continue; }
             const data = await res.json();
             return data.elements || [];
         } catch {
