@@ -161,6 +161,12 @@ async function fetchCityOfToronto(name, category) {
         if (!record) return "";
 
         if (isLibrary) {
+            // Validate by name fuzzy-match — no coordinates available in this dataset
+            const recordName = (record.BRANCHNAME ?? "").toLowerCase();
+            const queryWords = name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+            const nameMatch = queryWords.some(w => recordName.includes(w));
+            if (!nameMatch) return "";
+
             const parts = [];
             if (record.BRANCHNAME) parts.push(`${record.BRANCHNAME} is a Toronto Public Library branch.`);
             if (record.SQUARE_FOOTAGE) parts.push(`Size: ${record.SQUARE_FOOTAGE} sq ft.`);
@@ -168,12 +174,26 @@ async function fetchCityOfToronto(name, category) {
             return parts.join(" ");
         }
 
-        // Park record
+        // Park record — validate by coordinate proximity using geometry field
+        if (record.geometry) {
+            try {
+                const geo = JSON.parse(record.geometry);
+                const [geoLng, geoLat] = geo.coordinates;
+                if (haversineMetres(lat, lng, geoLat, geoLng) > 1000) return "";
+            } catch {
+                // Geometry unparseable — fall back to name match
+                const recordName = (record.ASSET_NAME ?? "").toLowerCase();
+                const queryWords = name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+                if (!queryWords.some(w => recordName.includes(w))) return "";
+            }
+        }
+
         const parts = [];
-        const facilityName = record.ASSET_DESCRIPTION || record.ASSET_NAME || name;
+        const facilityName = record.ASSET_NAME || name;
         parts.push(`${facilityName} is a City of Toronto park or recreation facility.`);
-        if (record.ASSET_TYPE) parts.push(`Type: ${record.ASSET_TYPE}.`);
-        if (record.LOCATION_NAME) parts.push(`Located at ${record.LOCATION_NAME}.`);
+        if (record.TYPE) parts.push(`Type: ${record.TYPE}.`);
+        if (record.AMENITIES) parts.push(`Amenities: ${record.AMENITIES}.`);
+        if (record.ADDRESS) parts.push(`Address: ${record.ADDRESS}.`);
         return parts.join(" ");
     } catch {
         return "";
