@@ -100,7 +100,12 @@ router.get("/heatmap", async (req, res) => {
             const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
             const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
             // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
-            const comfort  = (s?.reviewCount > 0 ? s?.comfortScore : null) ?? (noise != null ? (6 - (noise + lighting + crowd) / 3) : null);
+            // Guard nulls — JS coerces null to 0 in arithmetic, producing out-of-range scores
+            const communityComfort = s?.reviewCount > 0 ? s?.comfortScore : null;
+            const estimatedComfort = (noise != null && lighting != null && crowd != null)
+                ? Math.min(5, Math.max(1, 6 - (noise + lighting + crowd) / 3))
+                : null;
+            const comfort = communityComfort ?? estimatedComfort;
 
             return {
                 locationId: loc.id,
