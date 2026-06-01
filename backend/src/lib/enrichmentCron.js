@@ -2,6 +2,7 @@ import cron from "node-cron";
 import prisma from "./prisma.js";
 import { model } from "./gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
+import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 
 const STALE_THRESHOLD_HOURS = 24 * 7;
 const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
@@ -120,6 +121,65 @@ export async function runEnrichment() {
     }
 
     console.log(`[Enrichment] Done — updated: ${updated}, skipped: ${skipped}, failed: ${failed}`);
+}
+
+export async function runPhotoEnrichment() {
+    const locations = await prisma.location.findMany({
+        where: { imageUrl: null },
+        select: { id: true, name: true, latitude: true, longitude: true, googlePlaceId: true },
+    });
+
+    if (locations.length === 0) {
+        console.log("[Photos] All locations already have images.");
+        return;
+    }
+
+    console.log(`[Photos] Starting — ${locations.length} locations need images`);
+    let saved = 0, failed = 0;
+
+    for (const loc of locations) {
+        try {
+            let placeId = loc.googlePlaceId;
+
+            if (!placeId) {
+                const results = await searchGooglePlaces(loc.name, loc.latitude, loc.longitude);
+                placeId = results[0]?.place_id ?? null;
+                if (placeId) {
+                    await prisma.location.update({ where: { id: loc.id }, data: { googlePlaceId: placeId } });
+                }
+            }
+
+            if (!placeId) {
+                failed++;
+                await new Promise(r => setTimeout(r, 2000));
+                continue;
+            }
+
+            const details = await getGooglePlaceDetails(placeId);
+            const photoRef = details?.photos?.[0]?.photo_reference;
+
+            if (!photoRef) {
+                failed++;
+                await new Promise(r => setTimeout(r, 2000));
+                continue;
+            }
+
+            const imageUrl = await uploadPlacePhoto(photoRef);
+            if (imageUrl) {
+                await prisma.location.update({ where: { id: loc.id }, data: { imageUrl } });
+                saved++;
+                console.log(`[Photos] ${loc.name} ✓`);
+            } else {
+                failed++;
+            }
+        } catch (err) {
+            console.error(`[Photos] Failed ${loc.name}:`, err.message);
+            failed++;
+        }
+        await new Promise(r => setTimeout(r, 2000)); // 2s gap — Google Places rate limit
+    }
+
+    console.log(`[Photos] Done — saved: ${saved}, failed: ${failed}`);
 }
 
 export function startEnrichmentCron() {

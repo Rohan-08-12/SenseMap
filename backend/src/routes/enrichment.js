@@ -3,7 +3,7 @@ import prisma from "../lib/prisma.js";
 import { model } from "../lib/gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
-import { runEnrichment } from "../lib/enrichmentCron.js";
+import { runEnrichment, runPhotoEnrichment } from "../lib/enrichmentCron.js";
 
 const router = express.Router();
 
@@ -179,6 +179,12 @@ router.get("/stale", requireN8nSecret, async (req, res) => {
 router.post("/trigger", requireN8nSecret, (_req, res) => {
     runEnrichment().catch(err => console.error("[Enrichment] Trigger error:", err.message));
     res.json({ triggered: true, message: "Enrichment started in background" });
+});
+
+// POST /enrichment/photos — fetch and upload Google Places photos for all locations without images
+router.post("/photos", requireN8nSecret, (_req, res) => {
+    runPhotoEnrichment().catch(err => console.error("[Photos] Trigger error:", err.message));
+    res.json({ triggered: true, message: "Photo enrichment started in background" });
 });
 
 export default router;
