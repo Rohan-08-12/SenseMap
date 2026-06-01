@@ -101,6 +101,15 @@ async function fetchReddit(name) {
     }
 }
 
+// Returns distance in metres between two lat/lng points
+function haversineMetres(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 async function fetchGooglePlaces(name, lat, lng) {
     try {
         if (!process.env.GOOGLE_PLACES_KEY) return "";
@@ -110,8 +119,18 @@ async function fetchGooglePlaces(name, lat, lng) {
             timeout: 8000,
         });
 
-        const placeId = searchRes.data.results?.[0]?.place_id;
-        if (!placeId) return "";
+        const result = searchRes.data.results?.[0];
+        if (!result?.place_id) return "";
+
+        // Google Text Search uses location+radius as a bias not a hard filter — validate proximity
+        const placeLat = result.geometry?.location?.lat;
+        const placeLng = result.geometry?.location?.lng;
+        if (placeLat != null && placeLng != null) {
+            const distanceM = haversineMetres(lat, lng, placeLat, placeLng);
+            if (distanceM > 1000) return ""; // >1km away — likely a name collision, skip
+        }
+
+        const placeId = result.place_id;
 
         const detailsRes = await axios.get("https://maps.googleapis.com/maps/api/place/details/json", {
             params: { place_id: placeId, fields: "reviews,rating,user_ratings_total", key: process.env.GOOGLE_PLACES_KEY },
