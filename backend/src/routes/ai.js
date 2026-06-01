@@ -5,6 +5,7 @@ import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { generateLocationEmbedding } from "../lib/embeddings.js";
+import { fetchAllSources } from "../services/scraper.js";
 const router = express.Router();
 
 
@@ -90,15 +91,26 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
     })
 
     if (!location) return res.status(404).json({ error: "Location not found" });
-    if (location.reviews.length === 0) return res.status(400).json({ error: "Location has no reviews" });
 
     const reviewsWithText = location.reviews.filter((r) => r.bodyText && r.bodyText.trim().length > 0);
-    if (reviewsWithText.length === 0) return res.status(400).json({ error: "No text reviews yet" });
 
-    const reviewTexts = reviewsWithText.map((r) => {
+    let reviewTexts = reviewsWithText.map((r) => {
       const timeTag = r.visitTime ? `[${r.visitTime}] ` : "";
       return `${timeTag}${r.bodyText}`;
     }).join("\n");
+
+    // No community reviews — fall back to Yelp/Foursquare/Reddit enrichment text
+    if (!reviewTexts && location.estimatedNoiseScore != null) {
+      const { combinedText } = await fetchAllSources({
+        name: location.name,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        existingYelpId: location.externalYelpId,
+      });
+      reviewTexts = combinedText;
+    }
+
+    if (!reviewTexts) return res.status(400).json({ error: "No review data available for this location" });
 
     const insightsSchema = {
       type: "object",

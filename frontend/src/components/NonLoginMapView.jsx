@@ -577,7 +577,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                       <p>{place.tags}</p>
                     </div>
                     <div className={`nlm-ranked-score ${place.tier}`}>
-                      {(place.score || 0).toFixed(1)}
+                      {place.score > 0 ? place.score.toFixed(1) : '—'}
                     </div>
                   </div>
                 )) : (
@@ -666,8 +666,8 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   )}
                 </div>
 
-                {/* Stars */}
-                <div className="nlm-stars">
+                {/* Stars — only show for real community reviews */}
+                <div className="nlm-stars" style={{ opacity: dataSource === 'community' ? 1 : 0.2, pointerEvents: 'none' }}>
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className={`nlm-star ${i <= starCount ? 'filled' : 'empty'}`}>
                       {i <= starCount && <div className="star-overlay" />}

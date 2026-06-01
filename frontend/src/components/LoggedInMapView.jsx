@@ -1180,8 +1180,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 )}
               </div>
 
-              {/* Stars */}
-              {avgRating !== null && (
+              {/* Stars — only show for real community reviews */}
+              {avgRating !== null && dataSource === 'community' && (
                 <div style={{ display: 'flex', gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((i) => (
                     <svg key={i} width="16" height="16" viewBox="0 0 16 16" fill="none">
