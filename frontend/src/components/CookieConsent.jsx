@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import posthog from 'posthog-js';
 import './CookieConsent.css';
 
 const CONSENT_KEY = 'sensemap_analytics_consent';
 
-export default function CookieConsent() {
-    const [visible, setVisible] = useState(false);
+function shouldShowBanner() {
+    const stored = localStorage.getItem(CONSENT_KEY);
+    const dnt = navigator.doNotTrack === '1' || window.doNotTrack === '1';
+    return !stored && !dnt;
+}
 
-    useEffect(() => {
-        const stored = localStorage.getItem(CONSENT_KEY);
-        const dnt = navigator.doNotTrack === '1' || window.doNotTrack === '1';
-        if (!stored && !dnt) setVisible(true);
-    }, []);
+export default function CookieConsent() {
+    const [visible, setVisible] = useState(shouldShowBanner);
 
     const accept = () => {
         localStorage.setItem(CONSENT_KEY, 'true');
