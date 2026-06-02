@@ -150,9 +150,11 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
 
     const prompt = `You are a sensory analysis assistant helping autistic and sensory-sensitive people find comfortable public spaces.
 
-Analyze these reviews for "${location.name}" and produce a structured sensory profile with scores (1-5), summaries, best visit time, sentiment, descriptor tags, and practical preparation tips.
+Analyze the available information for "${location.name}" (category: ${location.category ?? "unknown"}) and produce a structured sensory profile.
 
-Reviews:
+Use the data below as your primary source. If specific sensory details are missing, make reasonable category-based estimates — for example, cafes tend to have moderate-to-high noise, bright lighting, and variable crowds; libraries tend to be quiet with soft lighting; parks tend to have natural light and low indoor crowds. Always produce useful estimates rather than saying "no information available". Set confidence lower (20-40) when relying mostly on category inference, and higher (60-90) when specific sensory signals are present.
+
+Available data:
 ${reviewTexts}`;
 
     // Run Gemini and Claude cross-validation in parallel
