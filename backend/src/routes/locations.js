@@ -96,9 +96,10 @@ router.get("/heatmap", async (req, res) => {
         const heatMapData = locations.map((loc) => {
             const s = loc.sensoryScores;
             // Community scores when real reviews exist; AI-estimated next; OSM defaults last
-            const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) ?? loc.estimatedNoiseScore ?? s?.noiseScore;
-            const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) ?? loc.estimatedLightingScore ?? s?.lightingScore;
-            const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) ?? loc.estimatedCrowdScore ?? s?.crowdScore;
+            // Use || null to treat 0 as invalid (Gemini occasionally returns 0 outside valid range)
+            const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) || loc.estimatedNoiseScore || s?.noiseScore;
+            const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) || loc.estimatedLightingScore || s?.lightingScore;
+            const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) || loc.estimatedCrowdScore || s?.crowdScore;
             // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
             // Guard nulls — JS coerces null to 0 in arithmetic, producing out-of-range scores
             const communityComfort = s?.reviewCount > 0 ? s?.comfortScore : null;
@@ -158,9 +159,10 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
             .map(loc => {
                 const s = loc.sensoryScores;
                 // Community scores when real reviews exist; AI-estimated next; OSM defaults last
-                const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) ?? loc.estimatedNoiseScore ?? s?.noiseScore;
-                const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) ?? loc.estimatedLightingScore ?? s?.lightingScore;
-                const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) ?? loc.estimatedCrowdScore ?? s?.crowdScore;
+                // Use || null to treat 0 as invalid (Gemini occasionally returns 0 outside valid range)
+                const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) || loc.estimatedNoiseScore || s?.noiseScore;
+                const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) || loc.estimatedLightingScore || s?.lightingScore;
+                const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) || loc.estimatedCrowdScore || s?.crowdScore;
 
                 if (noise == null && lighting == null && crowd == null) return null;
 

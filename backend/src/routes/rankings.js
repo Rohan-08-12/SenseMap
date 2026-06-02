@@ -42,9 +42,10 @@ router.get("/", async (req, res) => {
             .map((loc) => {
                 const s = loc.sensoryScores;
                 // Community scores when real reviews exist; AI-estimated next; OSM defaults last
-                const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) ?? loc.estimatedNoiseScore ?? s?.noiseScore;
-                const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) ?? loc.estimatedLightingScore ?? s?.lightingScore;
-                const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) ?? loc.estimatedCrowdScore ?? s?.crowdScore;
+                // Use || null to treat 0 as invalid (Gemini occasionally returns 0 outside valid range)
+                const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) || loc.estimatedNoiseScore || s?.noiseScore;
+                const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) || loc.estimatedLightingScore || s?.lightingScore;
+                const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) || loc.estimatedCrowdScore || s?.crowdScore;
                 if (noise == null) return null;
 
                 // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
