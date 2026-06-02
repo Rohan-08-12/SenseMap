@@ -140,7 +140,7 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
           },
           required: ["score", "summary"],
         },
-        bestTime:         { type: "string",  description: "One sentence recommending the best time to visit" },
+        bestTime:         { type: "string",  description: "Short phrase only, max 6 words, e.g. 'Mid-morning or late afternoon' or 'Weekday mornings'. No full sentences." },
         sentiment:        { type: "string",  enum: ["positive", "neutral", "negative"] },
         tags:             { type: "array",   items: { type: "string" }, description: "Short sensory descriptor tags" },
         preparationGuide: { type: "array",   items: { type: "string" }, description: "Practical sensory preparation tips" },
