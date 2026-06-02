@@ -61,6 +61,11 @@ async function enrichLocation(location) {
     const newLighting = analysis.lighting_score / 2;
     const newCrowd    = analysis.crowd_score    / 2;
 
+    // Reject invalid scores — Gemini occasionally returns 0 which is outside the 1-10 range
+    if (newNoise < 0.5 || newLighting < 0.5 || newCrowd < 0.5) {
+        return { updated: false, reason: "invalid_scores" };
+    }
+
     if (!scoresDiffer(location, newNoise, newLighting, newCrowd)) {
         await prisma.location.update({
             where: { id: location.id },
