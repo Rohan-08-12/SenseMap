@@ -1425,7 +1425,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                       </div>
                       <div className="lmv-ai-item-text">
                         <h5>Best time</h5>
-                        <p>{aiInsights.bestTime ?? '—'}</p>
+                        <p>{aiInsights.bestTime ? aiInsights.bestTime.split(' ').slice(0, 6).join(' ').replace(/[.,]$/, '') : '—'}</p>
                       </div>
                     </div>
                   </div>
