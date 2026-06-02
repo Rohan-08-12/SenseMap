@@ -586,7 +586,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
 
   const reviewCount = locationDetail?.sensoryScores?.reviewCount ?? locationDetail?.reviews?.length ?? 0;
 
-  const bestTimeText = aiInsights?.bestTime || (snapshot?.bestWindow ?? '—');
+  const bestTimeText = aiInsights?.bestTime ?? '—';
 
   const getDistance = useCallback((loc) => {
     if (!userCoords) return '— km away';
