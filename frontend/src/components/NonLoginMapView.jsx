@@ -881,8 +881,8 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   )}
                 </div>
                 <div className="nlm-score-badge">
-                  <span className="score-value">{overallScore}</span>
-                  <span className="score-label">{dataSource === 'community' ? `${reviewCount} reviews` : 'AI estimate'}</span>
+                  <span className="score-value">{dataSource === 'category' ? '—' : overallScore}</span>
+                  <span className="score-label">{dataSource === 'community' ? `${reviewCount} reviews` : dataSource === 'estimated' ? 'AI estimate' : 'No data'}</span>
                 </div>
                 <button
                   className="nlm-mobile-detail-close"
@@ -923,21 +923,23 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </div>
               )}
 
-              {/* Stars */}
-              <div className="nlm-stars">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className={`nlm-star ${i <= starCount ? 'filled' : 'empty'}`}>
-                    {i <= starCount && <div className="star-overlay" />}
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M8 1.33L10.06 5.51L14.67 6.18L11.33 9.43L12.12 14.01L8 11.85L3.88 14.01L4.67 9.43L1.33 6.18L5.94 5.51L8 1.33Z"
-                        fill={i <= starCount ? '#F5A623' : 'none'}
-                        stroke={i <= starCount ? '#F5A623' : '#CBD5E1'}
-                        strokeWidth={i <= starCount ? '0.5' : '1'}
-                        strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                ))}
-              </div>
+              {/* Stars — only show for real community reviews */}
+              {dataSource === 'community' && (
+                <div className="nlm-stars">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className={`nlm-star ${i <= starCount ? 'filled' : 'empty'}`}>
+                      {i <= starCount && <div className="star-overlay" />}
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 1.33L10.06 5.51L14.67 6.18L11.33 9.43L12.12 14.01L8 11.85L3.88 14.01L4.67 9.43L1.33 6.18L5.94 5.51L8 1.33Z"
+                          fill={i <= starCount ? '#F5A623' : 'none'}
+                          stroke={i <= starCount ? '#F5A623' : '#CBD5E1'}
+                          strokeWidth={i <= starCount ? '0.5' : '1'}
+                          strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Rating tags */}
               <div className="nlm-rating-tags" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -947,9 +949,9 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               </div>
 
               {/* Score bars */}
-              {reviewCount === 0 ? (
+              {dataSource === 'category' ? (
                 <div style={{ padding: '10px 12px', background: 'var(--theme-tag-soft)', borderRadius: 8, color: 'var(--theme-text-muted)', fontSize: 13 }}>
-                  No community data yet — be the first to review.
+                  No data yet — be the first to visit and review.
                 </div>
               ) : (
                 <div className="nlm-score-bars">
