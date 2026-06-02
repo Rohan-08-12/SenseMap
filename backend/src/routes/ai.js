@@ -156,13 +156,20 @@ Reviews:
 ${reviewTexts}`;
 
     // Run Gemini and Claude cross-validation in parallel
-    const [geminiResult, claudeResult] = await Promise.all([
-      model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", responseSchema: insightsSchema },
-      }),
-      validateWithClaude(reviewTexts),
-    ]);
+    // Wrap Gemini separately — it can fail on very short/low-quality text, return 400 not 500
+    let geminiResult, claudeResult;
+    try {
+      [geminiResult, claudeResult] = await Promise.all([
+        model.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json", responseSchema: insightsSchema },
+        }),
+        validateWithClaude(reviewTexts),
+      ]);
+    } catch (geminiErr) {
+      console.error("Gemini insights error:", geminiErr.message);
+      return res.status(400).json({ error: "Not enough data to generate insights for this location" });
+    }
 
     const parsed = JSON.parse(geminiResult.response.text());
 
