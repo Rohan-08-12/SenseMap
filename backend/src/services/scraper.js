@@ -35,20 +35,7 @@ async function fetchYelp(name, lat, lng) {
 
     if (!business) return { text: "", yelpId: null };
 
-    // Try reviews endpoint — may be blocked on Base plan, fall back to business metadata
-    try {
-        const reviewsRes = await axios.get(`${YELP_API_BASE}/businesses/${business.id}/reviews`, {
-            headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
-            params: { limit: 10, sort_by: "newest" },
-            timeout: 6000,
-        });
-        const reviews = reviewsRes.data.reviews ?? [];
-        const reviewText = reviews.map((r) => r.text).filter(Boolean).join("\n");
-        if (reviewText) return { text: reviewText, yelpId: business.id };
-    } catch {
-        // Reviews endpoint blocked — use business metadata instead
-    }
-
+    // Use business metadata only — Yelp ToS prohibits using review text to generate AI-derived content
     return { text: yelpBusinessToText(business), yelpId: business.id };
 }
 
@@ -76,31 +63,6 @@ async function fetchFoursquare(name, lat, lng) {
     }
 }
 
-async function fetchReddit(name) {
-    try {
-        const query = encodeURIComponent(`${name} toronto noise OR crowd OR lighting`);
-        const res = await axios.get(
-            `https://www.reddit.com/search.json?q=${query}&limit=5&sort=relevance`,
-            {
-                headers: { "User-Agent": "SenseMap/1.0 (sensory-mapping-app)" },
-                timeout: 8000,
-            }
-        );
-        const posts = res.data?.data?.children ?? [];
-        const nameLower = name.toLowerCase();
-        return posts
-            .filter((p) => {
-                const title = (p.data.title ?? "").toLowerCase();
-                const body = (p.data.selftext ?? "").toLowerCase();
-                return title.includes(nameLower) || body.includes(nameLower);
-            })
-            .map((p) => `${p.data.title}. ${p.data.selftext}`.trim())
-            .join("\n");
-    } catch {
-        return "";
-    }
-}
-
 // Returns distance in metres between two lat/lng points
 function haversineMetres(lat1, lng1, lat2, lng2) {
     const R = 6371000;
@@ -122,23 +84,27 @@ async function fetchGooglePlaces(name, lat, lng) {
         const result = searchRes.data.results?.[0];
         if (!result?.place_id) return "";
 
-        // Google Text Search uses location+radius as a bias not a hard filter — validate proximity
         const placeLat = result.geometry?.location?.lat;
         const placeLng = result.geometry?.location?.lng;
         if (placeLat != null && placeLng != null) {
             const distanceM = haversineMetres(lat, lng, placeLat, placeLng);
-            if (distanceM > 1000) return ""; // >1km away — likely a name collision, skip
+            if (distanceM > 1000) return "";
         }
 
         const placeId = result.place_id;
 
+        // Fetch rating and editorial summary only — Google ToS prohibits feeding
+        // user-generated review text into AI models to generate derived content
         const detailsRes = await axios.get("https://maps.googleapis.com/maps/api/place/details/json", {
-            params: { place_id: placeId, fields: "reviews,rating,user_ratings_total", key: process.env.GOOGLE_PLACES_KEY },
+            params: { place_id: placeId, fields: "rating,user_ratings_total,editorial_summary", key: process.env.GOOGLE_PLACES_KEY },
             timeout: 8000,
         });
 
-        const reviews = detailsRes.data.result?.reviews ?? [];
-        return reviews.map((r) => r.text).filter(Boolean).join("\n");
+        const detail = detailsRes.data.result ?? {};
+        const parts = [];
+        if (detail.rating) parts.push(`Google rating: ${detail.rating}/5 based on ${detail.user_ratings_total ?? 0} reviews.`);
+        if (detail.editorial_summary?.overview) parts.push(detail.editorial_summary.overview);
+        return parts.join(" ");
     } catch {
         return "";
     }
@@ -201,12 +167,11 @@ async function fetchCityOfToronto(name, category) {
 }
 
 export async function fetchAllSources({ name, latitude, longitude, category = null, existingYelpId = null }) {
-    const [yelpResult, foursquareText, redditText, googleText, torontoText] = await Promise.all([
+    const [yelpResult, foursquareText, googleText, torontoText] = await Promise.all([
         existingYelpId
             ? fetchYelpById(existingYelpId).then((text) => ({ text, yelpId: existingYelpId }))
             : fetchYelp(name, latitude, longitude),
         fetchFoursquare(name, latitude, longitude),
-        fetchReddit(name),
         fetchGooglePlaces(name, latitude, longitude),
         fetchCityOfToronto(name, category),
     ]);
@@ -221,10 +186,6 @@ export async function fetchAllSources({ name, latitude, longitude, category = nu
     if (foursquareText) {
         parts.push(foursquareText);
         sources.push("foursquare");
-    }
-    if (redditText) {
-        parts.push(redditText);
-        sources.push("reddit");
     }
     if (googleText) {
         parts.push(googleText);
@@ -245,19 +206,7 @@ export async function fetchAllSources({ name, latitude, longitude, category = nu
 }
 
 async function fetchYelpById(yelpId) {
-    try {
-        const reviewsRes = await axios.get(`${YELP_API_BASE}/businesses/${yelpId}/reviews`, {
-            headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },
-            params: { limit: 10, sort_by: "newest" },
-            timeout: 6000,
-        });
-        const reviews = reviewsRes.data.reviews ?? [];
-        const reviewText = reviews.map((r) => r.text).filter(Boolean).join("\n");
-        if (reviewText) return reviewText;
-    } catch {
-        // Reviews endpoint blocked — fall back to business details
-    }
-
+    // Use business metadata only — Yelp ToS prohibits using review text for AI-derived content
     try {
         const detailsRes = await axios.get(`${YELP_API_BASE}/businesses/${yelpId}`, {
             headers: { Authorization: `Bearer ${process.env.YELP_API_KEY}` },

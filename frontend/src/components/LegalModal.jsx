@@ -15,11 +15,11 @@ const PRIVACY_CONTENT = {
         },
         {
             heading: 'Third-party services',
-            body: 'We use Auth0 for authentication, Supabase/PostgreSQL to store your account data and reviews, Cloudinary to host place photos, and Google Gemini (AI) to analyse review text for sensory signals. To provide AI-estimated sensory scores, we query publicly available review data from Yelp Fusion API, Foursquare Places API, Reddit (public posts), and Google Places API. We also use City of Toronto Open Data (a public dataset) for park and library facility descriptions. None of your personal data is shared with these services — only location names and coordinates are sent to look up public reviews. Each third-party service operates under its own privacy policy. Data may be processed on servers outside your country of residence.',
+            body: 'We use Auth0 for authentication, Supabase/PostgreSQL to store your account data and reviews, Cloudinary to host place photos, and Google Gemini (AI) to analyse publicly available data for sensory signals. To provide AI-estimated sensory scores, we use business metadata from Yelp Fusion API, tips from Foursquare Places API, ratings and editorial summaries from Google Places API, and facility descriptions from City of Toronto Open Data. None of your personal data is shared with these services — only location names and coordinates are sent. Each third-party service operates under its own privacy policy. Data may be processed on servers outside your country of residence.',
         },
         {
             heading: 'AI-estimated scores',
-            body: 'Many locations display AI-estimated sensory scores derived from publicly available reviews on Yelp, Foursquare, Google, and Reddit. These scores are generated using Google Gemini and are not based on your personal data. They are clearly labelled "AI estimate" in the app.',
+            body: 'Many locations display AI-estimated sensory scores derived from publicly available business data on Yelp and Foursquare, ratings and editorial summaries from Google Places, and facility descriptions from City of Toronto Open Data. These scores are generated using Google Gemini and are not based on your personal data. They are clearly labelled "AI estimate" in the app.',
         },
         {
             heading: 'Sensitive data',
@@ -58,7 +58,7 @@ const TERMS_CONTENT = {
         },
         {
             heading: 'Accuracy',
-            body: 'Sensory scores are derived from two sources: community reviews submitted by real visitors, and AI-estimated scores generated automatically from publicly available reviews on Yelp, Foursquare, Google, and Reddit. All AI-estimated scores are clearly labelled in the app. Scores reflect general patterns, not guarantees — conditions at any location may change. SenseMap is not liable for decisions made based on the information shown.',
+            body: 'Sensory scores are derived from two sources: community reviews submitted by real visitors, and AI-estimated scores generated automatically from publicly available business data on Yelp, Foursquare, Google Places, and City of Toronto Open Data. All AI-estimated scores are clearly labelled in the app. Scores reflect general patterns, not guarantees — conditions at any location may change. SenseMap is not liable for decisions made based on the information shown.',
         },
         {
             heading: 'Not medical advice',
@@ -66,11 +66,11 @@ const TERMS_CONTENT = {
         },
         {
             heading: 'AI-generated content',
-            body: 'Sensory scores and insights for many locations are generated automatically by Google Gemini using publicly available review text from Yelp, Foursquare, Google Places, Reddit, and City of Toronto Open Data. AI-generated content may occasionally be inaccurate, incomplete, or outdated. It is clearly labelled "AI estimate" and should be used as a guide alongside real community reviews. SenseMap does not guarantee the accuracy of AI-generated sensory profiles.',
+            body: 'Sensory scores and insights for many locations are generated automatically by Google Gemini using publicly available business data from Yelp, Foursquare, Google Places, and City of Toronto Open Data. AI-generated content may occasionally be inaccurate, incomplete, or outdated. It is clearly labelled "AI estimate" and should be used as a guide alongside real community reviews. SenseMap does not guarantee the accuracy of AI-generated sensory profiles.',
         },
         {
             heading: 'Third-party data',
-            body: 'Location photos may be sourced from Google Places API ("Powered by Google") and hosted on Cloudinary. Sensory score estimates use publicly available review data from Yelp, Foursquare, Google, and Reddit. SenseMap is not affiliated with these services and does not guarantee the accuracy or completeness of their data.',
+            body: 'Location photos may be sourced from Google Places API ("Powered by Google") and hosted on Cloudinary. Where Google photos are displayed, a "Powered by Google" attribution is shown. Sensory score estimates use publicly available data from Yelp, Foursquare, Google Places, and City of Toronto Open Data. SenseMap is not affiliated with these services and does not guarantee the accuracy or completeness of their data.',
         },
         {
             heading: 'Age requirement',

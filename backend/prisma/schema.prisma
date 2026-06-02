@@ -83,6 +83,7 @@ model Review {
   aiCrowdScore    Float?
   aiSentiment     String?
   aiTags          String[]
+  isAiGenerated   Boolean   @default(false)
 
   user            User      @relation(fields: [userId], references: [id])
   location        Location  @relation(fields: [locationId], references: [id])
