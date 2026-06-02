@@ -9,6 +9,7 @@ import LoggedInMapView from './components/LoggedInMapView';
 import OnboardingModal, { hasSeenOnboarding } from './components/OnboardingModal';
 import LoginModal from './components/LoginModal';
 import LegalModal from './components/LegalModal';
+import CookieConsent from './components/CookieConsent';
 import NotFound from './components/NotFound';
 
 /**
@@ -129,6 +130,7 @@ function App() {
         {showOnboarding && (
           <OnboardingModal onDone={() => setShowOnboarding(false)} />
         )}
+        <CookieConsent />
       </>
     );
   }
@@ -145,6 +147,7 @@ function App() {
           onLogin={handleOpenLogin}
         />
         {loginModal}
+        <CookieConsent />
       </>
     );
   }
@@ -159,6 +162,7 @@ function App() {
       />
       {loginModal}
       {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
+      <CookieConsent />
     </>
   );
 }

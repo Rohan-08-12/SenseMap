@@ -1,7 +1,5 @@
 import prisma from "./prisma.js";
 import cloudinary from "./cloudinary.js";
-import { model } from "./gemini.js";
-import { getSystemUser } from "./systemBot.js";
 
 const CATEGORY_MAP = {
     library: "library",
@@ -76,54 +74,6 @@ export async function uploadPlacePhoto(photoReference) {
     }
 }
 
-export async function analyzeWithGemini(name, category, reviews) {
-    const reviewTexts = reviews
-        .map((r, i) => `Review ${i + 1} (${r.rating}/5 stars): ${r.text}`)
-        .join("\n\n");
-
-    const prompt = `You are a sensory environment analyst helping people with autism and sensory sensitivities evaluate public spaces.
-
-Given these Google reviews for "${name}" (${category}):
-
-${reviewTexts}
-
-Analyze the sensory environment and return ONLY a valid JSON object with this exact structure (no markdown, no backticks, no explanation):
-{
-  "noiseScore": <number 1.0-5.0, where 1=very quiet, 5=very loud>,
-  "lightingScore": <number 1.0-5.0, where 1=very dim/soft, 5=very bright/harsh>,
-  "crowdScore": <number 1.0-5.0, where 1=empty/sparse, 5=very crowded>,
-  "comfortScore": <number 1.0-5.0, overall sensory comfort for sensitive individuals, 5=most comfortable>,
-  "reviews": [
-    {
-      "bodyText": "<a realistic sensory-focused review from perspective of a sensory-sensitive visitor, 2-3 sentences>",
-      "rating": <number 1-10, overall comfort rating>,
-      "noiseLevel": <number 1-10>,
-      "lightingLevel": <number 1-10>,
-      "crowdLevel": <number 1-10>
-    },
-    {
-      "bodyText": "<second unique sensory-focused review>",
-      "rating": <number 1-10>,
-      "noiseLevel": <number 1-10>,
-      "lightingLevel": <number 1-10>,
-      "crowdLevel": <number 1-10>
-    },
-    {
-      "bodyText": "<third unique sensory-focused review>",
-      "rating": <number 1-10>,
-      "noiseLevel": <number 1-10>,
-      "lightingLevel": <number 1-10>,
-      "crowdLevel": <number 1-10>
-    }
-  ]
-}`;
-
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
-    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    return JSON.parse(cleaned);
-}
-
 
 export async function discoverAndCachePlace(googlePlace) {
     const gpid = googlePlace.place_id;
@@ -138,21 +88,11 @@ export async function discoverAndCachePlace(googlePlace) {
     if (!details) return null;
 
     const category = classifyCategory(details.types);
-    const googleReviews = details.reviews || [];
 
     let imageUrl = null;
     const photoRef = details.photos?.[0]?.photo_reference;
     if (photoRef) {
         imageUrl = await uploadPlacePhoto(photoRef);
-    }
-
-    let analysis = null;
-    if (googleReviews.length > 0) {
-        try {
-            analysis = await analyzeWithGemini(details.name, category, googleReviews.slice(0, 5));
-        } catch (err) {
-            console.error(`Gemini analysis failed for ${details.name}: ${err.message}`);
-        }
     }
 
     const location = await prisma.location.create({
@@ -167,34 +107,6 @@ export async function discoverAndCachePlace(googlePlace) {
             longitude: details.geometry.location.lng,
         },
     });
-
-    if (analysis) {
-        await prisma.sensoryScore.create({
-            data: {
-                locationId: location.id,
-                noiseScore: analysis.noiseScore,
-                lightingScore: analysis.lightingScore,
-                crowdScore: analysis.crowdScore,
-                comfortScore: analysis.comfortScore,
-                reviewCount: analysis.reviews.length,
-            },
-        });
-
-        const systemUser = await getSystemUser();
-        for (const review of analysis.reviews) {
-            await prisma.review.create({
-                data: {
-                    userId: systemUser.id,
-                    locationId: location.id,
-                    bodyText: review.bodyText,
-                    rating: review.rating,
-                    noiseLevel: review.noiseLevel,
-                    lightingLevel: review.lightingLevel,
-                    crowdLevel: review.crowdLevel,
-                },
-            });
-        }
-    }
 
     return prisma.location.findUnique({
         where: { id: location.id },

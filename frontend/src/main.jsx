@@ -9,12 +9,20 @@ import './themes.css';
 import './index.css';
 import App from './App.jsx';
 
-posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
-  api_host: 'https://us.i.posthog.com',
-  capture_pageview: true,
-  capture_pageleave: true,
-  session_recording: { maskAllInputs: true },
-});
+const analyticsConsent = localStorage.getItem('sensemap_analytics_consent');
+const dnt = navigator.doNotTrack === '1' || window.doNotTrack === '1';
+
+if (!dnt && analyticsConsent !== 'false') {
+  posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
+    api_host: 'https://us.i.posthog.com',
+    capture_pageview: true,
+    capture_pageleave: true,
+    session_recording: { maskAllInputs: true },
+    loaded: (ph) => {
+      if (analyticsConsent !== 'true') ph.opt_out_capturing();
+    },
+  });
+}
 
 const AUTH0_DOMAIN = import.meta.env.VITE_AUTH0_DOMAIN || '';
 const AUTH0_CLIENT_ID = import.meta.env.VITE_AUTH0_CLIENT_ID || '';

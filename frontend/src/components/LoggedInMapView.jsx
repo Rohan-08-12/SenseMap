@@ -964,7 +964,12 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             <div className="lmv-detail-card">
               <div className="lmv-loc-photo">
                 {(locationDetail?.imageUrl || locationDetail?.reviews?.find((r) => r.imageUrl)?.imageUrl) ? (
-                  <img src={optimizeCloudinaryUrl(locationDetail.imageUrl || locationDetail.reviews.find((r) => r.imageUrl).imageUrl)} alt={locName} loading="lazy" decoding="async" />
+                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                    <img src={optimizeCloudinaryUrl(locationDetail.imageUrl || locationDetail.reviews.find((r) => r.imageUrl).imageUrl)} alt={locName} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    {locationDetail?.imageUrl && (
+                      <span style={{ position: 'absolute', bottom: 6, right: 8, fontSize: 10, color: 'rgba(255,255,255,0.85)', background: 'rgba(0,0,0,0.35)', borderRadius: 4, padding: '2px 5px' }}>Powered by Google</span>
+                    )}
+                  </div>
                 ) : (
                   <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, var(--theme-tag-soft), var(--theme-tag-strong))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--theme-text-muted)', fontSize: 13 }}>
                     {locName}
