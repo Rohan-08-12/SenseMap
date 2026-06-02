@@ -17,6 +17,7 @@ async function getAuth0ManagementToken() {
         }),
     });
     const data = await res.json();
+    if (!res.ok) throw new Error(`Auth0 token request failed (${res.status}): ${JSON.stringify(data)}`);
     return data.access_token;
 }
 

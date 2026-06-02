@@ -966,7 +966,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 {(locationDetail?.imageUrl || locationDetail?.reviews?.find((r) => r.imageUrl)?.imageUrl) ? (
                   <div style={{ position: 'relative', width: '100%', height: '100%' }}>
                     <img src={optimizeCloudinaryUrl(locationDetail.imageUrl || locationDetail.reviews.find((r) => r.imageUrl).imageUrl)} alt={locName} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    {locationDetail?.imageUrl && !locationDetail.reviews?.find((r) => r.imageUrl) && (
+                    {locationDetail?.imageUrl && (
                       <span style={{ position: 'absolute', bottom: 6, right: 8, fontSize: 10, color: 'rgba(255,255,255,0.85)', background: 'rgba(0,0,0,0.35)', borderRadius: 4, padding: '2px 5px' }}>Powered by Google</span>
                     )}
                   </div>
