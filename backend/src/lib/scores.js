@@ -65,15 +65,15 @@ export function getDisplayScore(location) {
         return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, source: "community" };
     }
     if (reviewCount >= 1 && estimatedNoiseScore != null) {
-        return {
-            noise:    (noiseScore    * 0.7) + (estimatedNoiseScore    * 0.3),
-            lighting: (lightingScore * 0.7) + (estimatedLightingScore * 0.3),
-            crowd:    (crowdScore    * 0.7) + (estimatedCrowdScore    * 0.3),
-            source: "community",
-        };
+        const n = (noiseScore    * 0.7) + (estimatedNoiseScore    * 0.3);
+        const l = (lightingScore * 0.7) + (estimatedLightingScore * 0.3);
+        const c = (crowdScore    * 0.7) + (estimatedCrowdScore    * 0.3);
+        return { noise: n, lighting: l, crowd: c, source: "community" };
     }
     if (estimatedNoiseScore != null) {
-        return { noise: estimatedNoiseScore, lighting: estimatedLightingScore, crowd: estimatedCrowdScore, source: "estimated" };
+        const n = estimatedNoiseScore, l = estimatedLightingScore, c = estimatedCrowdScore;
+        const comfort = Math.min(5, Math.max(1, 6 - (n + l + c) / 3));
+        return { noise: n, lighting: l, crowd: c, comfort, source: "estimated" };
     }
     return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, source: "category" };
 }
