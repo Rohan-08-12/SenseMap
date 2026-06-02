@@ -1,13 +1,11 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
 import { toGeoJSON } from "../lib/geojson.js";
-import { getSystemUser } from "../lib/systemBot.js";
 import {
     searchGooglePlaces,
     getGooglePlaceDetails,
     uploadPlacePhoto,
     classifyCategory,
-    analyzeWithGemini,
     discoverAndCachePlace,
 } from "../lib/placesService.js";
 
@@ -58,60 +56,22 @@ async function quickCachePlace(googlePlace) {
     });
 
     const photoRef = details.photos?.[0]?.photo_reference;
-    const googleReviews = (details.reviews || []).slice(0, 5);
-
-    if (photoRef || googleReviews.length > 0) {
-        queueEnrichment(() => enrichLocationInBackground(location.id, photoRef, details.name, category, googleReviews));
+    if (photoRef) {
+        queueEnrichment(() => enrichLocationInBackground(location.id, photoRef, details.name));
     }
 
     return { ...location, sensoryScores: null };
 }
 
-async function enrichLocationInBackground(locationId, photoRef, name, category, googleReviews) {
+async function enrichLocationInBackground(locationId, photoRef, name) {
     try {
-        if (photoRef) {
-            const imageUrl = await uploadPlacePhoto(photoRef);
-            if (imageUrl) {
-                await prisma.location.update({ where: { id: locationId }, data: { imageUrl } });
-            }
+        const imageUrl = await uploadPlacePhoto(photoRef);
+        if (imageUrl) {
+            await prisma.location.update({ where: { id: locationId }, data: { imageUrl } });
         }
-
-        if (googleReviews.length > 0) {
-            const analysis = await analyzeWithGemini(name, category, googleReviews);
-
-            const existingScore = await prisma.sensoryScore.findUnique({ where: { locationId } });
-            if (!existingScore) {
-                await prisma.sensoryScore.create({
-                    data: {
-                        locationId,
-                        noiseScore: analysis.noiseScore,
-                        lightingScore: analysis.lightingScore,
-                        crowdScore: analysis.crowdScore,
-                        comfortScore: analysis.comfortScore,
-                        reviewCount: analysis.reviews.length,
-                    },
-                });
-
-                const systemUser = await getSystemUser();
-
-                for (const review of analysis.reviews) {
-                    await prisma.review.create({
-                        data: {
-                            userId: systemUser.id,
-                            locationId,
-                            bodyText: review.bodyText,
-                            rating: review.rating,
-                            noiseLevel: review.noiseLevel,
-                            lightingLevel: review.lightingLevel,
-                            crowdLevel: review.crowdLevel,
-                        },
-                    });
-                }
-            }
-        }
-        console.log(`[discover] Background enrichment done for: ${name}`);
+        console.log(`[discover] Photo saved for: ${name}`);
     } catch (err) {
-        console.error(`[discover] Background enrichment failed for ${name}: ${err.message}`);
+        console.error(`[discover] Photo enrichment failed for ${name}: ${err.message}`);
     }
 }
 
