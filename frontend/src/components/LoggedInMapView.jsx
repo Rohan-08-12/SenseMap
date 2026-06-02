@@ -1254,7 +1254,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   {/* Rating tags */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                     <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>
-                      {Math.round((sensory.comfortScore ?? sensory.comfort_score ?? 0) / 5 * 100)}% would revisit
+                      {Math.round((sensory.comfortScore ?? sensory.comfort_score ?? 0) / 5 * 100)}% {dataSource === 'community' ? 'would revisit' : 'sensory comfort'}
                     </span>
                     {(sensory.noiseScore ?? sensory.noise_score ?? 5) < 2 && (
                       <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-noise favorite</span>
@@ -1336,7 +1336,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               <div className="lmv-detail-card">
                 <div>
                   <h3 className="lmv-section-title">Noise through the day</h3>
-                  <p className="lmv-section-desc">Estimated trend based on sensory scores — not real-time data.</p>
+                  <p className="lmv-section-desc">{dataSource === 'community' ? 'Estimated trend based on community reviews — not real-time data.' : 'Estimated trend based on AI-analysed external reviews — not real-time data.'}</p>
                 </div>
                 <div style={{ width: '100%', height: 120, minWidth: 0 }}>
                   <ResponsiveContainer width="99%" height={120} debounce={50}>
@@ -1369,7 +1369,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 </p>
               ) : aiNoTextReviews ? (
                 <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>
-                  Write a review describing your experience to unlock AI insights for this place.
+                  {dataSource === 'estimated'
+                    ? 'Not enough external data found to generate AI insights. Be the first to leave a review.'
+                    : 'Write a review describing your experience to unlock AI insights for this place.'}
                 </p>
               ) : aiLoading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
