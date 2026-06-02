@@ -81,8 +81,8 @@ export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON
                 if (f === 'cafes') return /cafe|coffee|bistro|bakery|tea/i.test(cat);
                 if (f === 'parks') return /park|garden|field|green|nature|forest|trail|outdoor/i.test(cat);
                 if (f === 'libraries') return /library|archive|reading/i.test(cat);
-                if (f === 'restaurants') return /restaurant|food|dining|pub|bar|eatery|diner/i.test(cat);
-                if (f === 'fitness') return /gym|fitness|sport|recreation|pool|yoga|wellness/i.test(cat);
+                if (f === 'museums') return /museum|gallery|exhibit|art/i.test(cat);
+                if (f === 'community') return /community|centre|center|recreation|mall|shopping/i.test(cat);
                 return true;
             });
         }

@@ -20,8 +20,8 @@ const PLACE_FILTERS = [
   { emoji: '☕', label: 'Cafes', filter: 'cafes' },
   { emoji: '🌿', label: 'Parks', filter: 'parks' },
   { emoji: '📚', label: 'Libraries', filter: 'libraries' },
-  { emoji: '🍽️', label: 'Restaurants', filter: 'restaurants' },
-  { emoji: '🏋️', label: 'Fitness', filter: 'fitness' },
+  { emoji: '🏛️', label: 'Museums', filter: 'museums' },
+  { emoji: '🏢', label: 'Community', filter: 'community' },
 ];
 
 const CATEGORY_CHIPS = [
