@@ -95,10 +95,10 @@ router.get("/heatmap", async (req, res) => {
 
         const heatMapData = locations.map((loc) => {
             const s = loc.sensoryScores;
-            // Prefer community scores; fall back to AI-estimated
-            const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
-            const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
-            const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
+            // Community scores when real reviews exist; AI-estimated next; OSM defaults last
+            const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) ?? loc.estimatedNoiseScore ?? s?.noiseScore;
+            const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) ?? loc.estimatedLightingScore ?? s?.lightingScore;
+            const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) ?? loc.estimatedCrowdScore ?? s?.crowdScore;
             // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
             // Guard nulls — JS coerces null to 0 in arithmetic, producing out-of-range scores
             const communityComfort = s?.reviewCount > 0 ? s?.comfortScore : null;
@@ -157,10 +157,10 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
         const matches = locations
             .map(loc => {
                 const s = loc.sensoryScores;
-                // Use community scores if available, fall back to AI-estimated
-                const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
-                const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
-                const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
+                // Community scores when real reviews exist; AI-estimated next; OSM defaults last
+                const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) ?? loc.estimatedNoiseScore ?? s?.noiseScore;
+                const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) ?? loc.estimatedLightingScore ?? s?.lightingScore;
+                const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) ?? loc.estimatedCrowdScore ?? s?.crowdScore;
 
                 if (noise == null && lighting == null && crowd == null) return null;
 

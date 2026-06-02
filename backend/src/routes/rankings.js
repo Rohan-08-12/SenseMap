@@ -41,9 +41,10 @@ router.get("/", async (req, res) => {
         const result = locations
             .map((loc) => {
                 const s = loc.sensoryScores;
-                const noise    = s?.noiseScore    ?? loc.estimatedNoiseScore;
-                const lighting = s?.lightingScore ?? loc.estimatedLightingScore;
-                const crowd    = s?.crowdScore    ?? loc.estimatedCrowdScore;
+                // Community scores when real reviews exist; AI-estimated next; OSM defaults last
+                const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) ?? loc.estimatedNoiseScore ?? s?.noiseScore;
+                const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) ?? loc.estimatedLightingScore ?? s?.lightingScore;
+                const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) ?? loc.estimatedCrowdScore ?? s?.crowdScore;
                 if (noise == null) return null;
 
                 // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
