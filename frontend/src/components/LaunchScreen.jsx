@@ -402,6 +402,7 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
                                 <p className="ls-footer-col-label">Legal</p>
                                 <button onClick={() => setLegalModal('privacy')}>Privacy Policy</button>
                                 <button onClick={() => setLegalModal('terms')}>Terms of Use</button>
+                                <a href="https://forms.gle/F1NGPGdcKJR6Qg7u9" target="_blank" rel="noopener noreferrer">Share feedback</a>
                             </div>
                         </div>
                     </div>
