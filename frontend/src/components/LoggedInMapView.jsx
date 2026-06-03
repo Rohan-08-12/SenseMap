@@ -1058,6 +1058,18 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                     </>
                   )}
 
+                  {/* Feedback link */}
+                  <div style={{ marginTop: 12, textAlign: 'center' }}>
+                    <a
+                      href="https://forms.gle/F1NGPGdcKJR6Qg7u9"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: 12, color: 'var(--theme-text-muted, #94a3b8)', textDecoration: 'underline' }}
+                    >
+                      Something wrong? Share feedback
+                    </a>
+                  </div>
+
                   {/* Check-in error message (GPS / cooldown) */}
                   {checkInError && (
                     <div style={{
