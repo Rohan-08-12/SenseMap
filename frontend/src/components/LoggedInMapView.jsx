@@ -589,10 +589,10 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const bestTimeText = aiInsights?.bestTime ?? '—';
 
   const getDistance = useCallback((loc) => {
-    if (!userCoords) return '— km away';
+    if (!userCoords) return null;
     const lat = loc.latitude ?? loc.position?.[1];
     const lng = loc.longitude ?? loc.position?.[0];
-    if (lat == null || lng == null) return '— km away';
+    if (lat == null || lng == null) return null;
     return haversineDistance(userCoords.lat, userCoords.lng, lat, lng);
   }, [userCoords]);
 
@@ -884,7 +884,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                       >
                         <div className="lmv-nearby-card-header">
                           <span className={`lmv-nearby-score ${place.tier}`}>{place.score.toFixed(1)}</span>
-                          <span className="lmv-nearby-distance">{getDistance(place)}</span>
+                          {getDistance(place) && <span className="lmv-nearby-distance">{getDistance(place)}</span>}
                         </div>
                         <div className="lmv-nearby-card-info">
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
