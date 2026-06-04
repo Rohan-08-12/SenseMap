@@ -1203,8 +1203,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   {[1, 2, 3, 4, 5].map((i) => (
                     <svg key={i} width="16" height="16" viewBox="0 0 16 16" fill="none">
                       <path d="M8 1.33L10.06 5.51L14.67 6.18L11.33 9.43L12.12 14.01L8 11.85L3.88 14.01L4.67 9.43L1.33 6.18L5.94 5.51L8 1.33Z"
-                        fill={i <= Math.round(avgRating) ? '#F5A623' : 'none'}
-                        stroke={i <= Math.round(avgRating) ? '#F5A623' : '#CBD5E1'}
+                        fill={i <= Math.round(avgRating / 2) ? '#F5A623' : 'none'}
+                        stroke={i <= Math.round(avgRating / 2) ? '#F5A623' : '#CBD5E1'}
                         strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   ))}

@@ -260,7 +260,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const comfortScore = sensory.comfortScore ?? sensory.comfort_score ?? 2.5;
   const overallScore = comfortScore.toFixed(1);
 
-  const starCount = avgRating !== null ? Math.round(avgRating) : 0;
+  const starCount = avgRating !== null ? Math.round(avgRating / 2) : 0;
 
   // Rating tags
   const ratingTags = (() => {
