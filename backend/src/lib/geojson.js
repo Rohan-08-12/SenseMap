@@ -15,7 +15,7 @@ export const toGeoJSON = (locations) => {
                 noiseScore: loc.sensoryScores?.noiseScore ?? loc.estimatedNoiseScore ?? null,
                 lightingScore: loc.sensoryScores?.lightingScore ?? loc.estimatedLightingScore ?? null,
                 crowdScore: loc.sensoryScores?.crowdScore ?? loc.estimatedCrowdScore ?? null,
-                comfortScore: loc.sensoryScores?.comfortScore ?? (loc.estimatedNoiseScore != null ? +(((5 - loc.estimatedNoiseScore) * 0.4 + (5 - loc.estimatedCrowdScore) * 0.4 + loc.estimatedLightingScore * 0.2)).toFixed(1) : null),
+                comfortScore: loc.sensoryScores?.comfortScore ?? (loc.estimatedNoiseScore != null && loc.estimatedCrowdScore != null && loc.estimatedLightingScore != null ? +(((5 - loc.estimatedNoiseScore) * 0.4 + (5 - loc.estimatedCrowdScore) * 0.4 + loc.estimatedLightingScore * 0.2)).toFixed(1) : null),
                 reviewCount: loc.sensoryScores?.reviewCount ?? 0,
                 dataSource: loc.dataSource ?? 'category',
             },
