@@ -241,7 +241,24 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     if (!initialSearchQuery?.trim()) return;
     setSearchLoading(true);
     discoverLocations(initialSearchQuery.trim(), userCoords?.lat, userCoords?.lng)
-      .then((res) => setSearchResults(res.data))
+      .then((res) => {
+        setSearchResults(res.data);
+        const features = res.data?.features ?? [];
+        if (features.length > 0) {
+          setNearbyPlaces(features.slice(0, 6).map((f) => {
+            const p = f.properties ?? {};
+            const comfort = p.comfortScore ?? 0;
+            return {
+              id: p.id, name: p.name, score: comfort,
+              tier: comfort >= 3.5 ? 'high' : 'medium', featured: false,
+              tags: p.category || 'Place',
+              desc: `Noise: ${(p.noiseScore ?? 0).toFixed(1)} · Lighting: ${(p.lightingScore ?? 0).toFixed(1)} · Crowd: ${(p.crowdScore ?? 0).toFixed(1)}`,
+              comfort_score: comfort, noise_score: p.noiseScore, lighting_score: p.lightingScore, crowd_score: p.crowdScore,
+              latitude: f.geometry?.coordinates?.[1], longitude: f.geometry?.coordinates?.[0], category: p.category,
+            };
+          }));
+        }
+      })
       .catch(() => setSearchResults({ features: [] }))
       .finally(() => setSearchLoading(false));
   }, [initialSearchQuery]);
