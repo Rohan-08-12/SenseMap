@@ -1558,7 +1558,17 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{((sensory.noiseScore ?? sensory.noise_score ?? 0) * 2).toFixed(0)}</span></div>
                   <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{((sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2).toFixed(0)}</span></div>
                   <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{((sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2).toFixed(0)}</span></div>
-                  <div className="lmv-profile-stat"><span className="pstat-label">Comfort</span><span className="pstat-value">{((sensory.comfortScore ?? sensory.comfort_score ?? 0) * 2).toFixed(0)}</span></div>
+                  <div className="lmv-profile-stat">
+                    <span className="pstat-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      Comfort
+                      <span
+                        title="Comfort is the inverse of sensory load — a quiet, uncrowded, softly lit space scores high even though individual sensory values are low."
+                        style={{ cursor: 'help', fontSize: 10, fontWeight: 700, color: 'var(--theme-text-muted)', background: 'var(--theme-border)', borderRadius: '50%', width: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                        aria-label="Comfort score explanation"
+                      >?</span>
+                    </span>
+                    <span className="pstat-value">{((sensory.comfortScore ?? sensory.comfort_score ?? 0) * 2).toFixed(0)}</span>
+                  </div>
                 </div>
               </div>
             </div>
