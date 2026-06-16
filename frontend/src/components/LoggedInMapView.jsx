@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel, haversineDistance } from '../utils.js';
@@ -101,6 +101,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const [userCoords, setUserCoords] = useState(null);
   const [avgRating, setAvgRating] = useState(null);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  const rankingsRef = useRef([]);
   const [savedPlaceIds, setSavedPlaceIds] = useState(new Set());
   const [savedPlacesList, setSavedPlacesList] = useState([]);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -184,7 +185,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
       .then((res) => {
         const data = res.data;
         if (Array.isArray(data) && data.length > 0) {
-          setNearbyPlaces(data.slice(0, 6).map((loc) => ({
+          const mapped = data.slice(0, 6).map((loc) => ({
             name: loc.name,
             score: loc.comfortScore ?? 0,
             tags: loc.category || 'Sensory-friendly',
@@ -199,7 +200,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             latitude: loc.latitude,
             longitude: loc.longitude,
             category: loc.category,
-          })));
+          }));
+          rankingsRef.current = mapped;
+          setNearbyPlaces(mapped);
         }
       })
       .catch((err) => {
@@ -352,6 +355,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     e?.preventDefault();
     if (!searchQuery.trim()) {
       setSearchResults(null);
+      setNearbyPlaces(rankingsRef.current);
       return;
     }
     setSearchLoading(true);
@@ -380,9 +384,12 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             category: p.category,
           };
         }));
+      } else {
+        setNearbyPlaces([]);
       }
     } catch {
       setSearchResults({ features: [] });
+      setNearbyPlaces([]);
     } finally {
       setSearchLoading(false);
     }
@@ -1253,11 +1260,17 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
 
               {(() => {
                 const communityCount = locationDetail?.sensoryScores?.reviewCount ?? 0;
+                const allReviews = locationDetail?.reviews ?? [];
+                const allBot = allReviews.length > 0 && allReviews.every(r => r.user?.email === 'bot@sensemap.app');
+                const realCount = allReviews.filter(r => r.user?.email !== 'bot@sensemap.app').length;
 
                 if (dataSource === 'community') return (
                   <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#d6f5e1', color: '#05360d', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 6.5l2.5 2.5 4.5-4.5" stroke="#05360d" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {communityCount} community {communityCount === 1 ? 'review' : 'reviews'} — real visitor data
+                    {allBot
+                      ? `Curated by SenseMap — sourced from public accessibility research`
+                      : `${realCount || communityCount} community ${(realCount || communityCount) === 1 ? 'review' : 'reviews'} — real visitor data`
+                    }
                   </div>
                 );
                 if (dataSource === 'estimated') return (

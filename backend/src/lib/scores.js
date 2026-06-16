@@ -57,23 +57,23 @@ export const recalculateScores = async (locationId) => {
 export function getDisplayScore(location) {
     const {
         reviewCount,
-        noiseScore, lightingScore, crowdScore,
+        noiseScore, lightingScore, crowdScore, comfortScore,
         estimatedNoiseScore, estimatedLightingScore, estimatedCrowdScore,
     } = location;
 
     if (reviewCount >= 5) {
-        return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, source: "community" };
+        return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, comfort: comfortScore, source: "community" };
     }
     if (reviewCount >= 1 && estimatedNoiseScore != null) {
         const n = (noiseScore    * 0.7) + (estimatedNoiseScore    * 0.3);
         const l = (lightingScore * 0.7) + (estimatedLightingScore * 0.3);
         const c = (crowdScore    * 0.7) + (estimatedCrowdScore    * 0.3);
-        return { noise: n, lighting: l, crowd: c, source: "community" };
+        return { noise: n, lighting: l, crowd: c, comfort: comfortScore, source: "community" };
     }
     if (estimatedNoiseScore != null) {
         const n = estimatedNoiseScore, l = estimatedLightingScore, c = estimatedCrowdScore;
         const comfort = Math.min(5, Math.max(1, 6 - (n + l + c) / 3));
         return { noise: n, lighting: l, crowd: c, comfort, source: "estimated" };
     }
-    return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, source: "category" };
+    return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, comfort: comfortScore, source: "category" };
 }
