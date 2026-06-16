@@ -1261,7 +1261,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               {(() => {
                 const communityCount = locationDetail?.sensoryScores?.reviewCount ?? 0;
                 const allReviews = locationDetail?.reviews ?? [];
-                const allBot = allReviews.length > 0 && allReviews.every(r => r.user?.email === 'bot@sensemap.app');
+                const allBot = allReviews.length > 0 && allReviews.every(r => r.user?.email === 'bot@sensorysafe.com');
                 const realCount = allReviews.filter(r => r.user?.email !== 'bot@sensemap.app').length;
 
                 if (dataSource === 'community') return (
