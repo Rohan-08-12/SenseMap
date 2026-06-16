@@ -1261,8 +1261,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               {(() => {
                 const communityCount = locationDetail?.sensoryScores?.reviewCount ?? 0;
                 const allReviews = locationDetail?.reviews ?? [];
-                const allBot = allReviews.length > 0 && allReviews.every(r => r.user?.email === 'bot@sensemap.app');
-                const realCount = allReviews.filter(r => r.user?.email !== 'bot@sensemap.app').length;
+                const allBot = allReviews.length > 0 && allReviews.every(r => r.user?.email === 'bot@sensorysafe.com');
+                const realCount = allReviews.filter(r => r.user?.email !== 'bot@sensorysafe.com').length;
 
                 if (dataSource === 'community') return (
                   <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#d6f5e1', color: '#05360d', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1508,7 +1508,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 <h3 className="lmv-section-title">Recent reviews</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
                   {locationDetail.reviews.slice(0, 5).map((review) => {
-                    const isBot = review.user?.email === 'bot@sensemap.app';
+                    const isBot = review.user?.email === 'bot@sensorysafe.com';
                     const author = isBot ? 'SenseMap Bot' : (review.user?.username || 'Anonymous');
                     const date = new Date(review.visitedAt || review.createdAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
                     return (
