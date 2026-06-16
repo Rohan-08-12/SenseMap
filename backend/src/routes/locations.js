@@ -347,7 +347,7 @@ router.get("/:id", async (req, res) => {
                     orderBy: { createdAt: "desc" },
                     take: 10,
                     include: {
-                        user: { select: { username: true } }
+                        user: { select: { username: true, email: true } }
                     }
                 }
             }
@@ -360,6 +360,7 @@ router.get("/:id", async (req, res) => {
             noiseScore:             location.sensoryScores?.noiseScore     ?? null,
             lightingScore:          location.sensoryScores?.lightingScore  ?? null,
             crowdScore:             location.sensoryScores?.crowdScore     ?? null,
+            comfortScore:           location.sensoryScores?.comfortScore   ?? null,
             estimatedNoiseScore:    location.estimatedNoiseScore,
             estimatedLightingScore: location.estimatedLightingScore,
             estimatedCrowdScore:    location.estimatedCrowdScore,

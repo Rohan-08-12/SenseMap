@@ -1213,11 +1213,17 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
 
               {(() => {
                 const communityCount = locationDetail?.sensoryScores?.reviewCount ?? 0;
+                const allReviews = locationDetail?.reviews ?? [];
+                const allBot = allReviews.length > 0 && allReviews.every(r => r.user?.email === 'bot@sensemap.app');
+                const realCount = allReviews.filter(r => r.user?.email !== 'bot@sensemap.app').length;
 
                 if (dataSource === 'community') return (
                   <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#d6f5e1', color: '#05360d', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 6.5l2.5 2.5 4.5-4.5" stroke="#05360d" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {communityCount} community {communityCount === 1 ? 'review' : 'reviews'} — real visitor data
+                    {allBot
+                      ? `Curated by SenseMap — sourced from public accessibility research`
+                      : `${realCount || communityCount} community ${(realCount || communityCount) === 1 ? 'review' : 'reviews'} — real visitor data`
+                    }
                   </div>
                 );
                 if (dataSource === 'estimated') return (
