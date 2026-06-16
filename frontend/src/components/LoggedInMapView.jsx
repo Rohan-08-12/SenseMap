@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel, haversineDistance } from '../utils.js';
@@ -101,6 +101,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const [userCoords, setUserCoords] = useState(null);
   const [avgRating, setAvgRating] = useState(null);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  const rankingsRef = useRef([]);
   const [savedPlaceIds, setSavedPlaceIds] = useState(new Set());
   const [savedPlacesList, setSavedPlacesList] = useState([]);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -184,7 +185,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
       .then((res) => {
         const data = res.data;
         if (Array.isArray(data) && data.length > 0) {
-          setNearbyPlaces(data.slice(0, 6).map((loc) => ({
+          const mapped = data.slice(0, 6).map((loc) => ({
             name: loc.name,
             score: loc.comfortScore ?? 0,
             tags: loc.category || 'Sensory-friendly',
@@ -199,7 +200,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             latitude: loc.latitude,
             longitude: loc.longitude,
             category: loc.category,
-          })));
+          }));
+          rankingsRef.current = mapped;
+          setNearbyPlaces(mapped);
         }
       })
       .catch((err) => {
@@ -335,14 +338,41 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     e?.preventDefault();
     if (!searchQuery.trim()) {
       setSearchResults(null);
+      setNearbyPlaces(rankingsRef.current);
       return;
     }
     setSearchLoading(true);
     try {
       const res = await discoverLocations(searchQuery.trim(), userCoords?.lat, userCoords?.lng);
       setSearchResults(res.data);
+      const features = res.data?.features ?? [];
+      if (features.length > 0) {
+        setNearbyPlaces(features.slice(0, 6).map((f) => {
+          const p = f.properties ?? {};
+          const comfort = p.comfortScore ?? p.comfort_score ?? 0;
+          return {
+            id: p.id,
+            name: p.name,
+            score: comfort,
+            tier: comfort >= 3.5 ? 'high' : 'medium',
+            featured: false,
+            tags: p.category || 'Place',
+            desc: `Noise: ${(p.noiseScore ?? p.noise_score ?? 0).toFixed(1)} · Lighting: ${(p.lightingScore ?? p.lighting_score ?? 0).toFixed(1)} · Crowd: ${(p.crowdScore ?? p.crowd_score ?? 0).toFixed(1)}`,
+            comfort_score: comfort,
+            noise_score: p.noiseScore ?? p.noise_score,
+            lighting_score: p.lightingScore ?? p.lighting_score,
+            crowd_score: p.crowdScore ?? p.crowd_score,
+            latitude: f.geometry?.coordinates?.[1],
+            longitude: f.geometry?.coordinates?.[0],
+            category: p.category,
+          };
+        }));
+      } else {
+        setNearbyPlaces([]);
+      }
     } catch {
       setSearchResults({ features: [] });
+      setNearbyPlaces([]);
     } finally {
       setSearchLoading(false);
     }
@@ -863,7 +893,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               </div>}
 
               <div className="lmv-nearby-overlay">
-                <span className="lmv-nearby-label">Top nearby places</span>
+                <span className="lmv-nearby-label">{searchResults !== null ? 'Search results' : 'Top nearby places'}</span>
                 <div className="lmv-nearby-cards">
                   {nearbyPlaces.length === 0 ? (
                     <div className="lmv-nearby-empty">
