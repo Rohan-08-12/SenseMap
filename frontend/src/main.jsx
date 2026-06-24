@@ -12,7 +12,9 @@ import App from './App.jsx';
 const analyticsConsent = localStorage.getItem('sensemap_analytics_consent');
 const dnt = navigator.doNotTrack === '1' || window.doNotTrack === '1';
 
-if (!dnt && analyticsConsent !== 'false') {
+const founderOptOut = document.cookie.includes('ph_optout=1');
+
+if (!dnt && analyticsConsent !== 'false' && !founderOptOut) {
   posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
     api_host: 'https://us.i.posthog.com',
     capture_pageview: true,
@@ -21,6 +23,11 @@ if (!dnt && analyticsConsent !== 'false') {
     loaded: (ph) => {
       if (analyticsConsent !== 'true') ph.opt_out_capturing();
     },
+  });
+} else if (founderOptOut || window.location.hostname === 'localhost') {
+  posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
+    api_host: 'https://us.i.posthog.com',
+    loaded: (ph) => { ph.opt_out_capturing(); },
   });
 }
 
