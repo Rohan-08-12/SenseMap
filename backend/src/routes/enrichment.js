@@ -15,11 +15,12 @@ const analyzeSchema = {
         noise_score:    { type: "number", description: "Noise level 1-10, where 1=silent and 10=extremely loud" },
         lighting_score: { type: "number", description: "Lighting intensity 1-10, where 1=dim and 10=harsh/bright" },
         crowd_score:    { type: "number", description: "Crowd density 1-10, where 1=empty and 10=packed" },
+        confidence:     { type: "number", description: "Confidence in the scores 1-10, where 10=very confident" },
         sentiment:      { type: "string", enum: ["positive", "neutral", "negative"] },
         tags:           { type: "array",  items: { type: "string" } },
         summary:        { type: "string" },
     },
-    required: ["noise_score", "lighting_score", "crowd_score", "sentiment", "tags", "summary"],
+    required: ["noise_score", "lighting_score", "crowd_score", "confidence", "sentiment", "tags", "summary"],
 };
 
 // Gemini-only for background enrichment — Claude validation reserved for
@@ -143,7 +144,7 @@ router.post("/location", requireN8nSecret, async (req, res) => {
 });
 
 // GET /enrichment/stale — returns locations due for enrichment
-router.get("/stale", requireN8nSecret, async (req, res) => {
+router.get("/stale", requireN8nSecret, async (_req, res) => {
     try {
         const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
 

@@ -20,6 +20,9 @@ export default defineConfig(({ mode }) => {
         '/upload': backendUrl,
         '/checkins': backendUrl,
         '/users': backendUrl,
+        '/audio': backendUrl,
+        '/enrichment': backendUrl,
+        '/scraper': backendUrl,
       },
     },
   }

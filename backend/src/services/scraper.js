@@ -110,7 +110,7 @@ async function fetchGooglePlaces(name, lat, lng) {
     }
 }
 
-async function fetchCityOfToronto(name, category) {
+async function fetchCityOfToronto(name, category, lat, lng) {
     try {
         const cat = (category ?? "").toLowerCase();
         const isLibrary = /library/.test(cat);
@@ -173,7 +173,7 @@ export async function fetchAllSources({ name, latitude, longitude, category = nu
             : fetchYelp(name, latitude, longitude),
         fetchFoursquare(name, latitude, longitude),
         fetchGooglePlaces(name, latitude, longitude),
-        fetchCityOfToronto(name, category),
+        fetchCityOfToronto(name, category, latitude, longitude),
     ]);
 
     const parts = [];
