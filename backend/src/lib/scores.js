@@ -70,6 +70,9 @@ export function getDisplayScore(location) {
         const c = (crowdScore    * 0.7) + (estimatedCrowdScore    * 0.3);
         return { noise: n, lighting: l, crowd: c, comfort: comfortScore, source: "community" };
     }
+    if (reviewCount >= 1) {
+        return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, comfort: comfortScore, source: "community" };
+    }
     if (estimatedNoiseScore != null) {
         const n = estimatedNoiseScore, l = estimatedLightingScore, c = estimatedCrowdScore;
         const comfort = Math.min(5, Math.max(1, 6 - (n + l + c) / 3));
