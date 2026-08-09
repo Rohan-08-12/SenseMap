@@ -997,7 +997,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             <div className="lmv-detail-backdrop" onClick={() => { setSelectedLocation(null); setLocationDetail(null); }} />
           )}
 
-          {/* Right Detail Panel */}
+          {/* Right Detail Panel — only rendered once a location is selected */}
+          {selectedLocation && (
           <aside className="lmv-detail">
             <button
               className="lmv-detail-close"
@@ -1695,6 +1696,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               </div>
             )}
           </aside>
+          )}
         </>
       )}
 
