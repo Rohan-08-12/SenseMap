@@ -4,7 +4,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const backendUrl = env.VITE_API_URL || 'http://localhost:3000'
+  // BACKEND_PROXY_URL is a server-only var (not VITE_-prefixed, so it never
+  // ships to the client bundle) — lets the dev server proxy to a backend
+  // (e.g. production) while VITE_API_URL stays empty so the browser makes
+  // same-origin requests and avoids CORS entirely.
+  const backendUrl = env.BACKEND_PROXY_URL || env.VITE_API_URL || 'http://localhost:3000'
 
   return {
     plugins: [react()],
