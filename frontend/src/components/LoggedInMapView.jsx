@@ -541,7 +541,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     : (locationDetail?.sensoryScores || selectedLocation || {});
   const dataSource = _ds?.source ?? 'category';
   const locName = selectedLocation?.name || 'Select a location';
-  const comfortScore = (sensory.comfortScore ?? sensory.comfort_score ?? 0).toFixed(1);
+  // Clamped for display only (the "X / 5" label and % bars below assume a 5-point
+  // ceiling) — ranking/sort order elsewhere uses the true uncapped backend value.
+  const comfortScore = Math.min(5, sensory.comfortScore ?? sensory.comfort_score ?? 0).toFixed(1);
   const noiseVal = sensory.noiseScore ?? sensory.noise_score ?? 0;
   const noiseLevel = scoreToLabel(noiseVal);
 
@@ -997,7 +999,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             <div className="lmv-detail-backdrop" onClick={() => { setSelectedLocation(null); setLocationDetail(null); }} />
           )}
 
-          {/* Right Detail Panel */}
+          {/* Right Detail Panel — only rendered once a location is selected */}
+          {selectedLocation && (
           <aside className="lmv-detail">
             <button
               className="lmv-detail-close"
@@ -1324,7 +1327,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   {/* Rating tags */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                     <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>
-                      {Math.round((sensory.comfortScore ?? sensory.comfort_score ?? 0) / 5 * 100)}% {dataSource === 'community' ? 'would revisit' : 'sensory comfort'}
+                      {Math.round(Math.min(5, sensory.comfortScore ?? sensory.comfort_score ?? 0) / 5 * 100)}% {dataSource === 'community' ? 'would revisit' : 'sensory comfort'}
                     </span>
                     {(sensory.noiseScore ?? sensory.noise_score ?? 5) < 2 && (
                       <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-noise favorite</span>
@@ -1695,6 +1698,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               </div>
             )}
           </aside>
+          )}
         </>
       )}
 

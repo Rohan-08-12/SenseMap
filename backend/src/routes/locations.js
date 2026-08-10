@@ -103,8 +103,11 @@ router.get("/heatmap", async (req, res) => {
             // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
             // Guard nulls — JS coerces null to 0 in arithmetic, producing out-of-range scores
             const communityComfort = s?.reviewCount > 0 ? s?.comfortScore : null;
+            // No upper clamp: an all-minimum sensory profile (e.g. no-data placeholders
+            // at 0.5/0.5/0.5) would otherwise tie every such location at a flat 5 and
+            // outrank places with real, lower-intensity community reviews.
             const estimatedComfort = (noise != null && lighting != null && crowd != null)
-                ? Math.min(5, Math.max(1, 6 - (noise + lighting + crowd) / 3))
+                ? Math.max(1, 6 - (noise + lighting + crowd) / 3)
                 : null;
             const comfort = communityComfort ?? estimatedComfort;
 
@@ -148,8 +151,11 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
 
         const { noiseTolerance = 3, lightingTolerance = 3, crowdTolerance = 3 } = user.sensoryProfile ?? {};
 
+        // No take() cap: an arbitrary 500-row slice (with no orderBy) silently
+        // dropped locations past the cut, leaving their detail panel's numeric
+        // Match score stuck at "—" even though the qualitative checklist above
+        // it was computed independently and worked fine.
         const locations = await prisma.location.findMany({
-            take: 500,
             include: { sensoryScores: true }
         });
 

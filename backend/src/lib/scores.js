@@ -75,7 +75,10 @@ export function getDisplayScore(location) {
     }
     if (estimatedNoiseScore != null) {
         const n = estimatedNoiseScore, l = estimatedLightingScore, c = estimatedCrowdScore;
-        const comfort = Math.min(5, Math.max(1, 6 - (n + l + c) / 3));
+        // No upper clamp: an all-minimum sensory profile (e.g. no-data placeholders
+        // at 0.5/0.5/0.5) would otherwise tie every such location at a flat 5 and
+        // outrank places with real, lower-intensity community reviews.
+        const comfort = Math.max(1, 6 - (n + l + c) / 3);
         return { noise: n, lighting: l, crowd: c, comfort, source: "estimated" };
     }
     return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, comfort: comfortScore, source: "category" };

@@ -51,8 +51,11 @@ router.get("/", async (req, res) => {
                 // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
                 // Guard nulls explicitly — JS coerces null to 0 in arithmetic, producing out-of-range values
                 const communityComfort = s?.reviewCount > 0 ? s?.comfortScore : null;
+                // No upper clamp: an all-minimum sensory profile (e.g. no-data placeholders
+                // at 0.5/0.5/0.5) would otherwise tie every such location at a flat 5 and
+                // outrank places with real, lower-intensity community reviews.
                 const estimatedComfort = (noise != null && lighting != null && crowd != null)
-                    ? Math.min(5, Math.max(1, 6 - (noise + lighting + crowd) / 3))
+                    ? Math.max(1, 6 - (noise + lighting + crowd) / 3)
                     : null;
                 const comfort = communityComfort ?? estimatedComfort;
 
