@@ -912,7 +912,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               </div>}
 
               <div className="lmv-nearby-overlay">
-                <span className="lmv-nearby-label">{searchResults !== null ? 'Search results' : 'Top nearby places'}</span>
+                <span className="lmv-nearby-label">{searchResults !== null ? 'Search results' : 'Top comfort places'}</span>
                 <div className="lmv-nearby-cards">
                   {nearbyPlaces.length === 0 ? (
                     <div className="lmv-nearby-empty">
