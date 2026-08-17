@@ -9,6 +9,54 @@ import { getDisplayScore } from "../lib/scores.js";
 
 const router = express.Router()
 
+const FACILITIES_FIELDS = ["temperature", "seating", "bathrooms", "socialInteractions"];
+const FACILITIES_TOP_N = 6;
+
+// Aggregates facilities tags (temperature/seating/bathrooms/socialInteractions) across
+// ALL reviews for a location — not just the paginated slice returned to the client —
+// and returns, per category, the most commonly mentioned tags sorted by frequency plus
+// a `source` flag. Community (real review) data always wins for a category when present;
+// AI-estimated tags (from the enrichment pipeline's estimatedFacilities) fill in only for
+// categories with no community data yet — same precedence as the noise/lighting/crowd scores.
+// Categories with no data from either source are omitted entirely.
+async function aggregateFacilities(locationId, estimatedFacilities) {
+    const reviews = await prisma.review.findMany({
+        where: { locationId },
+        select: { temperature: true, seating: true, bathrooms: true, socialInteractions: true },
+    });
+
+    const facilities = {};
+    for (const field of FACILITIES_FIELDS) {
+        const counts = new Map();
+        for (const review of reviews) {
+            const tags = review[field];
+            if (!Array.isArray(tags)) continue;
+            for (const tag of tags) {
+                if (typeof tag !== "string") continue;
+                counts.set(tag, (counts.get(tag) ?? 0) + 1);
+            }
+        }
+        if (counts.size > 0) {
+            facilities[field] = {
+                source: "community",
+                tags: [...counts.entries()]
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, FACILITIES_TOP_N)
+                    .map(([tag, count]) => ({ tag, count })),
+            };
+            continue;
+        }
+        const estimatedTags = estimatedFacilities?.[field];
+        if (Array.isArray(estimatedTags) && estimatedTags.length > 0) {
+            facilities[field] = {
+                source: "estimated",
+                tags: estimatedTags.slice(0, FACILITIES_TOP_N).map((tag) => ({ tag, count: null })),
+            };
+        }
+    }
+    return facilities;
+}
+
 // Simple in-memory cache for 511 Ontario construction data (15-min TTL)
 let constructionCache = { data: null, fetchedAt: 0 };
 const CONSTRUCTION_TTL = 15 * 60 * 1000;
@@ -361,6 +409,8 @@ router.get("/:id", async (req, res) => {
 
         if (!location) return res.status(404).json({ error: "Location not found" });
 
+        const facilities = await aggregateFacilities(req.params.id, location.estimatedFacilities);
+
         const displayScores = getDisplayScore({
             reviewCount:            location.sensoryScores?.reviewCount    ?? 0,
             noiseScore:             location.sensoryScores?.noiseScore     ?? null,
@@ -372,7 +422,7 @@ router.get("/:id", async (req, res) => {
             estimatedCrowdScore:    location.estimatedCrowdScore,
         });
 
-        res.json({ ...location, displayScores });
+        res.json({ ...location, displayScores, facilities });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { haversineMetres } from "../lib/geo.js";
 
 const YELP_API_BASE = "https://api.yelp.com/v3";
 const FOURSQUARE_API_BASE = "https://api.foursquare.com/v3";
@@ -61,15 +62,6 @@ async function fetchFoursquare(name, lat, lng) {
     } catch {
         return "";
     }
-}
-
-// Returns distance in metres between two lat/lng points
-function haversineMetres(lat1, lng1, lat2, lng2) {
-    const R = 6371000;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 async function fetchGooglePlaces(name, lat, lng) {
@@ -166,14 +158,71 @@ async function fetchCityOfToronto(name, category, lat, lng) {
     }
 }
 
-export async function fetchAllSources({ name, latitude, longitude, category = null, existingYelpId = null }) {
-    const [yelpResult, foursquareText, googleText, torontoText] = await Promise.all([
+const OVERPASS_API = "https://overpass-api.de/api/interpreter";
+
+// Fetches raw OSM tags for a location imported via osm-import.js — its googlePlaceId is stored
+// as "osm_{type}_{id}" (see osm-import.js). Free public API, no key required. Returns null for
+// non-OSM locations (Google-Places-sourced) or if the element/tags can't be found.
+async function fetchOsmTags(googlePlaceId) {
+    if (!googlePlaceId || !googlePlaceId.startsWith("osm_")) return null;
+
+    const [, osmType, osmId] = googlePlaceId.split("_");
+    if (!["node", "way", "relation"].includes(osmType) || !osmId) return null;
+
+    try {
+        const query = `[out:json][timeout:8];${osmType}(${osmId});out tags;`;
+        const res = await axios.post(OVERPASS_API, query, {
+            // Overpass's Apache front-end 406s axios's default User-Agent (mod_security-style
+            // UA filtering) — a real, non-obvious quirk of their server, not our request format.
+            headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "SenseMap/1.0 (+https://sensemap.app)" },
+            timeout: 8000,
+        });
+        return res.data?.elements?.[0]?.tags ?? null;
+    } catch {
+        return null;
+    }
+}
+
+// Maps a handful of well-defined, unambiguous OSM tags directly onto the facilities pill
+// options — deterministic (no LLM inference) and only emits a tag when the OSM data is
+// explicit about it. Conservative on purpose: better to omit than to guess from a fuzzy tag.
+function mapOsmTagsToFacilities(tags) {
+    if (!tags) return null;
+    const facilities = {};
+
+    const bathrooms = [];
+    if (tags.toilets === "yes") bathrooms.push("Public bathroom available");
+    if (tags.toilets === "no") bathrooms.push("No public bathroom");
+    if (tags["toilets:wheelchair"] === "yes") bathrooms.push("Accessible bathroom");
+    if (tags["toilets:unisex"] === "yes") bathrooms.push("Unisex");
+    if (tags["toilets:unisex"] === "no") bathrooms.push("Gendered");
+    if (bathrooms.length > 0) facilities.bathrooms = bathrooms;
+
+    const seating = [];
+    if (tags.outdoor_seating === "yes" || tags.indoor_seating === "yes") seating.push("Plenty of seating");
+    if (tags.outdoor_seating === "no" && tags.indoor_seating === "no") seating.push("No seating");
+    if (seating.length > 0) facilities.seating = seating;
+
+    const temperature = [];
+    if (tags.air_conditioning === "yes") temperature.push("Good airflow");
+    if (temperature.length > 0) facilities.temperature = temperature;
+
+    const socialInteractions = [];
+    if (tags.self_service === "yes") socialInteractions.push("Self-checkout available");
+    if (socialInteractions.length > 0) facilities.socialInteractions = socialInteractions;
+
+    return Object.keys(facilities).length > 0 ? facilities : null;
+}
+
+export async function fetchAllSources({ name, latitude, longitude, category = null, existingYelpId = null, googlePlaceId = null }) {
+    const [yelpResult, foursquareText, googleText, torontoText, osmTags] = await Promise.all([
         existingYelpId
             ? fetchYelpById(existingYelpId).then((text) => ({ text, yelpId: existingYelpId }))
             : fetchYelp(name, latitude, longitude),
         fetchFoursquare(name, latitude, longitude),
         fetchGooglePlaces(name, latitude, longitude),
         fetchCityOfToronto(name, category, latitude, longitude),
+        fetchOsmTags(googlePlaceId),
     ]);
 
     const parts = [];
@@ -196,12 +245,16 @@ export async function fetchAllSources({ name, latitude, longitude, category = nu
         sources.push("toronto");
     }
 
+    const osmFacilities = mapOsmTagsToFacilities(osmTags);
+    if (osmFacilities) sources.push("osm");
+
     const combinedText = parts.join("\n\n");
     return {
         combinedText,
         sources,
         characterCount: combinedText.length,
         yelpId: yelpResult.yelpId,
+        osmFacilities,
     };
 }
 

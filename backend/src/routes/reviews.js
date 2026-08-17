@@ -3,8 +3,25 @@ import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { recalculateScores } from "../lib/scores.js";
+import { FACILITIES_OPTIONS } from "../lib/facilitiesOptions.js";
 
 const router = express.Router();
+
+// Validates an optional facilities field: must be an array of strings, each a known option.
+// Returns null (field omitted), a cleaned array, or throws a string error message.
+function parseFacilitiesField(fieldName, value) {
+    if (value == null) return undefined;
+    if (!Array.isArray(value) || !value.every(v => typeof v === "string")) {
+        throw new Error(`${fieldName} must be an array of strings`);
+    }
+    const allowed = FACILITIES_OPTIONS[fieldName];
+    const invalid = value.filter(v => !allowed.includes(v));
+    if (invalid.length > 0) {
+        throw new Error(`${fieldName} contains invalid option(s): ${invalid.join(", ")}`);
+    }
+    // De-dupe while preserving order
+    return [...new Set(value)];
+}
 
 // GET /reviews/:locationId — get reviews for a location (public)
 router.get("/:locationId", async (req, res) => {
@@ -24,7 +41,7 @@ router.get("/:locationId", async (req, res) => {
 router.post("/", requireAuth, syncUser, async (req, res) => {
     try {
         const auth0Id = req.auth.payload.sub;
-        const { locationId, bodyText, rating, noiseLevel, lightingLevel, crowdLevel, imageUrl, visitTime } = req.body;
+        const { locationId, bodyText, rating, noiseLevel, lightingLevel, crowdLevel, imageUrl, visitTime, temperature, seating, bathrooms, socialInteractions } = req.body;
 
         if (!locationId || typeof locationId !== "string") {
             return res.status(400).json({ error: "locationId is required" });
@@ -42,6 +59,17 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
         const VALID_VISIT_TIMES = ["morning", "afternoon", "evening", "night"];
         if (visitTime != null && !VALID_VISIT_TIMES.includes(visitTime)) {
             return res.status(400).json({ error: "Invalid visitTime — must be morning, afternoon, evening, or night" });
+        }
+
+        // Optional facilities fields — each is a validated array of strings, or omitted
+        let parsedTemperature, parsedSeating, parsedBathrooms, parsedSocialInteractions;
+        try {
+            parsedTemperature = parseFacilitiesField("temperature", temperature);
+            parsedSeating = parseFacilitiesField("seating", seating);
+            parsedBathrooms = parseFacilitiesField("bathrooms", bathrooms);
+            parsedSocialInteractions = parseFacilitiesField("socialInteractions", socialInteractions);
+        } catch (err) {
+            return res.status(400).json({ error: err.message });
         }
 
         // Only accept Cloudinary-hosted image URLs to prevent SSRF / XSS via imageUrl
@@ -65,6 +93,10 @@ router.post("/", requireAuth, syncUser, async (req, res) => {
                 crowdLevel: Number(crowdLevel),
                 imageUrl: imageUrl ?? null,
                 visitTime: visitTime ?? null,
+                ...(parsedTemperature !== undefined && { temperature: parsedTemperature }),
+                ...(parsedSeating !== undefined && { seating: parsedSeating }),
+                ...(parsedBathrooms !== undefined && { bathrooms: parsedBathrooms }),
+                ...(parsedSocialInteractions !== undefined && { socialInteractions: parsedSocialInteractions }),
             }
         });
 
