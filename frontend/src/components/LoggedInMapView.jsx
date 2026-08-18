@@ -1345,6 +1345,39 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 </>
               )}
 
+              {/* Facilities section — aggregated from reviews, falling back to AI-estimated
+                  tags per category when no review has covered it yet. Only shown if at
+                  least one category has data from either source. */}
+              {locationDetail?.facilities && Object.keys(locationDetail.facilities).length > 0 && (
+                <div className="lmv-facilities-section">
+                  <div className="lmv-section-title" style={{ fontSize: 14, marginBottom: 8 }}>Facilities</div>
+                  {[
+                    { field: 'temperature', icon: '🌡️', label: 'Temperature' },
+                    { field: 'seating', icon: '🪑', label: 'Seating' },
+                    { field: 'bathrooms', icon: '🚻', label: 'Bathrooms' },
+                    { field: 'socialInteractions', icon: '👥', label: 'Social' },
+                  ].map(({ field, icon, label }) => {
+                    const category = locationDetail.facilities[field];
+                    if (!category?.tags?.length) return null;
+                    return (
+                      <div key={field} className="lmv-facilities-row">
+                        <span className="lmv-facilities-row-label">
+                          {icon} {label}
+                          {category.source === 'estimated' && (
+                            <span style={{ fontSize: 10, fontWeight: 700, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 4px', marginLeft: 5 }}>AI</span>
+                          )}
+                        </span>
+                        <div className="lmv-facilities-pills">
+                          {category.tags.map(({ tag }) => (
+                            <span key={tag} className="lmv-facilities-pill">{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Write a Review button — only shown when a location is selected */}
               {selectedLocation?.id && (
                 <button

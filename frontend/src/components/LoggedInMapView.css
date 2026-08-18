@@ -950,6 +950,45 @@
   color: var(--theme-text);
 }
 
+/* Facilities section — secondary/muted, sits below the main sensory scores */
+.lmv-facilities-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--theme-border);
+}
+
+.lmv-facilities-row {
+  margin-bottom: 8px;
+}
+
+.lmv-facilities-row:last-child {
+  margin-bottom: 0;
+}
+
+.lmv-facilities-row-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--theme-text-muted);
+  margin-bottom: 4px;
+}
+
+.lmv-facilities-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lmv-facilities-pill {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--theme-bg);
+  border: 1px solid var(--theme-border);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--theme-text-muted);
+}
+
 /* Noise chart section */
 .lmv-section-title {
   font-size: 16px;

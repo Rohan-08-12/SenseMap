@@ -42,6 +42,52 @@ function SliderRow({ label, value, onChange, aiActive }) {
     );
 }
 
+// ─── Multi-select pill group ──────────────────────────────────────────────────
+// Same visual language as the existing "When did you visit?" pills, but allows
+// multiple selections (toggled independently) instead of a single choice.
+const FACILITIES_FIELDS = [
+    { field: 'temperature', icon: '🌡️', label: 'Temperature & Airflow', options: ['Very cold', 'Cool', 'Comfortable', 'Warm', 'Hot', 'Good airflow', 'Stuffy'] },
+    { field: 'seating', icon: '🪑', label: 'Seating', options: ['No seating', 'Limited seating', 'Plenty of seating', 'Soft/couch seating', 'Hard chairs only', 'Standing only'] },
+    { field: 'bathrooms', icon: '🚻', label: 'Bathrooms', options: ['No public bathroom', 'Public bathroom available', 'Accessible bathroom', 'Single stall', 'Multiple stalls', 'Gendered', 'Unisex'] },
+    { field: 'socialInteractions', icon: '👥', label: 'Social Interactions', options: ['Must speak to staff on entry', 'No interaction required', 'Electronic ordering available', 'Self-checkout available', 'Quiet/minimal staff interaction', 'Can browse freely without being approached'] },
+];
+
+function PillMultiSelect({ label, options, selected, onToggle }) {
+    return (
+        <div style={{ marginBottom: 18 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--theme-text, #0f1720)', marginBottom: 8 }}>
+                {label} <span style={{ fontWeight: 400, color: 'var(--theme-text-muted, #6b7280)' }}>(optional)</span>
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {options.map((opt) => {
+                    const isSelected = selected.includes(opt);
+                    return (
+                        <button
+                            key={opt}
+                            type="button"
+                            onClick={() => onToggle(opt)}
+                            aria-pressed={isSelected}
+                            style={{
+                                padding: '8px 12px',
+                                borderRadius: 20,
+                                border: `1px solid ${isSelected ? 'var(--theme-accent)' : 'var(--theme-border)'}`,
+                                background: isSelected ? 'var(--theme-accent)' : 'var(--theme-bg)',
+                                color: isSelected ? '#fff' : 'var(--theme-text)',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                            }}
+                        >
+                            {opt}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 /**
  * SubmitReview Component
@@ -57,6 +103,10 @@ function SubmitReview({ location, onClose, onSubmitted }) {
         bodyText: '',
         rating: 5,
         visitTime: null,
+        temperature: [],
+        seating: [],
+        bathrooms: [],
+        socialInteractions: [],
     });
     const [submitting, setSubmitting] = useState(false);
     const [aiParsing, setAiParsing] = useState(false);
@@ -87,6 +137,17 @@ function SubmitReview({ location, onClose, onSubmitted }) {
             return next;
         });
         setFormData((prev) => ({ ...prev, [field]: value }));
+    };
+
+    // Toggles a single option within one of the multi-select facilities fields
+    const toggleFacility = (field, option) => {
+        setFormData((prev) => {
+            const current = prev[field];
+            const next = current.includes(option)
+                ? current.filter((o) => o !== option)
+                : [...current, option];
+            return { ...prev, [field]: next };
+        });
     };
 
     // ── Photo handlers ──────────────────────────────────────────────────────
@@ -191,6 +252,10 @@ function SubmitReview({ location, onClose, onSubmitted }) {
             crowdLevel: formData.crowdLevel,
             ...(formData.visitTime && { visitTime: formData.visitTime }),
             ...(photoUrl && { imageUrl: photoUrl }),
+            ...(formData.temperature.length > 0 && { temperature: formData.temperature }),
+            ...(formData.seating.length > 0 && { seating: formData.seating }),
+            ...(formData.bathrooms.length > 0 && { bathrooms: formData.bathrooms }),
+            ...(formData.socialInteractions.length > 0 && { socialInteractions: formData.socialInteractions }),
         };
 
         setSubmitting(true);
@@ -401,6 +466,17 @@ function SubmitReview({ location, onClose, onSubmitted }) {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Facilities pill selectors */}
+                        {FACILITIES_FIELDS.map(({ field, icon, label, options }) => (
+                            <PillMultiSelect
+                                key={field}
+                                label={`${icon} ${label}`}
+                                options={options}
+                                selected={formData[field]}
+                                onToggle={(opt) => toggleFacility(field, opt)}
+                            />
+                        ))}
 
                         {/* Analyze with AI */}
                         <button

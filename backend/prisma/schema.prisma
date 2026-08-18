@@ -46,6 +46,7 @@ model Location {
   estimatedNoiseScore     Float?
   estimatedLightingScore  Float?
   estimatedCrowdScore     Float?
+  estimatedFacilities     Json?
   dataSource              String    @default("category")
   externalYelpId          String?
   lastEnrichedAt          DateTime?
@@ -84,6 +85,11 @@ model Review {
   aiSentiment     String?
   aiTags          String[]
   isAiGenerated   Boolean   @default(false)
+
+  temperature        Json?
+  seating            Json?
+  bathrooms          Json?
+  socialInteractions Json?
 
   user            User      @relation(fields: [userId], references: [id])
   location        Location  @relation(fields: [locationId], references: [id])
