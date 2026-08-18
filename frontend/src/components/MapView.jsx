@@ -13,7 +13,25 @@ const INITIAL_VIEW_STATE = {
     bearing: -10,
 };
 
-export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON, heatmapEnabled, heatmapData, flyToLocation, userCoords, mapStyle, trafficEnabled }) {
+// Single-filter predicate — shared by every active filter so multi-select can AND them together.
+// Unrecognized filter values (e.g. 'nearby', which only affects the backend query, not map pins)
+// match everything, same as the previous single-filter behavior.
+function matchesFilter(d, f) {
+    const cat = (d.category || '').toLowerCase();
+    if (f === 'quiet-now') return (d.noise_score ?? 5) < 2;
+    if (f === 'before-noon') return (d.noise_score ?? 5) < 2.5;
+    if (f === 'low-crowds') return (d.crowd_score ?? 5) < 2;
+    if (f === 'soft-lighting') return (d.lighting_score ?? 5) < 2.5;
+    if (f === 'outdoor') return /park|garden|outdoor|field|trail|beach|nature|forest|plaza|square/i.test(cat);
+    if (f === 'cafes') return /cafe|coffee|bistro|bakery|tea/i.test(cat);
+    if (f === 'parks') return /park|garden|field|green|nature|forest|trail|outdoor/i.test(cat);
+    if (f === 'libraries') return /library|archive|reading/i.test(cat);
+    if (f === 'museums') return /museum|gallery|exhibit|art/i.test(cat);
+    if (f === 'community') return /community|centre|center|recreation|mall|shopping/i.test(cat);
+    return true;
+}
+
+export default function MapView({ onLocationSelect, filters, searchResultsGeoJSON, heatmapEnabled, heatmapData, flyToLocation, userCoords, mapStyle, trafficEnabled }) {
     const mapRef = useRef(null);
     const hasFlownToUser = useRef(false);
 
@@ -67,27 +85,16 @@ export default function MapView({ onLocationSelect, filter, searchResultsGeoJSON
         return normalizedHeatmap;
     }, [searchResultsGeoJSON, normalizedHeatmap]);
 
+    // Normalize: accept an array (multi-select) — a location must match every active filter (AND).
+    const normalizedFilters = useMemo(
+        () => (filters ?? []).filter(Boolean).map((f) => f.toLowerCase()),
+        [filters]
+    );
+
     const filteredData = useMemo(() => {
-        let data = baseData;
-        if (filter) {
-            const f = filter.toLowerCase();
-            data = data.filter((d) => {
-                const cat = (d.category || '').toLowerCase();
-                if (f === 'quiet-now') return (d.noise_score ?? 5) < 2;
-                if (f === 'before-noon') return (d.noise_score ?? 5) < 2.5;
-                if (f === 'low-crowds') return (d.crowd_score ?? 5) < 2;
-                if (f === 'soft-lighting') return (d.lighting_score ?? 5) < 2.5;
-                if (f === 'outdoor') return /park|garden|outdoor|field|trail|beach|nature|forest|plaza|square/i.test(cat);
-                if (f === 'cafes') return /cafe|coffee|bistro|bakery|tea/i.test(cat);
-                if (f === 'parks') return /park|garden|field|green|nature|forest|trail|outdoor/i.test(cat);
-                if (f === 'libraries') return /library|archive|reading/i.test(cat);
-                if (f === 'museums') return /museum|gallery|exhibit|art/i.test(cat);
-                if (f === 'community') return /community|centre|center|recreation|mall|shopping/i.test(cat);
-                return true;
-            });
-        }
-        return data;
-    }, [baseData, filter]);
+        if (normalizedFilters.length === 0) return baseData;
+        return baseData.filter((d) => normalizedFilters.every((f) => matchesFilter(d, f)));
+    }, [baseData, normalizedFilters]);
 
     // Single GeoJSON source for both heatmap and pins
     const geojson = useMemo(() => ({

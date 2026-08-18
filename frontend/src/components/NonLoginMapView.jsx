@@ -50,7 +50,7 @@ function weatherEmoji(code) {
 
 function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLogin }) {
   const loginWithRedirect = () => onLogin();
-  const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);
+  const [activeFilters, setActiveFilters] = useState(initialFilter ? [initialFilter] : []);
   const [heatmapOn, setHeatmapOn] = useState(true);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery ?? '');
   const [searchResults, setSearchResults] = useState(null);
@@ -203,9 +203,14 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
     }
   }, [selectedLocation]);
 
+  // Toggles one filter in/out of the active set — multiple filters combine with AND logic.
   const handleFilterClick = (filter) => {
-    setActiveFilter((prev) => (prev === filter ? null : filter));
+    setActiveFilters((prev) =>
+      prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
+    );
   };
+
+  const handleClearAllFilters = () => setActiveFilters([]);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -232,8 +237,10 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
     }
   };
 
+  // "Explore all" passes filter: null, meaning "clear everything" rather than a toggle target.
   const handleCategoryClick = (f) => {
-    setActiveFilter((prev) => (prev === f ? null : f));
+    if (f === null) { setActiveFilters([]); return; }
+    handleFilterClick(f);
   };
 
   const handleLocationSelect = (location) => {
@@ -274,12 +281,8 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
     return tags;
   })();
 
-  // Map filter conversion for MapView
-  const mapFilter = (() => {
-    if (!activeFilter) return null;
-    if (activeFilter === 'nearby') return null;
-    return activeFilter;
-  })();
+  // Map filter conversion for MapView — 'nearby' only affects the backend query, not map pins
+  const mapFilters = activeFilters.filter((f) => f !== 'nearby');
 
   const zoomTransition = prefersReducedMotion
     ? { duration: 0.1 }
@@ -335,7 +338,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
       <div className="nlm-map-container">
         <MapView
           onLocationSelect={handleLocationSelect}
-          filter={mapFilter}
+          filters={mapFilters}
           searchResultsGeoJSON={searchResults}
           heatmapEnabled={heatmapOn}
           heatmapData={heatmapData}
@@ -444,12 +447,22 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
 
           {/* Quick Filters */}
           <div className="nlm-filters">
-            <h3>Quick filters</h3>
+            <div className="nlm-filters-header">
+              <h3>Quick filters</h3>
+              {activeFilters.length >= 2 && (
+                <div className="nlm-filters-status">
+                  <span className="nlm-filters-count">{activeFilters.length} filters active</span>
+                  <button type="button" className="nlm-filters-clear" onClick={handleClearAllFilters}>
+                    Clear all
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="nlm-filter-chips">
               {QUICK_FILTERS.map((f) => (
                 <button
                   key={f.filter}
-                  className={`nlm-filter-chip${activeFilter === f.filter ? ' active' : ''}`}
+                  className={`nlm-filter-chip${activeFilters.includes(f.filter) ? ' active' : ''}`}
                   onClick={() => handleFilterClick(f.filter)}
                 >
                   {f.label}
@@ -462,7 +475,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               {PLACE_FILTERS.map((f) => (
                 <button
                   key={f.filter}
-                  className={`nlm-filter-chip nlm-filter-chip--place${activeFilter === f.filter ? ' active' : ''}`}
+                  className={`nlm-filter-chip nlm-filter-chip--place${activeFilters.includes(f.filter) ? ' active' : ''}`}
                   onClick={() => handleFilterClick(f.filter)}
                 >
                   <span aria-hidden>{f.emoji}</span>

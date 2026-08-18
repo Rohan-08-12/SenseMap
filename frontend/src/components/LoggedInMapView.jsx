@@ -80,7 +80,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery ?? '');
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [activeFilter, setActiveFilter] = useState(initialFilter ?? null);
+  const [activeFilters, setActiveFilters] = useState(initialFilter ? [initialFilter] : []);
   const [heatmapOn, setHeatmapOn] = useState(true);
   const [trafficOn, setTrafficOn] = useState(false);
   const [locationHours, setLocationHours] = useState(null);
@@ -395,8 +395,15 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     }
   };
 
+  // Toggles one filter in/out of the active set — multiple filters combine with AND logic.
+  const handleFilterClick = (filter) => {
+    setActiveFilters((prev) =>
+      prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
+    );
+  };
+
   const handleCalmRoute = () => {
-    setActiveFilter((prev) => prev === 'quiet-now' ? null : 'quiet-now');
+    handleFilterClick('quiet-now');
   };
 
   const handlePersonalize = () => {
@@ -766,7 +773,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
           snapshot={snapshot}
           onEditProfile={() => setActiveNav('profile')}
           onViewAllSaved={() => setActiveNav('saved')}
-          onCalmRoute={() => { setActiveNav('explore'); setActiveFilter((prev) => prev === 'quiet-now' ? null : 'quiet-now'); }}
+          onCalmRoute={() => { setActiveNav('explore'); handleFilterClick('quiet-now'); }}
           onSearchGo={(query) => {
             setSearchQuery(query);
             setActiveNav('explore');
@@ -838,7 +845,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               <div className="lmv-map-inner">
                 <MapView
                   onLocationSelect={handleLocationSelect}
-                  filter={activeFilter}
+                  filters={activeFilters}
                   searchResultsGeoJSON={searchResults}
                   selectedLocationId={selectedLocation?.id}
                   selectedLocation={selectedLocation}
@@ -881,8 +888,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               {!hideControls && !showLogoutModal && <div className="lmv-map-toggle">
                 <button
                   className="lmv-map-time-filter"
-                  onClick={() => setActiveFilter((prev) => prev === 'before-noon' ? null : 'before-noon')}
-                  style={{ cursor: 'pointer', border: activeFilter === 'before-noon' ? '2px solid var(--theme-accent)' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
+                  onClick={() => handleFilterClick('before-noon')}
+                  style={{ cursor: 'pointer', border: activeFilters.includes('before-noon') ? '2px solid var(--theme-accent)' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#0f1720" strokeWidth="1.3" /><path d="M8 4V8L10.5 9.5" stroke="#0f1720" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   Before 11am
