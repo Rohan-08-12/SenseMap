@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel } from '../utils.js';
 import MapView from './MapView';
+import EmailCaptureBanner from './EmailCaptureBanner';
 import { getRankings, getLocationHeatmap, getLocationById, getLocationHours, searchLocations, checkNearbyConstruction } from '../services/api';
 import './NonLoginMapView.css';
 
@@ -68,6 +69,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const [searchNoResults, setSearchNoResults] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const [showSigninDetail, setShowSigninDetail] = useState(false);
+  const [viewedLocationIds, setViewedLocationIds] = useState(() => new Set());
 
   const toggleNavCollapse = () => setIsNavCollapsed((prev) => !prev);
   const toggleSigninDetail = () => setShowSigninDetail((prev) => !prev);
@@ -245,6 +247,10 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
 
   const handleLocationSelect = (location) => {
     setSelectedLocation(location);
+    const id = location?.id;
+    if (id) {
+      setViewedLocationIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+    }
   };
 
   const handleSignIn = () => {
@@ -1067,6 +1073,8 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
           </p>
         )}
       </div>
+
+      <EmailCaptureBanner viewedCount={viewedLocationIds.size} />
     </motion.div>
   );
 }

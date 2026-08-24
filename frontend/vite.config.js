@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
         '/audio': backendUrl,
         '/enrichment': backendUrl,
         '/scraper': backendUrl,
+        '/subscribe': backendUrl,
       },
     },
   }

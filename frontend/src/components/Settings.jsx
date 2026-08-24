@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../theme/ThemeContext.jsx';
-import { deleteAccount } from '../services/api';
+import { deleteAccount, subscribeEmail } from '../services/api';
 import LegalModal from './LegalModal';
 import './Settings.css';
 
 const STORAGE_KEY = 'sensorysafe_settings';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const DEFAULT_SETTINGS = {
   notifications: true,
   quietAlerts: true,
   crowdWarnings: true,
   emailDigest: false,
+  digestEmail: '',
   darkMode: false,
   highContrast: false,
   reducedMotion: false,
@@ -41,6 +43,8 @@ function Settings({ user, userProfile, onLogout, onSettingsChange }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [legalModal, setLegalModal] = useState(null);
+  const [digestEmail, setDigestEmail] = useState(settings.digestEmail || user?.email || '');
+  const [digestStatus, setDigestStatus] = useState('idle'); // idle | saving | error
   const toastRef = useRef(null);
   const mountedRef = useRef(false);
 
@@ -71,7 +75,26 @@ function Settings({ user, userProfile, onLogout, onSettingsChange }) {
 
   const handleReset = () => {
     setSettings({ ...DEFAULT_SETTINGS });
+    setDigestEmail(user?.email || '');
+    setDigestStatus('idle');
     resetTheme();
+  };
+
+  const handleDigestSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = digestEmail.trim();
+    if (!EMAIL_RE.test(trimmed)) {
+      setDigestStatus('error');
+      return;
+    }
+    setDigestStatus('saving');
+    try {
+      await subscribeEmail(trimmed, 'settings');
+      setSettings((prev) => ({ ...prev, emailDigest: true, digestEmail: trimmed }));
+      setDigestStatus('idle');
+    } catch {
+      setDigestStatus('error');
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -168,7 +191,49 @@ function Settings({ user, userProfile, onLogout, onSettingsChange }) {
           <Toggle label="Push notifications" sublabel="Real-time sensory alerts on your device" checked={settings.notifications} onChange={handleNotificationsToggle} />
           <Toggle label="Quiet zone alerts" sublabel="Notify when nearby places drop below your noise threshold" checked={settings.quietAlerts} onChange={() => toggle('quietAlerts')} />
           <Toggle label="Crowd warnings" sublabel="Alert when saved places exceed your crowd tolerance" checked={settings.crowdWarnings} onChange={() => toggle('crowdWarnings')} />
-          <Toggle label="Weekly email digest" sublabel="Summary of your comfort scores and new quiet spots" checked={settings.emailDigest} onChange={() => toggle('emailDigest')} />
+
+          <div className="sett-toggle-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+            <div>
+              <span className="sett-toggle-label">Weekly email digest</span>
+              <span className="sett-toggle-sub">New quiet spots in Toronto, every Sunday</span>
+            </div>
+
+            {settings.emailDigest ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--theme-text-muted)' }}>
+                <span aria-hidden style={{ color: 'var(--theme-accent)', fontWeight: 700 }}>✓</span>
+                <span>Subscribed as {settings.digestEmail}</span>
+                <button
+                  type="button"
+                  className="sett-legal-link"
+                  onClick={() => setSettings((prev) => ({ ...prev, emailDigest: false }))}
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleDigestSubmit} style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="email"
+                  value={digestEmail}
+                  onChange={(e) => {
+                    setDigestEmail(e.target.value);
+                    if (digestStatus === 'error') setDigestStatus('idle');
+                  }}
+                  placeholder="you@example.com"
+                  className="sett-select"
+                  style={{ flex: 1 }}
+                  disabled={digestStatus === 'saving'}
+                  aria-label="Email address for weekly digest"
+                />
+                <button type="submit" className="sett-btn sett-btn-reset" disabled={digestStatus === 'saving'}>
+                  {digestStatus === 'saving' ? 'Saving…' : 'Subscribe'}
+                </button>
+              </form>
+            )}
+            {digestStatus === 'error' && (
+              <span style={{ fontSize: 12, color: '#dc2626' }}>Please enter a valid email address.</span>
+            )}
+          </div>
         </section>
 
         {/* ── Appearance Card ── */}

@@ -17,6 +17,8 @@ import usersRouter from "./routes/users.js";
 import audioRouter from "./routes/audio.js";
 import enrichmentRouter from "./routes/enrichment.js";
 import scraperRouter from "./routes/scraper.js";
+import subscribeRouter from "./routes/subscribe.js";
+import unsubscribeRouter from "./routes/unsubscribe.js";
 
 dotenv.config();
 
@@ -77,6 +79,14 @@ const discoverLimiter = rateLimit({
     message: { error: "Search limit reached, please slow down." },
 });
 
+const subscribeLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many signup attempts, please try again later." },
+});
+
 // Claude cross-validation adds ~$0.003/call — cap tightly
 const claudeLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -119,6 +129,8 @@ const enrichmentPostLimiter = (req, res, next) => {
 };
 app.use("/enrichment", enrichmentPostLimiter, enrichmentRouter);
 app.use("/scraper", enrichmentLimiter, scraperRouter);
+app.use("/subscribe", subscribeLimiter, subscribeRouter);
+app.use("/unsubscribe", subscribeLimiter, unsubscribeRouter);
 
 // Global error handler — converts auth errors and uncaught throws to clean JSON
 app.use((err, req, res, _next) => {
