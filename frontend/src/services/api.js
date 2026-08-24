@@ -158,4 +158,8 @@ export const deleteAccount = () =>
 export const getLocationAudio = (locationId) =>
     api.get(`/audio/${locationId}`, { timeout: 30000 });
 
+// ─── Email Subscription (weekly digest) ──────────────────────
+export const subscribeEmail = (email, source) =>
+    api.post('/subscribe', { email, source });
+
 export default api;

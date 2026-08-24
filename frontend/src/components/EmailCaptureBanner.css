@@ -1,0 +1,139 @@
+.ecb-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 150px;
+  transform: translateX(-50%);
+  z-index: 9998;
+  width: calc(100% - 32px);
+  max-width: 460px;
+  background: color-mix(in srgb, var(--theme-surface) 96%, transparent);
+  border: 1px solid var(--theme-border);
+  border-radius: 16px;
+  box-shadow: 0px 16px 32px rgba(15, 23, 32, 0.14);
+  padding: 18px 20px;
+  backdrop-filter: blur(6px);
+  animation: ecb-rise 0.35s ease-out;
+}
+
+@keyframes ecb-rise {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ecb-banner {
+    animation: none;
+  }
+}
+
+.ecb-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--theme-text-muted, #6b7280);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.ecb-close:hover {
+  background: var(--theme-tag-soft);
+}
+
+.ecb-title {
+  margin: 0 24px 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text, #1f2937);
+  line-height: 1.35;
+}
+
+.ecb-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ecb-input-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface-soft, transparent);
+  color: var(--theme-text, #1f2937);
+  font-size: 14px;
+}
+
+.ecb-input-row input:focus {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 1px;
+}
+
+.ecb-input-row button {
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: none;
+  background: var(--theme-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ecb-input-row button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.ecb-error {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: #dc2626;
+}
+
+.ecb-fineprint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--theme-text-muted, #6b7280);
+}
+
+.ecb-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 8px;
+}
+
+.ecb-confirm-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ecb-confirm p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--theme-text, #1f2937);
+}
+
+@media (max-width: 640px) {
+  .ecb-banner {
+    bottom: 190px;
+  }
+}

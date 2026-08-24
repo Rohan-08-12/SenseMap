@@ -19,14 +19,14 @@ if (missing.length > 0) {
 const PORT = process.env.PORT || 3000;
 
 import prisma from "./lib/prisma.js";
-import { startEnrichmentCron } from "./lib/enrichmentCron.js";
+import { startScheduler } from "./lib/scheduler.js";
 
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
     prisma.$connect()
         .then(() => {
             console.log("Database connected.");
-            startEnrichmentCron();
+            startScheduler();
         })
         .catch((err) => {
             console.error("Database connection failed:", err.message);

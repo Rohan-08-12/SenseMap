@@ -155,3 +155,11 @@ model EnrichmentLog {
   updatedAt  DateTime @default(now())
   scores     Json
 }
+
+model EmailSubscriber {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  active    Boolean  @default(true)
+  source    String?
+}
