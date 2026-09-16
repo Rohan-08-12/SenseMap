@@ -247,10 +247,47 @@
   border-radius: 8px;
   box-shadow: 0px 14px 34px var(--theme-shadow);
   backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+
+/* Compact single-line summary — mobile-only trigger, hidden on desktop */
+.lmv-snapshot-compact {
+  display: none;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  text-align: left;
+}
+
+.lmv-snapshot-compact-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--theme-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lmv-snapshot-chevron {
+  flex-shrink: 0;
+  color: var(--theme-text-muted);
+  transition: transform 0.15s;
+}
+
+.lmv-snapshot-chevron.up {
+  transform: rotate(180deg);
+}
+
+.lmv-snapshot-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  flex-shrink: 0;
 }
 
 .lmv-snapshot-header {
@@ -376,6 +413,11 @@
   border: 1px solid rgba(200, 200, 200, 0.28);
   box-shadow: 0px 18px 40px var(--theme-shadow);
   min-height: 300px;
+}
+
+.lmv-map-viewport {
+  position: absolute;
+  inset: 0;
 }
 
 .lmv-map-inner {
@@ -1443,12 +1485,48 @@
   .lmv-main {
     margin-left: 0;
     padding: 12px 12px 80px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
+
+  /* Map fills at least 60% of the viewport height and is visible without scrolling;
+     the "Top comfort places" cards flow below it and only appear once the user scrolls. */
   .lmv-map-section {
-    min-height: 50vh;
-  }
-  .lmv-snapshot-stats {
+    flex: none;
+    display: flex;
     flex-direction: column;
+    overflow: visible;
+    min-height: 0;
+  }
+  .lmv-map-viewport {
+    position: relative;
+    inset: auto;
+    min-height: 60vh;
+    flex-shrink: 0;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .lmv-nearby-overlay {
+    position: static;
+    margin-top: 12px;
+    left: auto;
+    right: auto;
+    bottom: auto;
+  }
+
+  /* Comfort snapshot collapses to a single-line summary by default on mobile */
+  .lmv-snapshot {
+    padding: 12px 14px;
+  }
+  .lmv-snapshot-compact {
+    display: flex;
+  }
+  .lmv-snapshot-body {
+    display: none;
+    margin-top: 14px;
+  }
+  .lmv-snapshot--expanded .lmv-snapshot-body {
+    display: flex;
   }
   .lmv-snapshot-divider {
     display: none;
