@@ -98,6 +98,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const [aiNoTextReviews, setAiNoTextReviews] = useState(false);
   const [aiError, setAiError] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
+  const [snapshotExpanded, setSnapshotExpanded] = useState(() => (
+    typeof window === 'undefined' || window.innerWidth >= 768
+  ));
   const [userCoords, setUserCoords] = useState(null);
   const [avgRating, setAvgRating] = useState(null);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
@@ -789,134 +792,156 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
           {/* Center Main */}
           <main className="lmv-main">
             {/* Comfort Snapshot */}
-            <div className="lmv-snapshot">
-              <div className="lmv-snapshot-header">
-                <div className="lmv-snapshot-title">
-                  <span>Today</span>
-                  <h2>Comfort snapshot</h2>
-                </div>
-                {snapshot && snapshot.avgComfort > 3 && (
-                  <span className="lmv-calm-badge">Calm now</span>
-                )}
-              </div>
+            <div className={`lmv-snapshot${snapshotExpanded ? ' lmv-snapshot--expanded' : ' lmv-snapshot--collapsed'}`}>
+              <button
+                type="button"
+                className="lmv-snapshot-compact"
+                onClick={() => setSnapshotExpanded((prev) => !prev)}
+                aria-expanded={snapshotExpanded}
+              >
+                <span className="lmv-snapshot-compact-text">
+                  {snapshot
+                    ? `${snapshot.bestWindow} is best · ${snapshot.noiseTrend === 'Low' ? 'Low noise nearby' : `${snapshot.noiseTrend} noise nearby`}`
+                    : 'Loading comfort snapshot…'}
+                </span>
+                <svg className={`lmv-snapshot-chevron${snapshotExpanded ? ' up' : ''}`} width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
 
-              <div className="lmv-snapshot-stats">
-                <div className="lmv-snapshot-big">
-                  {snapshot ? (
-                    <>
-                      <span className="big-number">{snapshot.calmCount}</span>
-                      <span className="big-label">calm places nearby</span>
-                    </>
-                  ) : (
-                    <SkeletonBlock width={120} height={38} />
+              <div className="lmv-snapshot-body">
+                <div className="lmv-snapshot-header">
+                  <div className="lmv-snapshot-title">
+                    <span>Today</span>
+                    <h2>Comfort snapshot</h2>
+                  </div>
+                  {snapshot && snapshot.avgComfort > 3 && (
+                    <span className="lmv-calm-badge">Calm now</span>
                   )}
                 </div>
-                <div className="lmv-snapshot-divider" />
-                <div className="lmv-snapshot-cards">
-                  <div className="lmv-stat-card">
-                    <div className="stat-label">Best window</div>
-                    <div className="stat-value">{snapshot?.bestWindow ?? '—'}</div>
-                  </div>
-                  <div className="lmv-stat-card">
-                    <div className="stat-label">Noise trend</div>
-                    <div className="stat-value">{snapshot?.noiseTrend ?? '—'}</div>
+
+                <div className="lmv-snapshot-stats">
+                  {!snapshot ? (
+                    <div className="lmv-snapshot-big">
+                      <SkeletonBlock width={120} height={38} />
+                    </div>
+                  ) : userCoords ? (
+                    <>
+                      <div className="lmv-snapshot-big">
+                        <span className="big-number">{snapshot.calmCount}</span>
+                        <span className="big-label">calm places nearby</span>
+                      </div>
+                      <div className="lmv-snapshot-divider" />
+                    </>
+                  ) : null}
+                  <div className="lmv-snapshot-cards">
+                    <div className="lmv-stat-card">
+                      <div className="stat-label">Best window</div>
+                      <div className="stat-value">{snapshot?.bestWindow ?? '—'}</div>
+                    </div>
+                    <div className="lmv-stat-card">
+                      <div className="stat-label">Noise trend</div>
+                      <div className="stat-value">{snapshot?.noiseTrend ?? '—'}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="lmv-snapshot-tags">
-                {snapshot && snapshot.noiseTrend === 'Low' && (
-                  <span className="lmv-tag green">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    Low noise nearby
-                  </span>
-                )}
-                {snapshot && snapshot.noiseTrend !== 'Low' && (
-                  <span className="lmv-tag gray">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75L8.75 5.25L12.25 5.83L9.625 8.4L10.25 12.25L7 10.5L3.75 12.25L4.375 8.4L1.75 5.83L5.25 5.25Z" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    Best time: {snapshot.bestWindow}
-                  </span>
-                )}
+                <div className="lmv-snapshot-tags">
+                  {snapshot && snapshot.noiseTrend === 'Low' && (
+                    <span className="lmv-tag green">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      Low noise nearby
+                    </span>
+                  )}
+                  {snapshot && snapshot.noiseTrend !== 'Low' && (
+                    <span className="lmv-tag gray">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75L8.75 5.25L12.25 5.83L9.625 8.4L10.25 12.25L7 10.5L3.75 12.25L4.375 8.4L1.75 5.83L5.25 5.25Z" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      Best time: {snapshot.bestWindow}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Map */}
             <div className="lmv-map-section">
-              <div className="lmv-map-inner">
-                <MapView
-                  onLocationSelect={handleLocationSelect}
-                  filters={activeFilters}
-                  searchResultsGeoJSON={searchResults}
-                  selectedLocationId={selectedLocation?.id}
-                  selectedLocation={selectedLocation}
-                  flyToLocation={flyToLocation}
-                  userCoords={userCoords}
-                  heatmapData={heatmapData}
-                  heatmapEnabled={heatmapOn}
-                  trafficEnabled={trafficOn}
-                  mapStyle={mapStyleUrl}
-                />
+              <div className="lmv-map-viewport">
+                <div className="lmv-map-inner">
+                  <MapView
+                    onLocationSelect={handleLocationSelect}
+                    filters={activeFilters}
+                    searchResultsGeoJSON={searchResults}
+                    selectedLocationId={selectedLocation?.id}
+                    selectedLocation={selectedLocation}
+                    flyToLocation={flyToLocation}
+                    userCoords={userCoords}
+                    heatmapData={heatmapData}
+                    heatmapEnabled={heatmapOn}
+                    trafficEnabled={trafficOn}
+                    mapStyle={mapStyleUrl}
+                  />
+                </div>
+
+                {/* SubmitReview slide-in — layered over the map */}
+                {showReviewForm && selectedLocation && (
+                  <SubmitReview
+                    location={selectedLocation}
+                    onClose={() => setShowReviewForm(false)}
+                    onSubmitted={() => {
+                      setShowReviewForm(false);
+                      if (selectedLocation?.id) refreshLocationData(selectedLocation.id);
+                    }}
+                  />
+                )}
+
+                <div className="lmv-map-legend">
+                  <span className="lmv-legend-chip calm">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    Calm
+                  </span>
+                  <span className="lmv-legend-chip moderate">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.25" stroke="#4a2a00" strokeWidth="1.2" /><circle cx="7" cy="7" r="1.5" fill="#4a2a00" /></svg>
+                    Moderate
+                  </span>
+                  <span className="lmv-legend-chip overwhelming">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.25" stroke="#4a0f00" strokeWidth="1.2" /><path d="M5 5l4 4M9 5l-4 4" stroke="#4a0f00" strokeWidth="1.2" strokeLinecap="round" /></svg>
+                    Overwhelming
+                  </span>
+                </div>
+
+                {!hideControls && !showLogoutModal && <div className="lmv-map-toggle">
+                  <button
+                    className="lmv-map-time-filter"
+                    onClick={() => handleFilterClick('before-noon')}
+                    style={{ cursor: 'pointer', border: activeFilters.includes('before-noon') ? '2px solid var(--theme-accent)' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#0f1720" strokeWidth="1.3" /><path d="M8 4V8L10.5 9.5" stroke="#0f1720" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    Before 11am
+                  </button>
+                  <button
+                    className="lmv-map-time-filter"
+                    onClick={() => setHeatmapOn((prev) => !prev)}
+                    style={{ cursor: 'pointer', border: heatmapOn ? '2px solid var(--theme-accent)' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M4 12V8M8 12V4M12 12V6" stroke={heatmapOn ? "var(--theme-accent)" : "#6b7280"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Heatmap
+                  </button>
+                  <button
+                    className="lmv-map-time-filter"
+                    onClick={() => setTrafficOn((prev) => !prev)}
+                    style={{ cursor: 'pointer', border: trafficOn ? '2px solid #f97316' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="4" r="2" fill={trafficOn ? "#dc2626" : "#6b7280"} />
+                      <circle cx="8" cy="8" r="2" fill={trafficOn ? "#fbbf24" : "#9ca3af"} />
+                      <circle cx="8" cy="12" r="2" fill={trafficOn ? "#4ade80" : "#d1d5db"} />
+                    </svg>
+                    Traffic
+                  </button>
+                </div>}
               </div>
-
-              {/* SubmitReview slide-in — layered over the map */}
-              {showReviewForm && selectedLocation && (
-                <SubmitReview
-                  location={selectedLocation}
-                  onClose={() => setShowReviewForm(false)}
-                  onSubmitted={() => {
-                    setShowReviewForm(false);
-                    if (selectedLocation?.id) refreshLocationData(selectedLocation.id);
-                  }}
-                />
-              )}
-
-              <div className="lmv-map-legend">
-                <span className="lmv-legend-chip calm">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  Calm
-                </span>
-                <span className="lmv-legend-chip moderate">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.25" stroke="#4a2a00" strokeWidth="1.2" /><circle cx="7" cy="7" r="1.5" fill="#4a2a00" /></svg>
-                  Moderate
-                </span>
-                <span className="lmv-legend-chip overwhelming">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.25" stroke="#4a0f00" strokeWidth="1.2" /><path d="M5 5l4 4M9 5l-4 4" stroke="#4a0f00" strokeWidth="1.2" strokeLinecap="round" /></svg>
-                  Overwhelming
-                </span>
-              </div>
-
-              {!hideControls && !showLogoutModal && <div className="lmv-map-toggle">
-                <button
-                  className="lmv-map-time-filter"
-                  onClick={() => handleFilterClick('before-noon')}
-                  style={{ cursor: 'pointer', border: activeFilters.includes('before-noon') ? '2px solid var(--theme-accent)' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#0f1720" strokeWidth="1.3" /><path d="M8 4V8L10.5 9.5" stroke="#0f1720" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  Before 11am
-                </button>
-                <button
-                  className="lmv-map-time-filter"
-                  onClick={() => setHeatmapOn((prev) => !prev)}
-                  style={{ cursor: 'pointer', border: heatmapOn ? '2px solid var(--theme-accent)' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M4 12V8M8 12V4M12 12V6" stroke={heatmapOn ? "var(--theme-accent)" : "#6b7280"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Heatmap
-                </button>
-                <button
-                  className="lmv-map-time-filter"
-                  onClick={() => setTrafficOn((prev) => !prev)}
-                  style={{ cursor: 'pointer', border: trafficOn ? '2px solid #f97316' : '1px solid var(--theme-border)', background: 'var(--theme-surface)' }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <circle cx="8" cy="4" r="2" fill={trafficOn ? "#dc2626" : "#6b7280"} />
-                    <circle cx="8" cy="8" r="2" fill={trafficOn ? "#fbbf24" : "#9ca3af"} />
-                    <circle cx="8" cy="12" r="2" fill={trafficOn ? "#4ade80" : "#d1d5db"} />
-                  </svg>
-                  Traffic
-                </button>
-              </div>}
 
               <div className="lmv-nearby-overlay">
                 <span className="lmv-nearby-label">{searchResults !== null ? 'Search results' : 'Top comfort places'}</span>
