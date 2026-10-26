@@ -318,9 +318,19 @@ router.get("/construction-check", async (req, res) => {
   }
 });
 
+// Each /similar call loads up to 200 embedding vectors and runs cosine similarity in JS, so cache
+// finished results per location. Embeddings only change when /ai/insights regenerates one, so a
+// short TTL is fine. Bounded so it can't grow without limit.
+const SIMILAR_TTL_MS = 10 * 60 * 1000;
+const SIMILAR_CACHE_MAX = 500;
+const similarCache = new Map();
+
 router.get("/similar/:id", async (req, res) => {
     try {
         const { id } = req.params;
+
+        const cached = similarCache.get(id);
+        if (cached && Date.now() - cached.at < SIMILAR_TTL_MS) return res.json(cached.results);
 
         const target = await prisma.location.findUnique({ where: { id } });
         if (!target) return res.status(404).json({ error: "Location not found" });
@@ -353,6 +363,10 @@ router.get("/similar/:id", async (req, res) => {
             }))
             .sort((a, b) => b.similarity - a.similarity)
             .slice(0, 5);
+
+        similarCache.delete(id);
+        if (similarCache.size >= SIMILAR_CACHE_MAX) similarCache.delete(similarCache.keys().next().value);
+        similarCache.set(id, { at: Date.now(), results });
 
         res.json(results);
     } catch (error) {
@@ -396,6 +410,8 @@ router.get("/:id", async (req, res) => {
     try {
         const location = await prisma.location.findUnique({
             where: { id: req.params.id },
+            // The embedding is a ~3k-float vector used only server-side for /similar; never send it to clients.
+            omit: { embedding: true },
             include: {
                 sensoryScores: true,
                 reviews: {
