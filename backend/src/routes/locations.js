@@ -5,6 +5,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
 import { getDisplayScore } from "../lib/scores.js";
+import { isBotReview } from "../lib/systemBot.js";
 
 
 const router = express.Router()
@@ -88,8 +89,8 @@ async function getConstructionProjects() {
  */
 router.get("/", async (req, res) => {
     try {
+        // No take() cap: an unordered 500-row slice silently hid every location past the cut.
         const locations = await prisma.location.findMany({
-            take: 500,
             include: {
                 sensoryScores: true,
             }
@@ -112,8 +113,8 @@ router.get("/heatmap", async (req, res) => {
         const clamp = (v) => v != null ? Math.min(5, Math.max(1, v)) : null;
 
         // Pull all locations with either community scores or AI-estimated scores
+        // No take() cap: an unordered 500-row slice silently hid every location past the cut.
         const locations = await prisma.location.findMany({
-            take: 500,
             where: {
                 OR: [
                     { sensoryScores: { isNot: null } },
@@ -173,6 +174,8 @@ router.get("/heatmap", async (req, res) => {
             };
         });
 
+        // Read-mostly public data — let browsers/CDNs reuse it briefly.
+        res.set("Cache-Control", "public, max-age=60");
         res.json(heatMapData);
     } catch (error) {
         console.error("Error:", error);
@@ -317,9 +320,19 @@ router.get("/construction-check", async (req, res) => {
   }
 });
 
+// Each /similar call loads up to 200 embedding vectors and runs cosine similarity in JS, so cache
+// finished results per location. Embeddings only change when /ai/insights regenerates one, so a
+// short TTL is fine. Bounded so it can't grow without limit.
+const SIMILAR_TTL_MS = 10 * 60 * 1000;
+const SIMILAR_CACHE_MAX = 500;
+const similarCache = new Map();
+
 router.get("/similar/:id", async (req, res) => {
     try {
         const { id } = req.params;
+
+        const cached = similarCache.get(id);
+        if (cached && Date.now() - cached.at < SIMILAR_TTL_MS) return res.json(cached.results);
 
         const target = await prisma.location.findUnique({ where: { id } });
         if (!target) return res.status(404).json({ error: "Location not found" });
@@ -352,6 +365,10 @@ router.get("/similar/:id", async (req, res) => {
             }))
             .sort((a, b) => b.similarity - a.similarity)
             .slice(0, 5);
+
+        similarCache.delete(id);
+        if (similarCache.size >= SIMILAR_CACHE_MAX) similarCache.delete(similarCache.keys().next().value);
+        similarCache.set(id, { at: Date.now(), results });
 
         res.json(results);
     } catch (error) {
@@ -395,13 +412,15 @@ router.get("/:id", async (req, res) => {
     try {
         const location = await prisma.location.findUnique({
             where: { id: req.params.id },
+            // The embedding is a ~3k-float vector used only server-side for /similar; never send it to clients.
+            omit: { embedding: true },
             include: {
                 sensoryScores: true,
                 reviews: {
                     orderBy: { createdAt: "desc" },
                     take: 10,
                     include: {
-                        user: { select: { username: true, email: true } }
+                        user: { select: { username: true, email: true, auth0Id: true } }
                     }
                 }
             }
@@ -422,7 +441,14 @@ router.get("/:id", async (req, res) => {
             estimatedCrowdScore:    location.estimatedCrowdScore,
         });
 
-        res.json({ ...location, displayScores, facilities });
+        // Never expose reviewer emails/auth ids publicly — send username + a server-computed isBot flag.
+        const reviews = location.reviews.map(({ user, ...review }) => ({
+            ...review,
+            user: { username: user?.username ?? null },
+            isBot: isBotReview(review, user),
+        }));
+
+        res.json({ ...location, reviews, displayScores, facilities });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });

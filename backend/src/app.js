@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 
@@ -27,6 +28,9 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
+
+// gzip JSON responses (default threshold: skips bodies under 1 KB)
+app.use(compression());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean)

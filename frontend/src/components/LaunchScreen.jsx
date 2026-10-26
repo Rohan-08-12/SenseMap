@@ -410,7 +410,7 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
                     <div className="ls-footer-bottom">
                         <span>© 2026 SenseMap.</span>
                         <div className="ls-footer-trust">
-                            {['Community data','No ads','No tracking','Toronto — expanding soon'].map((t, i, arr) => (
+                            {['Community data','No ads','Analytics only with your consent','Toronto — expanding soon'].map((t, i, arr) => (
                                 <span key={t} className="ls-trust-item">
                                     {t}{i < arr.length - 1 && <span className="ls-trust-sep" aria-hidden="true"> · </span>}
                                 </span>
