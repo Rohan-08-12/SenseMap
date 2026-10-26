@@ -174,6 +174,8 @@ router.get("/heatmap", async (req, res) => {
             };
         });
 
+        // Read-mostly public data — let browsers/CDNs reuse it briefly.
+        res.set("Cache-Control", "public, max-age=60");
         res.json(heatMapData);
     } catch (error) {
         console.error("Error:", error);

@@ -77,6 +77,8 @@ router.get("/", async (req, res) => {
             .sort((a, b) => b.comfortScore - a.comfortScore)
             .map((loc, index) => ({ rank: index + 1, ...loc }));
 
+        // Read-mostly public data — let browsers/CDNs reuse it briefly.
+        res.set("Cache-Control", "public, max-age=60");
         res.json(result);
     } catch (error) {
         console.error("Error fetching rankings:", error);
