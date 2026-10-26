@@ -393,10 +393,10 @@ function LaunchScreen({ onExploreMap, onLogin, onLogout }) {
                                 <button onClick={() => onLogin()}>Sign up</button>
                             </div>
                             <div className="ls-footer-col">
-                                <p className="ls-footer-col-label">Community</p>
+                                <p className="ls-footer-col-label">Follow</p>
                                 <button onClick={() => handleNavigate()}>Submit a review</button>
-                                <a href="https://reddit.com/r/autism" target="_blank" rel="noopener noreferrer">r/autism</a>
-                                <a href="https://reddit.com/r/ADHD" target="_blank" rel="noopener noreferrer">r/ADHD</a>
+                                <a href="https://instagram.com/sensemap.app" target="_blank" rel="noopener noreferrer">Instagram</a>
+                                <a href="https://x.com/nayyer_rohan" target="_blank" rel="noopener noreferrer">X / Twitter</a>
                             </div>
                             <div className="ls-footer-col">
                                 <p className="ls-footer-col-label">Legal</p>

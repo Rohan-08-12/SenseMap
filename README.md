@@ -90,7 +90,7 @@ node seed_demo.js
 # Fires 35 Toronto search queries through the /discover pipeline
 node seed_bulk.js
 
-# Option C — OpenStreetMap import (~3800 Toronto locations, default scores)
+# Option C — OpenStreetMap import (Toronto locations, default scores; the live DB was later trimmed to ~1,300)
 npm run osm-import
 ```
 
