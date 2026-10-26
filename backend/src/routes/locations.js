@@ -89,8 +89,8 @@ async function getConstructionProjects() {
  */
 router.get("/", async (req, res) => {
     try {
+        // No take() cap: an unordered 500-row slice silently hid every location past the cut.
         const locations = await prisma.location.findMany({
-            take: 500,
             include: {
                 sensoryScores: true,
             }
@@ -113,8 +113,8 @@ router.get("/heatmap", async (req, res) => {
         const clamp = (v) => v != null ? Math.min(5, Math.max(1, v)) : null;
 
         // Pull all locations with either community scores or AI-estimated scores
+        // No take() cap: an unordered 500-row slice silently hid every location past the cut.
         const locations = await prisma.location.findMany({
-            take: 500,
             where: {
                 OR: [
                     { sensoryScores: { isNot: null } },

@@ -14,8 +14,8 @@ const router = express.Router();
  */
 router.get("/", async (req, res) => {
     try {
+        // No take() cap: ranking an unordered 500-row slice excluded most locations from the top list.
         const locations = await prisma.location.findMany({
-            take: 500,
             select: {
                 id: true,
                 name: true,
