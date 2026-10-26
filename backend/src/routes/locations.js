@@ -5,6 +5,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
 import { getDisplayScore } from "../lib/scores.js";
+import { isBotReview } from "../lib/systemBot.js";
 
 
 const router = express.Router()
@@ -401,7 +402,7 @@ router.get("/:id", async (req, res) => {
                     orderBy: { createdAt: "desc" },
                     take: 10,
                     include: {
-                        user: { select: { username: true, email: true } }
+                        user: { select: { username: true, email: true, auth0Id: true } }
                     }
                 }
             }
@@ -422,7 +423,14 @@ router.get("/:id", async (req, res) => {
             estimatedCrowdScore:    location.estimatedCrowdScore,
         });
 
-        res.json({ ...location, displayScores, facilities });
+        // Never expose reviewer emails/auth ids publicly — send username + a server-computed isBot flag.
+        const reviews = location.reviews.map(({ user, ...review }) => ({
+            ...review,
+            user: { username: user?.username ?? null },
+            isBot: isBotReview(review, user),
+        }));
+
+        res.json({ ...location, reviews, displayScores, facilities });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });
