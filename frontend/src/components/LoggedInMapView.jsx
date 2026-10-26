@@ -1311,7 +1311,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 if (dataSource === 'estimated') return (
                   <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#ede9fe', color: '#5b21b6', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontWeight: 700, fontSize: 10, background: '#5b21b6', color: '#fff', borderRadius: 4, padding: '1px 5px' }}>AI</span>
-                    Scores estimated from Yelp, Foursquare &amp; Reddit via Gemini — no community visits yet.
+                    Scores estimated from public data (Yelp, Foursquare, Google Places, City of Toronto) via Gemini — no community visits yet.
                   </div>
                 );
                 return (
