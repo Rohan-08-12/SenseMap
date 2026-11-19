@@ -156,6 +156,27 @@ model EnrichmentLog {
   scores     Json
 }
 
+// One row per enrichment run (nightly cron, n8n/manual trigger). Doubles as the overlap lock:
+// a partial unique index (see migration 20261119000000_add_enrichment_run) allows at most one status='running' row.
+model EnrichmentRun {
+  id           String    @id @default(uuid())
+  trigger      String    // "cron" | "trigger" | "trigger-force"
+  force        Boolean   @default(false)
+  status       String    @default("running") // running | success | failed | abandoned
+  startedAt    DateTime  @default(now())
+  heartbeatAt  DateTime  @default(now())
+  finishedAt   DateTime?
+  planned      Int       @default(0)
+  updated      Int       @default(0)
+  skipped      Int       @default(0)
+  failed       Int       @default(0)
+  errors       Json?     // capped list of { location, message }
+  errorMessage String?   // fatal error that aborted the run
+
+  @@index([status, finishedAt])
+  @@index([startedAt])
+}
+
 model EmailSubscriber {
   id        String   @id @default(uuid())
   email     String   @unique
