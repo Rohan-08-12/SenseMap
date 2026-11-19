@@ -3,7 +3,7 @@ import prisma from "../lib/prisma.js";
 import { model } from "../lib/gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
-import { runEnrichment, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
+import { startEnrichmentRun, executeEnrichmentRun, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
 
 const router = express.Router();
@@ -197,10 +197,18 @@ router.get("/stale", requireN8nSecret, async (_req, res) => {
 // POST /enrichment/trigger — kicks off a background enrichment run
 // ?force=true ignores the staleness window and re-processes every location —
 // useful for backfilling a newly added field (e.g. estimatedFacilities) without waiting a week.
-router.post("/trigger", requireN8nSecret, (req, res) => {
-    const force = req.query.force === "true";
-    runEnrichment({ force }).catch(err => console.error("[Enrichment] Trigger error:", err.message));
-    res.json({ triggered: true, force, message: "Enrichment started in background" });
+router.post("/trigger", requireN8nSecret, async (req, res) => {
+    try {
+        const force = req.query.force === "true";
+        const run = await startEnrichmentRun({ trigger: force ? "trigger-force" : "trigger", force });
+        if (!run) return res.status(409).json({ triggered: false, error: "An enrichment run is already in progress" });
+
+        executeEnrichmentRun(run).catch(err => console.error("[Enrichment] Trigger error:", err.message));
+        res.json({ triggered: true, force, runId: run.id, message: "Enrichment started in background" });
+    } catch (error) {
+        console.error("Enrichment trigger error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
 });
 
 // POST /enrichment/photos — fetch and upload Google Places photos for all locations without images
