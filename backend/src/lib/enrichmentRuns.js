@@ -5,6 +5,9 @@ import prisma from "./prisma.js";
 // after every location (~2s apart), so 15 minutes of silence is unambiguous.
 export const RUN_STALE_AFTER_MS = 15 * 60 * 1000;
 
+// No successful run within this window => data is considered stale and an alert fires.
+export const FRESHNESS_ALERT_HOURS = 36;
+
 const MAX_RECORDED_ERRORS = 50;
 
 /**
@@ -45,4 +48,58 @@ export function finishRun(runId, { status, counts = {}, errors, errorMessage }) 
             errorMessage: errorMessage ?? null,
         },
     });
+}
+
+/** Snapshot used by GET /enrichment/freshness and the stale-data alert. */
+export async function getFreshness() {
+    const now = Date.now();
+    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+    const [lastSuccess, lastRun, running, recentFailures, total, enrichedLast7d, neverEnriched, oldest, newest] =
+        await Promise.all([
+            prisma.enrichmentRun.findFirst({ where: { status: "success" }, orderBy: { finishedAt: "desc" } }),
+            prisma.enrichmentRun.findFirst({ orderBy: { startedAt: "desc" } }),
+            prisma.enrichmentRun.findFirst({ where: { status: "running" } }),
+            prisma.enrichmentRun.findMany({
+                where: { status: { in: ["failed", "abandoned"] }, startedAt: { gte: new Date(now - 7 * 24 * 60 * 60 * 1000) } },
+                orderBy: { startedAt: "desc" },
+                take: 10,
+            }),
+            prisma.location.count(),
+            prisma.location.count({ where: { lastEnrichedAt: { gte: sevenDaysAgo } } }),
+            prisma.location.count({ where: { lastEnrichedAt: null } }),
+            prisma.location.findFirst({ where: { lastEnrichedAt: { not: null } }, orderBy: { lastEnrichedAt: "asc" }, select: { lastEnrichedAt: true } }),
+            prisma.location.findFirst({ where: { lastEnrichedAt: { not: null } }, orderBy: { lastEnrichedAt: "desc" }, select: { lastEnrichedAt: true } }),
+        ]);
+
+    const lastSuccessAt = lastSuccess?.finishedAt ?? null;
+    const hoursSinceSuccess = lastSuccessAt ? (now - lastSuccessAt.getTime()) / 3_600_000 : null;
+    // Never succeeded counts as unhealthy — but a freshly deployed instance with no history
+    // shouldn't page anyone instantly, so the alert caller applies its own grace (see scheduler).
+    const healthy = hoursSinceSuccess !== null && hoursSinceSuccess <= FRESHNESS_ALERT_HOURS;
+
+    const summarize = r => r && {
+        id: r.id, trigger: r.trigger, force: r.force, status: r.status,
+        startedAt: r.startedAt, finishedAt: r.finishedAt,
+        planned: r.planned, updated: r.updated, skipped: r.skipped, failed: r.failed,
+        errorMessage: r.errorMessage, errors: r.errors,
+    };
+
+    return {
+        healthy,
+        alertThresholdHours: FRESHNESS_ALERT_HOURS,
+        hoursSinceLastSuccess: hoursSinceSuccess === null ? null : Math.round(hoursSinceSuccess * 10) / 10,
+        lastSuccessfulRun: summarize(lastSuccess),
+        lastRun: summarize(lastRun),
+        currentlyRunning: !!running,
+        recentFailures: recentFailures.map(summarize),
+        locations: {
+            total,
+            enrichedLast7d,
+            staleOver7d: total - enrichedLast7d - neverEnriched,
+            neverEnriched,
+            oldestEnrichedAt: oldest?.lastEnrichedAt ?? null,
+            newestEnrichedAt: newest?.lastEnrichedAt ?? null,
+        },
+    };
 }

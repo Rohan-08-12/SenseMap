@@ -5,6 +5,7 @@ import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
 import { startEnrichmentRun, executeEnrichmentRun, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
+import { getFreshness } from "../lib/enrichmentRuns.js";
 
 const router = express.Router();
 
@@ -207,6 +208,20 @@ router.post("/trigger", requireN8nSecret, async (req, res) => {
         res.json({ triggered: true, force, runId: run.id, message: "Enrichment started in background" });
     } catch (error) {
         console.error("Enrichment trigger error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// GET /enrichment/freshness — data-freshness report for n8n / uptime monitors (n8n secret only).
+// Add ?strict=true to get HTTP 503 when there's been no successful run in 36h, so a plain
+// status-code monitor can alert without parsing the body.
+router.get("/freshness", requireN8nSecret, async (req, res) => {
+    try {
+        const report = await getFreshness();
+        const status = req.query.strict === "true" && !report.healthy ? 503 : 200;
+        res.status(status).json(report);
+    } catch (error) {
+        console.error("Freshness error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 });
