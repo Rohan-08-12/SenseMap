@@ -8,7 +8,7 @@ import { notifyEnrichmentStale } from "./notify.js";
 const ALERT_REPEAT_MS = 24 * 60 * 60 * 1000; // re-send at most once a day while still stale
 let lastAlertAt = 0;
 
-async function checkEnrichmentFreshness() {
+export async function checkEnrichmentFreshness() {
     const report = await getFreshness();
     // No runs recorded at all = freshly deployed, table empty; the first cron run will populate it.
     if (report.healthy || !report.lastRun) return;
@@ -29,7 +29,7 @@ function catchupEnabled() {
     return process.env.ENRICHMENT_CATCHUP === "true" || !!process.env.RAILWAY_ENVIRONMENT;
 }
 
-async function catchUpEnrichment() {
+export async function catchUpEnrichment() {
     const report = await getFreshness();
     if (report.currentlyRunning) return;
     const stale = report.hoursSinceLastSuccess === null || report.hoursSinceLastSuccess > CATCHUP_AFTER_HOURS;
