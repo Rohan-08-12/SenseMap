@@ -99,3 +99,32 @@ test("selectLocationsToEnrich: every selection has a take, forced runs included 
     assert.equal(findManyArgs.at(-1).take, 3);
     assert.deepEqual(findManyArgs.at(-1).orderBy, [{ lastEnrichedAt: { sort: "asc", nulls: "first" } }], "oldest first, so batches make progress");
 });
+
+// ---- 2. ENRICHMENT_DELAY_MS ----------------------------------------------------------------------------------
+const { runEnrichment } = await import("../src/lib/enrichmentCron.js");
+
+test("delayMs: default 2000; clamped to 0-60000; garbage falls back to the default", () => {
+    assert.equal(cfg.delayMs({}), 2000);
+    assert.equal(cfg.delayMs({ ENRICHMENT_DELAY_MS: "0" }), 0);
+    assert.equal(cfg.delayMs({ ENRICHMENT_DELAY_MS: "750" }), 750);
+    assert.equal(cfg.delayMs({ ENRICHMENT_DELAY_MS: "-5" }), 0);
+    assert.equal(cfg.delayMs({ ENRICHMENT_DELAY_MS: "999999" }), 60000);
+    for (const bad of ["", "abc", undefined]) assert.equal(cfg.delayMs({ ENRICHMENT_DELAY_MS: bad }), 2000, String(bad));
+});
+
+test("a run pauses ENRICHMENT_DELAY_MS between places (not after the last), and not at all at 0", async () => {
+    locationRows = places(3);
+
+    process.env.ENRICHMENT_DELAY_MS = "0";
+    let t = Date.now();
+    await runEnrichment({ force: false, trigger: "test" });
+    assert.ok(Date.now() - t < 400, "no pause at 0");
+
+    process.env.ENRICHMENT_DELAY_MS = "300";
+    t = Date.now();
+    await runEnrichment({ force: false, trigger: "test" });
+    const took = Date.now() - t;
+    assert.ok(took >= 600, `2 pauses of 300ms expected, took ${took}ms`);
+    assert.ok(took < 1500, `but not a pause after the last place, took ${took}ms`);
+    process.env.ENRICHMENT_DELAY_MS = "0";
+});

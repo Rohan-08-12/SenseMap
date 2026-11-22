@@ -26,3 +26,12 @@ export function resolveLimit(limit, env = process.env) {
     const n = toInt(limit);
     return n === null ? maxPerRun(env) : clamp(n, 1, MAX_PER_RUN_CEILING);
 }
+
+export const DEFAULT_DELAY_MS = 2000;
+export const MAX_DELAY_MS = 60_000;
+
+/** ENRICHMENT_DELAY_MS: pause between places during a run. Default 2000, clamped to 0-60000. */
+export function delayMs(env = process.env) {
+    const n = toInt(env.ENRICHMENT_DELAY_MS);
+    return n === null ? DEFAULT_DELAY_MS : clamp(n, 0, MAX_DELAY_MS);
+}

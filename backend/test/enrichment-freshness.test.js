@@ -20,6 +20,7 @@ if (!/@(127\.0\.0\.1|localhost):\d+\//.test(url)) {
     process.exit(1);
 }
 process.env.N8N_WEBHOOK_SECRET = "test-secret";
+process.env.ENRICHMENT_DELAY_MS = "0";               // no pauses between places in tests
 process.env.RESEND_API_KEY = "re_test";
 process.env.ADMIN_NOTIFY_EMAIL = "admin@example.test";
 

@@ -7,9 +7,7 @@ import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
 import { acquireRun, heartbeat, finishRun } from "./enrichmentRuns.js";
 import { requestAnalysis, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
 import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "./enrichmentBackoff.js";
-import { resolveLimit } from "./enrichmentConfig.js";
-
-const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
+import { resolveLimit, delayMs } from "./enrichmentConfig.js";
 
 // Maps the Gemini schema's *_tags keys to the canonical facilities field names
 // used everywhere else (Review columns, FACILITIES_OPTIONS, frontend pills).
@@ -175,7 +173,9 @@ export async function executeEnrichmentRun(run) {
         console.log(`[Enrichment] Starting — ${locations.length} locations to process`);
         await heartbeat(run.id, counts);
 
-        for (const location of locations) {
+        const pauseMs = delayMs();   // ENRICHMENT_DELAY_MS, default 2000
+        for (let i = 0; i < locations.length; i++) {
+            const location = locations[i];
             try {
                 const result = await enrichLocation(location);
                 if (result.updated) counts.updated++;
@@ -187,7 +187,7 @@ export async function executeEnrichmentRun(run) {
             }
             // A heartbeat failure (e.g. transient DB blip) must not abort the whole run.
             await heartbeat(run.id, counts).catch(err => console.error("[Enrichment] Heartbeat failed:", err.message));
-            await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+            if (pauseMs > 0 && i < locations.length - 1) await new Promise(r => setTimeout(r, pauseMs));
         }
 
         console.log(`[Enrichment] Done — updated: ${counts.updated}, skipped: ${counts.skipped}, failed: ${counts.failed}`);

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 
 process.env.N8N_WEBHOOK_SECRET = "test-secret";
+process.env.ENRICHMENT_DELAY_MS = "0";               // no pauses between places in tests
 
 // ---- mocks -------------------------------------------------------------------------------
 const updates = [];          // every prisma.location.update({ data }) call

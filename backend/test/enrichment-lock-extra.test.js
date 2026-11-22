@@ -21,6 +21,7 @@ if (!/@(127\.0\.0\.1|localhost):\d+\//.test(url)) {
     process.exit(1);
 }
 process.env.N8N_WEBHOOK_SECRET = "test-secret";
+process.env.ENRICHMENT_DELAY_MS = "0";               // no pauses between places in tests
 
 mock.module("resend", { namedExports: { Resend: class { emails = { send: async () => ({ data: {}, error: null }) }; } } });
 mock.module("../src/services/scraper.js", { namedExports: { fetchAllSources: async () => ({ combinedText: "", sources: [], yelpId: null, osmFacilities: null }) } });
