@@ -3,8 +3,9 @@ import prisma from "../lib/prisma.js";
 import { model } from "../lib/gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
-import { runEnrichment, runPhotoEnrichment, extractFacilities, hasInvalidScores } from "../lib/enrichmentCron.js";
+import { runEnrichment, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
+import { validateScores } from "../lib/scoreValidation.js";
 
 const router = express.Router();
 
@@ -107,14 +108,10 @@ router.post("/location", requireN8nSecret, async (req, res) => {
             return res.json({ updated: false, reason: "analysis_failed", sources });
         }
 
-        // Convert 1-10 scores to 1-5
-        const newNoise    = analysis.noise_score    / 2;
-        const newLighting = analysis.lighting_score / 2;
-        const newCrowd    = analysis.crowd_score    / 2;
-
         // Same guard as the nightly cron: reject out-of-range scores (e.g. Gemini returning 0)
         // instead of saving them, but still keep the deterministic OSM facilities.
-        if (hasInvalidScores(newNoise, newLighting, newCrowd)) {
+        const validated = validateScores(analysis);
+        if (!validated.ok) {
             if (osmFacilities) {
                 await prisma.location.update({
                     where: { id: locationId },
@@ -123,6 +120,7 @@ router.post("/location", requireN8nSecret, async (req, res) => {
             }
             return res.json({ updated: false, reason: "invalid_scores", sources });
         }
+        const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = validated;
 
         // OSM tags are exact/deterministic, so they take precedence over Gemini's
         // text-inferred guesses per category; Gemini only fills categories OSM has no tag for.

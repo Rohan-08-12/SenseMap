@@ -4,6 +4,7 @@ import { model } from "./gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
+import { validateScores } from "./scoreValidation.js";
 
 const STALE_THRESHOLD_HOURS = 24 * 7;
 const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
@@ -56,12 +57,6 @@ export function extractFacilities(analysis) {
     return Object.keys(facilities).length > 0 ? facilities : null;
 }
 
-// Gemini occasionally returns 0, which is outside the 1-10 range (0.5 is the lowest valid score
-// after halving). Shared by the nightly cron and POST /enrichment/location.
-export function hasInvalidScores(noise, lighting, crowd) {
-    return noise < 0.5 || lighting < 0.5 || crowd < 0.5;
-}
-
 function scoresDiffer(location, newNoise, newLighting, newCrowd, threshold = 0.5) {
     if (location.estimatedNoiseScore == null) return true;
     return (
@@ -106,12 +101,9 @@ async function enrichLocation(location) {
     // guesses per category; Gemini only fills categories OSM has no tag for.
     const facilities = mergeFacilities(osmFacilities, extractFacilities(analysis));
 
-    const newNoise    = analysis.noise_score    / 2;
-    const newLighting = analysis.lighting_score / 2;
-    const newCrowd    = analysis.crowd_score    / 2;
-
-    // Reject invalid scores — Gemini occasionally returns 0 which is outside the 1-10 range
-    if (hasInvalidScores(newNoise, newLighting, newCrowd)) {
+    // Reject anything that is not a finite number in 1-10 (missing, null, NaN, strings, 0, >10).
+    const validated = validateScores(analysis);
+    if (!validated.ok) {
         // Scores are unusable, but the (deterministic, Gemini-independent) OSM facilities are
         // still worth saving rather than discarding along with the bad score analysis.
         if (osmFacilities) {
@@ -122,6 +114,8 @@ async function enrichLocation(location) {
         }
         return { updated: false, reason: "invalid_scores" };
     }
+
+    const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = validated;
 
     if (!scoresDiffer(location, newNoise, newLighting, newCrowd)) {
         await prisma.location.update({
