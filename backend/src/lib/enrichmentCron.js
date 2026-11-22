@@ -4,7 +4,7 @@ import { model } from "./gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
-import { validateScores } from "./scoreValidation.js";
+import { analyzeSchema, buildAnalysisPrompt, interpretAnalysis } from "./enrichmentAnalysis.js";
 
 const STALE_THRESHOLD_HOURS = 24 * 7;
 const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
@@ -14,23 +14,6 @@ const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemi
 // get reprocessed in one lump instead of trickling in — spiking Google Places/Yelp/Foursquare
 // spend and quota in a single run. force=true (manual backfill trigger) ignores this cap.
 const NIGHTLY_BATCH_LIMIT = 200;
-
-const analyzeSchema = {
-    type: "object",
-    properties: {
-        noise_score:    { type: "number", description: "Noise level 1-10, where 1=silent and 10=extremely loud" },
-        lighting_score: { type: "number", description: "Lighting intensity 1-10, where 1=dim and 10=harsh/bright" },
-        crowd_score:    { type: "number", description: "Crowd density 1-10, where 1=empty and 10=packed" },
-        sentiment:      { type: "string", enum: ["positive", "neutral", "negative"] },
-        tags:           { type: "array",  items: { type: "string" } },
-        summary:        { type: "string" },
-        temperature_tags:         { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.temperature } },
-        seating_tags:              { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.seating } },
-        bathroom_tags:             { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.bathrooms } },
-        social_interaction_tags:   { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.socialInteractions } },
-    },
-    required: ["noise_score", "lighting_score", "crowd_score", "sentiment", "tags", "summary"],
-};
 
 // Maps the Gemini schema's *_tags keys to the canonical facilities field names
 // used everywhere else (Review columns, FACILITIES_OPTIONS, frontend pills).
@@ -92,7 +75,7 @@ async function enrichLocation(location) {
     }
 
     const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: `You are a sensory analysis assistant for autistic and sensory-sensitive people.\n\nAnalyze these reviews for "${location.name}" and extract structured sensory scores. Also infer, where the text gives any signal, the facility characteristics below — only include tags the text actually supports; leave a category's array empty if there's no signal for it. Use only the exact option strings listed (no new values):\n- temperature_tags, from: ${FACILITIES_OPTIONS.temperature.join(", ")}\n- seating_tags, from: ${FACILITIES_OPTIONS.seating.join(", ")}\n- bathroom_tags, from: ${FACILITIES_OPTIONS.bathrooms.join(", ")}\n- social_interaction_tags, from: ${FACILITIES_OPTIONS.socialInteractions.join(", ")}\n\nReviews:\n${combinedText}` }] }],
+        contents: [{ role: "user", parts: [{ text: buildAnalysisPrompt(location.name, combinedText) }] }],
         generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
     });
 
@@ -101,21 +84,23 @@ async function enrichLocation(location) {
     // guesses per category; Gemini only fills categories OSM has no tag for.
     const facilities = mergeFacilities(osmFacilities, extractFacilities(analysis));
 
-    // Reject anything that is not a finite number in 1-10 (missing, null, NaN, strings, 0, >10).
-    const validated = validateScores(analysis);
-    if (!validated.ok) {
-        // Scores are unusable, but the (deterministic, Gemini-independent) OSM facilities are
-        // still worth saving rather than discarding along with the bad score analysis.
-        if (osmFacilities) {
+    // Reject anything that is not a finite number in 1-10, and never store estimates when the model
+    // reported no sensory signal (null scores) — see enrichmentAnalysis.interpretAnalysis.
+    const decision = interpretAnalysis(analysis);
+    if (decision.action === "skip") {
+        const markEnriched = decision.reason === "no_sensory_signal" || !!osmFacilities;
+        // The (deterministic, Gemini-independent) OSM facilities are still worth saving. For
+        // no_sensory_signal the result is a definite answer, so mark the place enriched (it won't be
+        // retried nightly); for malformed output keep the old behaviour of retrying soon.
+        if (markEnriched) {
             await prisma.location.update({
                 where: { id: location.id },
-                data: { ...(yelpId && { externalYelpId: yelpId }), estimatedFacilities: osmFacilities, lastEnrichedAt: new Date() },
+                data: { ...(yelpId && { externalYelpId: yelpId }), ...(osmFacilities && { estimatedFacilities: osmFacilities }), lastEnrichedAt: new Date() },
             });
         }
-        return { updated: false, reason: "invalid_scores" };
+        return { updated: false, reason: decision.reason };
     }
-
-    const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = validated;
+    const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = decision;
 
     if (!scoresDiffer(location, newNoise, newLighting, newCrowd)) {
         await prisma.location.update({

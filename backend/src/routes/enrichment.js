@@ -5,45 +5,18 @@ import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
 import { runEnrichment, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
-import { validateScores } from "../lib/scoreValidation.js";
+import { analyzeSchema, buildAnalysisPrompt, interpretAnalysis } from "../lib/enrichmentAnalysis.js";
 
 const router = express.Router();
 
 const STALE_THRESHOLD_HOURS = 24 * 7; // weekly — stays within Yelp 5000/month limit
-
-const analyzeSchema = {
-    type: "object",
-    properties: {
-        noise_score:    { type: "number", description: "Noise level 1-10, where 1=silent and 10=extremely loud" },
-        lighting_score: { type: "number", description: "Lighting intensity 1-10, where 1=dim and 10=harsh/bright" },
-        crowd_score:    { type: "number", description: "Crowd density 1-10, where 1=empty and 10=packed" },
-        confidence:     { type: "number", description: "Confidence in the scores 1-10, where 10=very confident" },
-        sentiment:      { type: "string", enum: ["positive", "neutral", "negative"] },
-        tags:           { type: "array",  items: { type: "string" } },
-        summary:        { type: "string" },
-        temperature_tags:         { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.temperature } },
-        seating_tags:              { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.seating } },
-        bathroom_tags:             { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.bathrooms } },
-        social_interaction_tags:   { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.socialInteractions } },
-    },
-    required: ["noise_score", "lighting_score", "crowd_score", "confidence", "sentiment", "tags", "summary"],
-};
 
 // Gemini-only for background enrichment — Claude validation reserved for
 // user-submitted reviews in /ai/analyze where accuracy matters most
 async function analyzeText(name, reviewText) {
     if (!reviewText.trim()) return null;
 
-    const prompt = `You are a sensory analysis assistant for autistic and sensory-sensitive people.
-
-Analyze these reviews for "${name}" and extract structured sensory scores. Also infer, where the text gives any signal, the facility characteristics below — only include tags the text actually supports; leave a category's array empty if there's no signal for it. Use only the exact option strings listed (no new values):
-- temperature_tags, from: ${FACILITIES_OPTIONS.temperature.join(", ")}
-- seating_tags, from: ${FACILITIES_OPTIONS.seating.join(", ")}
-- bathroom_tags, from: ${FACILITIES_OPTIONS.bathrooms.join(", ")}
-- social_interaction_tags, from: ${FACILITIES_OPTIONS.socialInteractions.join(", ")}
-
-Reviews:
-${reviewText}`;
+    const prompt = buildAnalysisPrompt(name, reviewText);
 
     const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -110,17 +83,18 @@ router.post("/location", requireN8nSecret, async (req, res) => {
 
         // Same guard as the nightly cron: reject out-of-range scores (e.g. Gemini returning 0)
         // instead of saving them, but still keep the deterministic OSM facilities.
-        const validated = validateScores(analysis);
-        if (!validated.ok) {
-            if (osmFacilities) {
+        const decision = interpretAnalysis(analysis);
+        if (decision.action === "skip") {
+            const markEnriched = decision.reason === "no_sensory_signal" || !!osmFacilities;
+            if (markEnriched) {
                 await prisma.location.update({
                     where: { id: locationId },
-                    data: { ...(yelpId && { externalYelpId: yelpId }), estimatedFacilities: osmFacilities, lastEnrichedAt: new Date() },
+                    data: { ...(yelpId && { externalYelpId: yelpId }), ...(osmFacilities && { estimatedFacilities: osmFacilities }), lastEnrichedAt: new Date() },
                 });
             }
-            return res.json({ updated: false, reason: "invalid_scores", sources });
+            return res.json({ updated: false, reason: decision.reason, sources });
         }
-        const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = validated;
+        const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = decision;
 
         // OSM tags are exact/deterministic, so they take precedence over Gemini's
         // text-inferred guesses per category; Gemini only fills categories OSM has no tag for.

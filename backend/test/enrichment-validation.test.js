@@ -124,3 +124,46 @@ test("the route reports the rejection reason", async () => {
 });
 
 test("no test in this file can reach Gemini", () => { assert.ok(geminiCalls >= 0); });
+
+// ---- 2. nullable scores, shared schema/prompt ------------------------------------------------
+const { analyzeSchema, buildAnalysisPrompt, interpretAnalysis } = await import("../src/lib/enrichmentAnalysis.js");
+
+test("schema: scores are nullable, confidence (0-10) is required, one schema for both writers", () => {
+    for (const k of ["noise_score", "lighting_score", "crowd_score"]) assert.equal(analyzeSchema.properties[k].nullable, true, k);
+    assert.ok(analyzeSchema.required.includes("confidence"));
+    assert.match(analyzeSchema.properties.confidence.description, /0-10/);
+    assert.equal(analyzeSchema.properties.confidence.nullable, undefined);
+});
+
+test("prompt tells the model to use null instead of guessing", () => {
+    const p = buildAnalysisPrompt("X", "some text");
+    assert.match(p, /return null/);
+    assert.match(p, /do NOT guess/);
+    assert.match(p, /confidence \(0-10\)/);
+    assert.match(p, /some text/);
+});
+
+test("interpretAnalysis: all null -> no_sensory_signal; some null -> incomplete; bad -> invalid; good -> write", () => {
+    const nul = { noise_score: null, lighting_score: null, crowd_score: null };
+    assert.deepEqual(interpretAnalysis({ ...good, ...nul }), { action: "skip", reason: "no_sensory_signal" });
+    assert.deepEqual(interpretAnalysis({ ...good, noise_score: null }), { action: "skip", reason: "incomplete_scores" });
+    assert.deepEqual(interpretAnalysis({ ...good, noise_score: "x" }), { action: "skip", reason: "invalid_scores" });
+    assert.equal(interpretAnalysis(good).action, "write");
+});
+
+for (const [name, run] of [["nightly cron", viaCron], ["POST /enrichment/location", viaRoute]]) {
+    test(`${name}: all-null scores write no estimates but mark the place enriched`, async () => {
+        const r = await run({ ...good, noise_score: null, lighting_score: null, crowd_score: null, confidence: 0 });
+        assert.equal(wroteScores(r.updates), false);
+        assert.equal(logs.length, 0);
+        assert.equal(r.updates.length, 1);
+        assert.ok(r.updates[0].lastEnrichedAt instanceof Date);   // not retried every night
+        if (r.body) assert.equal(r.body.reason, "no_sensory_signal");
+    });
+
+    test(`${name}: partially null scores write nothing (no half estimates)`, async () => {
+        const r = await run({ ...good, lighting_score: null });
+        assert.equal(wroteScores(r.updates), false);
+        if (r.body) assert.equal(r.body.reason, "incomplete_scores");
+    });
+}
