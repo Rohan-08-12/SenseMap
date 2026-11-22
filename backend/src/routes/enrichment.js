@@ -3,7 +3,7 @@ import prisma from "../lib/prisma.js";
 import { model } from "../lib/gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
-import { runEnrichment, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
+import { runEnrichment, runPhotoEnrichment, extractFacilities, hasInvalidScores } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
 
 const router = express.Router();
@@ -111,6 +111,18 @@ router.post("/location", requireN8nSecret, async (req, res) => {
         const newNoise    = analysis.noise_score    / 2;
         const newLighting = analysis.lighting_score / 2;
         const newCrowd    = analysis.crowd_score    / 2;
+
+        // Same guard as the nightly cron: reject out-of-range scores (e.g. Gemini returning 0)
+        // instead of saving them, but still keep the deterministic OSM facilities.
+        if (hasInvalidScores(newNoise, newLighting, newCrowd)) {
+            if (osmFacilities) {
+                await prisma.location.update({
+                    where: { id: locationId },
+                    data: { ...(yelpId && { externalYelpId: yelpId }), estimatedFacilities: osmFacilities, lastEnrichedAt: new Date() },
+                });
+            }
+            return res.json({ updated: false, reason: "invalid_scores", sources });
+        }
 
         // OSM tags are exact/deterministic, so they take precedence over Gemini's
         // text-inferred guesses per category; Gemini only fills categories OSM has no tag for.

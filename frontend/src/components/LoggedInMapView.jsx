@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel, haversineDistance } from '../utils.js';
+import { describeDataSources, joinList, clampComfort, factorShares } from '../panelLabels.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import MapView from './MapView';
 import Dashboard from './Dashboard';
@@ -550,32 +551,41 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     ? { noiseScore: _ds.noise, lightingScore: _ds.lighting, crowdScore: _ds.crowd, comfortScore: _ds.comfort ?? (_ds.noise + _ds.lighting + _ds.crowd) / 3 }
     : (locationDetail?.sensoryScores || selectedLocation || {});
   const dataSource = _ds?.source ?? 'category';
+  // AI estimate with no real signal (all-floor or near-identical scores, no community reviews): don't
+  // present it as 'highly comfortable' or give it a match percentage.
+  const lowConfidence = _ds?.lowConfidence === true;
   const locName = selectedLocation?.name || 'Select a location';
   // Clamped for display only (the "X / 5" label and % bars below assume a 5-point
   // ceiling) — ranking/sort order elsewhere uses the true uncapped backend value.
-  const comfortScore = Math.min(5, sensory.comfortScore ?? sensory.comfort_score ?? 0).toFixed(1);
+  const comfortNum = clampComfort(sensory.comfortScore ?? sensory.comfort_score);
+  const comfortScore = comfortNum.toFixed(1);
   const noiseVal = sensory.noiseScore ?? sensory.noise_score ?? 0;
   const noiseLevel = scoreToLabel(noiseVal);
 
   const currentMatch = selectedLocation?.id
     ? matchScores.find((m) => m.locationId === selectedLocation.id)
     : null;
-  const matchPercent = currentMatch?.matchScore ?? null;
+  const matchPercent = lowConfidence ? null : (currentMatch?.matchScore ?? null);
 
-  // Comfort score breakdown
-  const total = (sensory.noiseScore ?? sensory.noise_score ?? 0) +
-    (sensory.crowdScore ?? sensory.crowd_score ?? 0) +
-    (sensory.lightingScore ?? sensory.lighting_score ?? 0) +
-    (sensory.comfortScore ?? sensory.comfort_score ?? 0);
-  const breakdown = total > 0 ? {
-    noise: ((sensory.noiseScore ?? sensory.noise_score ?? 0) / total * 100).toFixed(0),
-    crowd: ((sensory.crowdScore ?? sensory.crowd_score ?? 0) / total * 100).toFixed(0),
-    lighting: ((sensory.lightingScore ?? sensory.lighting_score ?? 0) / total * 100).toFixed(0),
-    comfort: ((sensory.comfortScore ?? sensory.comfort_score ?? 0) / total * 100).toFixed(0),
-  } : { noise: '0', crowd: '0', lighting: '0', comfort: '0' };
+  // Comfort score breakdown: shares of the three sensory loads only (they sum to 100%).
+  // Comfort is their inverse, so it is shown separately as a fraction of its own 0-5 scale.
+  const shares = factorShares({
+    noise: sensory.noiseScore ?? sensory.noise_score ?? 0,
+    lighting: sensory.lightingScore ?? sensory.lighting_score ?? 0,
+    crowd: sensory.crowdScore ?? sensory.crowd_score ?? 0,
+  });
+  const breakdown = {
+    noise: String(shares.noise),
+    lighting: String(shares.lighting),
+    crowd: String(shares.crowd),
+    comfort: String(Math.round(comfortNum / 5 * 100)),
+  };
+  const dominantFactorLabel = { noise: 'Noise matters most', crowd: 'Crowds matter most', lighting: 'Lighting matters most' }[shares.dominant]
+    ?? 'All factors about equal';
 
   // Location tags from AI or sensory scores
   const locationTags = (() => {
+    if (lowConfidence) return ['Low confidence, limited data'];
     if (aiInsights?.tags?.length > 0) return aiInsights.tags;
     const tags = [];
     const ns = sensory.noiseScore ?? sensory.noise_score ?? 3;
@@ -605,7 +615,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     { axis: 'Noise', value: (sensory.noiseScore ?? sensory.noise_score ?? 0) * 2 },
     { axis: 'Lighting', value: (sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2 },
     { axis: 'Crowds', value: (sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2 },
-    { axis: 'Comfort', value: (sensory.comfortScore ?? sensory.comfort_score ?? 0) * 2 },
+    { axis: 'Comfort', value: comfortNum * 2 },
   ];
 
   // Possible triggers
@@ -630,7 +640,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
 
   // Match checks
   const matchChecks = (() => {
-    if (!userProfile || !selectedLocation) return [];
+    if (!userProfile || !selectedLocation || lowConfidence) return [];
     const checks = [];
     const ns = sensory.noiseScore ?? sensory.noise_score ?? 0;
     const ls = sensory.lightingScore ?? sensory.lighting_score ?? 0;
@@ -644,8 +654,6 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   })();
 
   const reviewCount = locationDetail?.sensoryScores?.reviewCount ?? locationDetail?.reviews?.length ?? 0;
-
-  const bestTimeText = aiInsights?.bestTime ?? '—';
 
   const getDistance = useCallback((loc) => {
     if (!userCoords) return null;
@@ -771,7 +779,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
         <Dashboard
           userProfile={userProfile}
           savedPlacesList={savedPlacesList}
-          bestMatch={matchScores?.[0] ?? null}
+          bestMatch={matchScores?.find((m) => m.matchScore != null) ?? null}
           userCoords={userCoords}
           snapshot={snapshot}
           onEditProfile={() => setActiveNav('profile')}
@@ -1311,7 +1319,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 if (dataSource === 'estimated') return (
                   <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#ede9fe', color: '#5b21b6', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontWeight: 700, fontSize: 10, background: '#5b21b6', color: '#fff', borderRadius: 4, padding: '1px 5px' }}>AI</span>
-                    Scores estimated from public data (Yelp, Foursquare, Google Places, City of Toronto) via Gemini — no community visits yet.
+                    Scores estimated from public data ({joinList(describeDataSources(locationDetail?.dataSource))}) via Gemini — no community visits yet.
                   </div>
                 );
                 return (
@@ -1327,21 +1335,23 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   <div className="lmv-stat-boxes">
                     <div className="lmv-stat-box">
                       <div className="box-label">Comfort</div>
-                      <div className="box-value">{comfortScore}</div>
+                      <div className="box-value">{lowConfidence ? '—' : comfortScore}</div>
                     </div>
                     <div className="lmv-stat-box">
                       <div className="box-label">Noise</div>
-                      <div className="box-value small">{noiseLevel}</div>
+                      <div className="box-value small">{lowConfidence ? '—' : noiseLevel}</div>
                     </div>
-                    <div className="lmv-stat-box">
-                      <div className="box-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        Best time
-                        {aiInsights?.bestTime && (
-                          <span style={{ fontSize: 10, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 4px', fontWeight: 600 }}>AI</span>
-                        )}
+                    {aiInsights?.bestTime && (
+                      <div className="lmv-stat-box">
+                        <div className="box-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          Best time
+                          {aiInsights?.bestTime && (
+                            <span style={{ fontSize: 10, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 4px', fontWeight: 600 }}>AI</span>
+                          )}
+                        </div>
+                        <div className="box-value small">{aiInsights.bestTime}</div>
                       </div>
-                      <div className="box-value small">{bestTimeText}</div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="lmv-loc-tags">
@@ -1352,12 +1362,13 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                       </span>
                     )}
                     {locationTags.map((tag) => (
-                      <span key={tag} className="lmv-loc-tag">{tag}</span>
+                      <span key={tag} className="lmv-loc-tag" style={lowConfidence ? { background: 'var(--theme-tag-soft)', color: 'var(--theme-text-muted)', border: '1px solid var(--theme-border)' } : undefined}>{tag}</span>
                     ))}
                   </div>
 
                   {/* Rating tags */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {!lowConfidence && (<>
                     <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>
                       {Math.round(Math.min(5, sensory.comfortScore ?? sensory.comfort_score ?? 0) / 5 * 100)}% {dataSource === 'community' ? 'would revisit' : 'sensory comfort'}
                     </span>
@@ -1367,6 +1378,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                     {(sensory.crowdScore ?? sensory.crowd_score ?? 5) < 2 && (
                       <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-crowd spot</span>
                     )}
+                    </>)}
                     {aiInsights?.bestTime && (
                       <span className="lmv-loc-tag" style={{ background: '#ede9fe', color: '#5b21b6' }}>
                         <span style={{ fontSize: 10, fontWeight: 700, marginRight: 2 }}>AI</span>
@@ -1441,7 +1453,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               )}
 
               {/* Audio summary pill */}
-              {selectedLocation?.id && (
+              {/* Hidden for low-confidence places: the audio script is built server-side from community scores only, so it would read out made-up defaults. */}
+              {selectedLocation?.id && !lowConfidence && (
                 <button
                   type="button"
                   onClick={handlePlayAudio}
@@ -1470,11 +1483,11 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             </div>
 
             {/* Noise through the day */}
-            {dataSource !== 'category' && (
+            {dataSource !== 'category' && !lowConfidence && (
               <div className="lmv-detail-card">
                 <div>
                   <h3 className="lmv-section-title">Noise through the day</h3>
-                  <p className="lmv-section-desc">{dataSource === 'community' ? 'Estimated trend based on community reviews — not real-time data.' : 'Estimated trend based on AI-analysed external reviews — not real-time data.'}</p>
+                  <p className="lmv-section-desc">{dataSource === 'community' ? 'Estimated trend based on community reviews — not real-time data.' : `Estimated trend based on AI analysis of public data (${joinList(describeDataSources(locationDetail?.dataSource))}) — not real-time data.`}</p>
                 </div>
                 <div style={{ width: '100%', height: 120, minWidth: 0 }}>
                   <ResponsiveContainer width="99%" height={120} debounce={50}>
@@ -1498,7 +1511,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   AI insight
                   <span style={{ fontSize: 11, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>Gemini AI</span>
                 </h3>
-                <p className="lmv-section-desc">{dataSource === 'community' ? 'Generated by AI from community reviews.' : 'Generated by AI from external reviews (Yelp, Google, Foursquare).'} Not a substitute for personal judgement.</p>
+                <p className="lmv-section-desc">{dataSource === 'community' ? 'Generated by AI from community reviews.' : `Generated by AI from public data (${joinList(describeDataSources(locationDetail?.dataSource))}).`} Not a substitute for personal judgement.</p>
               </div>
 
               {dataSource === 'category' ? (
@@ -1508,7 +1521,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               ) : aiNoTextReviews ? (
                 <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>
                   {dataSource === 'estimated'
-                    ? 'Not enough external data found to generate AI insights. Be the first to leave a review.'
+                    ? 'Not enough public data found to generate AI insights. Be the first to leave a review.'
                     : 'Write a review describing your experience to unlock AI insights for this place.'}
                 </p>
               ) : aiLoading ? (
@@ -1604,132 +1617,137 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             )}
 
             {/* Sensory Profile (Radar) */}
-            <div className="lmv-detail-card">
-              <div>
-                <h3 className="lmv-section-title">Sensory profile</h3>
-                <p className="lmv-section-desc">A simplified radar view for this location.</p>
-              </div>
-
-              <div className="lmv-radar-container">
-                <div style={{ width: 250, height: 200, minWidth: 0 }}>
-                  <ResponsiveContainer width={250} height={200} debounce={50}>
-                    <RadarChart data={radarData} outerRadius={70}>
-                      <PolarGrid stroke="#e5e7eb" />
-                      <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
-                      <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: '#94a3b8' }} />
-                      <Radar dataKey="value" stroke="var(--theme-accent)" fill="var(--theme-accent)" fillOpacity={0.25} />
-                    </RadarChart>
-                  </ResponsiveContainer>
+            {!lowConfidence && (
+              <div className="lmv-detail-card">
+                <div>
+                  <h3 className="lmv-section-title">Sensory profile</h3>
+                  <p className="lmv-section-desc">A simplified radar view for this location.</p>
                 </div>
 
-                <div className="lmv-profile-grid">
-                  <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{((sensory.noiseScore ?? sensory.noise_score ?? 0) * 2).toFixed(0)}</span></div>
-                  <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{((sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2).toFixed(0)}</span></div>
-                  <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{((sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2).toFixed(0)}</span></div>
-                  <div className="lmv-profile-stat">
-                    <span className="pstat-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      Comfort
-                      <span
-                        title="Comfort is the inverse of sensory load — a quiet, uncrowded, softly lit space scores high even though individual sensory values are low."
-                        style={{ cursor: 'help', fontSize: 10, fontWeight: 700, color: 'var(--theme-text-muted)', background: 'var(--theme-border)', borderRadius: '50%', width: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                        aria-label="Comfort score explanation"
-                      >?</span>
-                    </span>
-                    <span className="pstat-value">{((sensory.comfortScore ?? sensory.comfort_score ?? 0) * 2).toFixed(0)}</span>
+                <div className="lmv-radar-container">
+                  <div style={{ width: 250, height: 200, minWidth: 0 }}>
+                    <ResponsiveContainer width={250} height={200} debounce={50}>
+                      <RadarChart data={radarData} outerRadius={70}>
+                        <PolarGrid stroke="#e5e7eb" />
+                        <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
+                        <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                        <Radar dataKey="value" stroke="var(--theme-accent)" fill="var(--theme-accent)" fillOpacity={0.25} />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="lmv-profile-grid">
+                    <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{((sensory.noiseScore ?? sensory.noise_score ?? 0) * 2).toFixed(0)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{((sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2).toFixed(0)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{((sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2).toFixed(0)}</span></div>
+                    <div className="lmv-profile-stat">
+                      <span className="pstat-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Comfort
+                        <span
+                          title="Comfort is the inverse of sensory load — a quiet, uncrowded, softly lit space scores high even though individual sensory values are low."
+                          style={{ cursor: 'help', fontSize: 10, fontWeight: 700, color: 'var(--theme-text-muted)', background: 'var(--theme-border)', borderRadius: '50%', width: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                          aria-label="Comfort score explanation"
+                        >i</span>
+                      </span>
+                      <span className="pstat-value">{(comfortNum * 2).toFixed(0)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Comfort Score Breakdown */}
-            <div className="lmv-detail-card">
-              <div>
-                <h3 className="lmv-section-title">Comfort score</h3>
-                <p className="lmv-section-desc">How the score is calculated.</p>
-              </div>
+            {!lowConfidence && (
+              <div className="lmv-detail-card">
+                <div>
+                  <h3 className="lmv-section-title">Comfort score</h3>
+                  <p className="lmv-section-desc">How the score is calculated.</p>
+                </div>
 
-              <div className="lmv-comfort-header">
-                <div className="lmv-comfort-score">
-                  <div className="cscore-label">Sensory Comfort Score</div>
-                  <div className="cscore-value">{comfortScore} / 5</div>
+                <div className="lmv-comfort-header">
+                  <div className="lmv-comfort-score">
+                    <div className="cscore-label">Sensory Comfort Score</div>
+                    <div className="cscore-value">{lowConfidence ? '—' : `${comfortScore} / 5`}</div>
+                  </div>
+                  <span className="lmv-tag green">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    {dominantFactorLabel}
+                  </span>
                 </div>
-                <span className="lmv-tag green">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  {parseInt(breakdown.noise) >= parseInt(breakdown.crowd) && parseInt(breakdown.noise) >= parseInt(breakdown.lighting) ? 'Noise matters most' :
-                    parseInt(breakdown.crowd) >= parseInt(breakdown.lighting) ? 'Crowds matter most' : 'Lighting matters most'}
-                </span>
-              </div>
 
-              <div className="lmv-score-bars">
-                <div className="lmv-score-row">
-                  <span className="sr-label">Noise</span>
-                  <div className="sr-bar"><div className="sr-fill blue" style={{ width: `${breakdown.noise}%` }} /></div>
-                  <span className="sr-percent">{breakdown.noise}%</span>
-                </div>
-                <div className="lmv-score-row">
-                  <span className="sr-label">Lighting</span>
-                  <div className="sr-bar"><div className="sr-fill teal" style={{ width: `${breakdown.lighting}%` }} /></div>
-                  <span className="sr-percent">{breakdown.lighting}%</span>
-                </div>
-                <div className="lmv-score-row">
-                  <span className="sr-label">Crowds</span>
-                  <div className="sr-bar"><div className="sr-fill yellow" style={{ width: `${breakdown.crowd}%` }} /></div>
-                  <span className="sr-percent">{breakdown.crowd}%</span>
-                </div>
-                <div className="lmv-score-row">
-                  <span className="sr-label">Comfort</span>
-                  <div className="sr-bar"><div className="sr-fill purple" style={{ width: `${breakdown.comfort}%` }} /></div>
-                  <span className="sr-percent">{breakdown.comfort}%</span>
+                <div className="lmv-score-bars">
+                  <div className="lmv-score-row">
+                    <span className="sr-label">Noise</span>
+                    <div className="sr-bar"><div className="sr-fill blue" style={{ width: `${breakdown.noise}%` }} /></div>
+                    <span className="sr-percent">{breakdown.noise}%</span>
+                  </div>
+                  <div className="lmv-score-row">
+                    <span className="sr-label">Lighting</span>
+                    <div className="sr-bar"><div className="sr-fill teal" style={{ width: `${breakdown.lighting}%` }} /></div>
+                    <span className="sr-percent">{breakdown.lighting}%</span>
+                  </div>
+                  <div className="lmv-score-row">
+                    <span className="sr-label">Crowds</span>
+                    <div className="sr-bar"><div className="sr-fill yellow" style={{ width: `${breakdown.crowd}%` }} /></div>
+                    <span className="sr-percent">{breakdown.crowd}%</span>
+                  </div>
+                  <div className="lmv-score-row">
+                    <span className="sr-label">Comfort</span>
+                    <div className="sr-bar"><div className="sr-fill purple" style={{ width: `${breakdown.comfort}%` }} /></div>
+                    <span className="sr-percent">{breakdown.comfort}%</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Why it fits you */}
-            <div className="lmv-detail-card">
-              <div>
-                <h3 className="lmv-section-title">Why it fits you</h3>
-                <p className="lmv-section-desc">A short recommendation and a soft alert.</p>
-              </div>
+            {!lowConfidence && (
+              <div className="lmv-detail-card">
+                <div>
+                  <h3 className="lmv-section-title">Why it fits you</h3>
+                  <p className="lmv-section-desc">A short recommendation and a soft alert.</p>
+                </div>
 
-              <div className="lmv-match-card">
-                <div className="lmv-match-card-header">
-                  <h4>Match score</h4>
-                  <span className="lmv-match-badge">{matchPercent !== null ? `${matchPercent}%` : '—'}</span>
-                </div>
-                <div className="lmv-match-bar">
-                  <div className="lmv-match-bar-fill" style={{ width: `${matchPercent ?? 0}%` }} />
-                </div>
-                <div className="lmv-match-checks">
-                  {matchChecks.length > 0 ? matchChecks.map((check) => (
-                    <div key={check} className="lmv-match-check">
-                      <span className="lmv-check-icon">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 7l2.5 2.5L10.5 5" stroke="#05360d" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      </span>
-                      {check}
-                    </div>
-                  )) : (
-                    <p style={{ color: 'var(--theme-text-muted)', fontSize: 13, margin: 0 }}>
-                      {userProfile ? 'Select a location to see match details.' : 'Set up your sensory profile to see matches.'}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {triggers.length > 0 && (
-                <div className="lmv-trigger-card">
-                  <h4>Possible triggers later today</h4>
-                  <div className="lmv-trigger-chips">
-                    {triggers.map((t) => (
-                      <span key={t} className="lmv-trigger-chip">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75v3.5L9.33 7" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="7" cy="7" r="5.25" stroke="#0f1720" strokeWidth="1.2" /></svg>
-                        {t}
-                      </span>
-                    ))}
+                <div className="lmv-match-card">
+                  <div className="lmv-match-card-header">
+                    <h4>Match score</h4>
+                    <span className="lmv-match-badge">{matchPercent !== null ? `${matchPercent}%` : '—'}</span>
                   </div>
-                  {triggerTip && <p className="lmv-trigger-tip">Tip: {triggerTip}</p>}
+                  <div className="lmv-match-bar">
+                    <div className="lmv-match-bar-fill" style={{ width: `${matchPercent ?? 0}%` }} />
+                  </div>
+                  <div className="lmv-match-checks">
+                    {matchChecks.length > 0 ? matchChecks.map((check) => (
+                      <div key={check} className="lmv-match-check">
+                        <span className="lmv-check-icon">
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 7l2.5 2.5L10.5 5" stroke="#05360d" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </span>
+                        {check}
+                      </div>
+                    )) : (
+                      <p style={{ color: 'var(--theme-text-muted)', fontSize: 13, margin: 0 }}>
+                        {lowConfidence ? 'Not enough data to calculate a match for this place yet.' : userProfile ? 'Select a location to see match details.' : 'Set up your sensory profile to see matches.'}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {triggers.length > 0 && (
+                  <div className="lmv-trigger-card">
+                    <h4>Possible triggers later today</h4>
+                    <div className="lmv-trigger-chips">
+                      {triggers.map((t) => (
+                        <span key={t} className="lmv-trigger-chip">
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75v3.5L9.33 7" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="7" cy="7" r="5.25" stroke="#0f1720" strokeWidth="1.2" /></svg>
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                    {triggerTip && <p className="lmv-trigger-tip">Tip: {triggerTip}</p>}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Similar Places */}
             {similarLocations.length > 0 && (

@@ -56,6 +56,12 @@ export function extractFacilities(analysis) {
     return Object.keys(facilities).length > 0 ? facilities : null;
 }
 
+// Gemini occasionally returns 0, which is outside the 1-10 range (0.5 is the lowest valid score
+// after halving). Shared by the nightly cron and POST /enrichment/location.
+export function hasInvalidScores(noise, lighting, crowd) {
+    return noise < 0.5 || lighting < 0.5 || crowd < 0.5;
+}
+
 function scoresDiffer(location, newNoise, newLighting, newCrowd, threshold = 0.5) {
     if (location.estimatedNoiseScore == null) return true;
     return (
@@ -105,7 +111,7 @@ async function enrichLocation(location) {
     const newCrowd    = analysis.crowd_score    / 2;
 
     // Reject invalid scores — Gemini occasionally returns 0 which is outside the 1-10 range
-    if (newNoise < 0.5 || newLighting < 0.5 || newCrowd < 0.5) {
+    if (hasInvalidScores(newNoise, newLighting, newCrowd)) {
         // Scores are unusable, but the (deterministic, Gemini-independent) OSM facilities are
         // still worth saving rather than discarding along with the bad score analysis.
         if (osmFacilities) {

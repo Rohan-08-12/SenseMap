@@ -83,3 +83,18 @@ export function getDisplayScore(location) {
     }
     return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, comfort: comfortScore, source: "category" };
 }
+
+/**
+ * True when a display score is an AI estimate that carries no signal: no community reviews
+ * (source "estimated") and all three factors at or below the 0.5 floor (Gemini said 1/10 across
+ * the board). Such places must not be shown as "highly comfortable" or given a match percentage.
+ * Deliberately narrow: flat but real estimates like 2.0/2.0/2.0 are NOT low confidence.
+ * Note: Location.enrichmentConfidence would be the natural signal, but only the n8n route sets it
+ * (the nightly cron never does), so it can't be relied on.
+ */
+export function isLowConfidence(display) {
+    if (!display || display.source !== "estimated") return false;
+    const vals = [display.noise, display.lighting, display.crowd];
+    if (vals.some((v) => !Number.isFinite(v))) return false;
+    return vals.every((v) => v <= 0.5);
+}
