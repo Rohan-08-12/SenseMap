@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "test:db": "node --experimental-test-module-mocks --test --test-concurrency=1 test/enrichment-freshness.test.js test/enrichment-lock-extra.test.js",
+    "test:db": "node --experimental-test-module-mocks --test --test-concurrency=1 test/enrichment-freshness.test.js test/enrichment-lock-extra.test.js test/enrichment-run-integration.test.js",
     "start": "prisma migrate deploy && node src/server.js",
     "osm-import": "node osm-import.js",
     "postinstall": "prisma generate"
