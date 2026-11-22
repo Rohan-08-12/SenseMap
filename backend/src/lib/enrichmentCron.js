@@ -7,14 +7,9 @@ import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
 import { acquireRun, heartbeat, finishRun } from "./enrichmentRuns.js";
 import { requestAnalysis, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
 import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "./enrichmentBackoff.js";
+import { resolveLimit } from "./enrichmentConfig.js";
 
 const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
-
-// Caps how many locations a single unforced nightly run touches. Without this, a backlog of
-// simultaneously-stale locations (e.g. all last enriched in the same original batch job) would
-// get reprocessed in one lump instead of trickling in — spiking Google Places/Yelp/Foursquare
-// spend and quota in a single run. force=true (manual backfill trigger) ignores this cap.
-const NIGHTLY_BATCH_LIMIT = 200;
 
 // Maps the Gemini schema's *_tags keys to the canonical facilities field names
 // used everywhere else (Review columns, FACILITIES_OPTIONS, frontend pills).
@@ -128,23 +123,23 @@ async function enrichLocation(location) {
 
 /**
  * The places an enrichment run would process: stale (or never enriched) and not inside the
- * incomplete-scores backoff, oldest first, capped at NIGHTLY_BATCH_LIMIT unless forced.
+ * incomplete-scores backoff, oldest first. Every selection is capped (ENRICHMENT_MAX_PER_RUN, default 50,
+ * or an explicit `limit`, both clamped to 1-1000), forced runs included, so no run is unbounded.
  * Exported so scripts/check_backoff_query.js can exercise the exact production query.
  */
-export async function selectLocationsToEnrich({ force = false } = {}) {
+export async function selectLocationsToEnrich({ force = false, limit } = {}) {
     const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
     // Places whose last analysis was incomplete are left alone for 30 days (a forced run ignores this).
     const backoffIds = force ? [] : await idsInIncompleteBackoff(prisma);
 
     return prisma.location.findMany({
-        // force=true (manual backfill trigger) ignores staleness and the nightly cap, re-processing
-        // every location — used e.g. to seed estimatedFacilities onto locations enriched before
-        // that field existed. An unforced (cron) run processes at most NIGHTLY_BATCH_LIMIT of the
-        // oldest-stale locations, so a backlog trickles in over several nights instead of spiking
-        // API spend in one run.
+        // force=true (manual backfill trigger) ignores staleness, re-processing places regardless of
+        // when they were last enriched (e.g. to seed estimatedFacilities onto places enriched before
+        // that field existed) but is still capped, so a backlog is worked through in batches instead
+        // of spiking Gemini / Google Places spend and quota in one run.
         where: force ? {} : staleWhere(cutoff, backoffIds),
         orderBy: [{ lastEnrichedAt: { sort: "asc", nulls: "first" } }],
-        ...(force ? {} : { take: NIGHTLY_BATCH_LIMIT }),
+        take: resolveLimit(limit),
         select: {
             id: true, name: true, latitude: true, longitude: true,
             category: true, externalYelpId: true, googlePlaceId: true,
