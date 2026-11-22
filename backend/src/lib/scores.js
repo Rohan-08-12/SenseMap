@@ -84,6 +84,20 @@ export function getDisplayScore(location) {
     return { noise: noiseScore, lighting: lightingScore, crowd: crowdScore, comfort: comfortScore, source: "category" };
 }
 
+/** getDisplayScore for a Location loaded with `sensoryScores` (the same inputs GET /locations/:id uses). */
+export function displayScoreForLocation(location) {
+    return getDisplayScore({
+        reviewCount:            location.sensoryScores?.reviewCount    ?? 0,
+        noiseScore:             location.sensoryScores?.noiseScore     ?? null,
+        lightingScore:          location.sensoryScores?.lightingScore  ?? null,
+        crowdScore:             location.sensoryScores?.crowdScore     ?? null,
+        comfortScore:           location.sensoryScores?.comfortScore   ?? null,
+        estimatedNoiseScore:    location.estimatedNoiseScore,
+        estimatedLightingScore: location.estimatedLightingScore,
+        estimatedCrowdScore:    location.estimatedCrowdScore,
+    });
+}
+
 /**
  * True when a display score is an AI estimate that carries no signal: no community reviews
  * (source "estimated") and all three factors at or below the 0.5 floor (Gemini said 1/10 across

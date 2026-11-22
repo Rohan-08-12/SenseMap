@@ -3,7 +3,9 @@ import rateLimit from "express-rate-limit";
 import prisma from "../lib/prisma.js";
 import cloudinary from "../lib/cloudinary.js";
 import { generateAudioSummary } from "../lib/elevenlabs.js";
-import { buildAudioScript } from "../lib/audioScript.js";
+import { buildAudioScript, audioAvailability, audioPublicId, isAudioCacheValid, NO_AUDIO_MESSAGE } from "../lib/audioScript.js";
+import { displayScoreForLocation, isLowConfidence } from "../lib/scores.js";
+import { summarizeReviewSources } from "../lib/systemBot.js";
 
 const router = express.Router();
 
@@ -23,18 +25,25 @@ router.get("/:locationId", async (req, res) => {
   try {
     const location = await prisma.location.findUnique({
       where: { id: locationId },
-      include: { sensoryScores: true },
+      include: {
+        sensoryScores: true,
+        reviews: { select: { isAiGenerated: true, user: { select: { email: true, auth0Id: true } } } },
+      },
     });
 
     if (!location) return res.status(404).json({ error: "Location not found" });
 
-    // Serve cached audio if it was generated after the location was last updated
-    if (
-      location.audioUrl &&
-      location.audioGeneratedAt &&
-      location.audioGeneratedAt > location.updatedAt
-    ) {
-      return res.json({ audioUrl: location.audioUrl });
+    // Same scores the place panel shows. Nothing usable (or an AI guess with no signal) -> no audio at all,
+    // decided BEFORE the cache so a stale file made from the old hardcoded fallback is never served.
+    const display = displayScoreForLocation(location);
+    const availability = audioAvailability(display, isLowConfidence(display));
+    if (!availability.available) {
+      return res.json({ available: false, reason: availability.reason, audioUrl: null, message: NO_AUDIO_MESSAGE });
+    }
+
+    // Serve cached audio only if it came from the current script version and is newer than the last update
+    if (isAudioCacheValid(location)) {
+      return res.json({ available: true, audioUrl: location.audioUrl });
     }
 
     // Apply rate limit only for generation calls (not cache hits)
@@ -43,7 +52,7 @@ router.get("/:locationId", async (req, res) => {
     void limited;
 
     // Generate fresh audio
-    const script = buildAudioScript(location, location.sensoryScores, null);
+    const script = buildAudioScript(location, display, { realReviews: summarizeReviewSources(location.reviews).real }, null);
 
     let audioBuffer;
     try {
@@ -59,7 +68,7 @@ router.get("/:locationId", async (req, res) => {
         {
           resource_type: "video",
           folder: "sensemap-audio",
-          public_id: `audio_${locationId}`,
+          public_id: audioPublicId(locationId),
           overwrite: true,
         },
         (err, result) => (err ? reject(err) : resolve(result))
@@ -75,7 +84,7 @@ router.get("/:locationId", async (req, res) => {
       },
     });
 
-    res.json({ audioUrl: uploadResult.secure_url });
+    res.json({ available: true, audioUrl: uploadResult.secure_url });
   } catch (error) {
     console.error("Audio route error:", error);
     res.status(503).json({ audioUrl: null, error: "Audio unavailable" });

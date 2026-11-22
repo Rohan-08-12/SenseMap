@@ -126,12 +126,14 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioError, setAudioError] = useState(false);
+  const [audioUnavailable, setAudioUnavailable] = useState(false);   // server said there is no audio for this place
 
   // Reset audio state when the selected location changes
   useEffect(() => {
     setAudioLoading(false);
     setAudioPlaying(false);
     setAudioError(false);
+    setAudioUnavailable(false);
   }, [selectedLocation?.id]);
 
   // Apply accessibility + appearance settings from localStorage on mount
@@ -676,6 +678,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     setAudioLoading(true);
     try {
       const { data } = await getLocationAudio(selectedLocation.id);
+      if (data?.available === false) { setAudioUnavailable(true); setAudioLoading(false); return; }
       if (!data?.audioUrl) throw new Error('No audio URL');
       const audio = new Audio(data.audioUrl);
       audio.onended = () => setAudioPlaying(false);
@@ -1454,8 +1457,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               )}
 
               {/* Audio summary pill */}
-              {/* Hidden for low-confidence places: the audio script is built server-side from community scores only, so it would read out made-up defaults. */}
-              {selectedLocation?.id && !lowConfidence && (
+              {/* Hidden when there is nothing honest to read out: no usable scores (category defaults), a low-confidence AI guess, or the server answered "no audio". */}
+              {selectedLocation?.id && !lowConfidence && dataSource !== 'category' && !audioUnavailable && (
                 <button
                   type="button"
                   onClick={handlePlayAudio}

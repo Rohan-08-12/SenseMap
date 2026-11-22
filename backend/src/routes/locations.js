@@ -4,7 +4,7 @@ import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
-import { getDisplayScore, isLowConfidence } from "../lib/scores.js";
+import { getDisplayScore, displayScoreForLocation, isLowConfidence } from "../lib/scores.js";
 import { computeMatch, compareMatches } from "../lib/matchScore.js";
 import { isBotReview, summarizeReviewSources } from "../lib/systemBot.js";
 
@@ -419,16 +419,7 @@ router.get("/:id", async (req, res) => {
 
         const facilities = await aggregateFacilities(req.params.id, location.estimatedFacilities);
 
-        const displayScores = getDisplayScore({
-            reviewCount:            location.sensoryScores?.reviewCount    ?? 0,
-            noiseScore:             location.sensoryScores?.noiseScore     ?? null,
-            lightingScore:          location.sensoryScores?.lightingScore  ?? null,
-            crowdScore:             location.sensoryScores?.crowdScore     ?? null,
-            comfortScore:           location.sensoryScores?.comfortScore   ?? null,
-            estimatedNoiseScore:    location.estimatedNoiseScore,
-            estimatedLightingScore: location.estimatedLightingScore,
-            estimatedCrowdScore:    location.estimatedCrowdScore,
-        });
+        const displayScores = displayScoreForLocation(location);
 
         // Never expose reviewer emails/auth ids publicly — send username + a server-computed isBot flag.
         const reviews = location.reviews.map(({ user, ...review }) => ({
