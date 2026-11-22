@@ -4,9 +4,9 @@ import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
-import { getDisplayScore, isLowConfidence } from "../lib/scores.js";
+import { getDisplayScore, displayScoreForLocation, isLowConfidence } from "../lib/scores.js";
 import { computeMatch, compareMatches } from "../lib/matchScore.js";
-import { isBotReview } from "../lib/systemBot.js";
+import { isBotReview, summarizeReviewSources } from "../lib/systemBot.js";
 
 
 const router = express.Router()
@@ -419,16 +419,7 @@ router.get("/:id", async (req, res) => {
 
         const facilities = await aggregateFacilities(req.params.id, location.estimatedFacilities);
 
-        const displayScores = getDisplayScore({
-            reviewCount:            location.sensoryScores?.reviewCount    ?? 0,
-            noiseScore:             location.sensoryScores?.noiseScore     ?? null,
-            lightingScore:          location.sensoryScores?.lightingScore  ?? null,
-            crowdScore:             location.sensoryScores?.crowdScore     ?? null,
-            comfortScore:           location.sensoryScores?.comfortScore   ?? null,
-            estimatedNoiseScore:    location.estimatedNoiseScore,
-            estimatedLightingScore: location.estimatedLightingScore,
-            estimatedCrowdScore:    location.estimatedCrowdScore,
-        });
+        const displayScores = displayScoreForLocation(location);
 
         // Never expose reviewer emails/auth ids publicly — send username + a server-computed isBot flag.
         const reviews = location.reviews.map(({ user, ...review }) => ({
@@ -437,7 +428,15 @@ router.get("/:id", async (req, res) => {
             isBot: isBotReview(review, user),
         }));
 
-        res.json({ ...location, reviews, displayScores: { ...displayScores, lowConfidence: isLowConfidence(displayScores) }, facilities });
+        // Counted over ALL reviews (the list above is only the latest 10) so labels can tell real visitor
+        // reviews from bot/curated ones.
+        const allReviews = await prisma.review.findMany({
+            where: { locationId: req.params.id },
+            select: { isAiGenerated: true, user: { select: { email: true, auth0Id: true } } },
+        });
+        const reviewSources = summarizeReviewSources(allReviews);
+
+        res.json({ ...location, reviews, reviewSources, displayScores: { ...displayScores, lowConfidence: isLowConfidence(displayScores) }, facilities });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });

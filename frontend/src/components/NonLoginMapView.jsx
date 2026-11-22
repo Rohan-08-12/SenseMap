@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel } from '../utils.js';
+import { describeEvidence } from '../panelLabels.js';
 import MapView from './MapView';
 import EmailCaptureBanner from './EmailCaptureBanner';
 import { getRankings, getLocationHeatmap, getLocationById, getLocationHours, searchLocations, checkNearbyConstruction } from '../services/api';
@@ -266,6 +267,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
   const dataSource = _ds?.source ?? 'category';
   const locationName = selectedLocation?.name || 'Select a location';
   const reviewCount = locationDetail?.sensoryScores?.reviewCount ?? locationDetail?.reviews?.length ?? 0;
+  const evidence = describeEvidence({ dataSource, reviewSources: locationDetail?.reviewSources, reviews: locationDetail?.reviews, dataSourceField: locationDetail?.dataSource });
 
   const noiseScore = sensory.noiseScore ?? sensory.noise_score ?? 2.5;
   const lightingScore = sensory.lightingScore ?? sensory.lighting_score ?? 2.5;
@@ -653,7 +655,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   </div>
                   <div className="nlm-score-badge">
                     <span className="score-value">{dataSource === 'category' ? '—' : overallScore}</span>
-                    <span className="score-label">{dataSource === 'community' ? `${reviewCount} reviews` : dataSource === 'estimated' ? 'AI estimate' : 'No data'}</span>
+                    <span className="score-label">{evidence.kind === 'category' ? 'No data' : evidence.countLabel}</span>
                   </div>
                 </div>
 
@@ -686,7 +688,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </div>
 
                 {/* Stars — only show for real community reviews */}
-                {dataSource === 'community' && (
+                {evidence.hasRealReviews && (
                   <div className="nlm-stars">
                     {[1, 2, 3, 4, 5].map((i) => (
                       <div key={i} className={`nlm-star ${i <= starCount ? 'filled' : 'empty'}`}>
@@ -901,7 +903,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </div>
                 <div className="nlm-score-badge">
                   <span className="score-value">{dataSource === 'category' ? '—' : overallScore}</span>
-                  <span className="score-label">{dataSource === 'community' ? `${reviewCount} reviews` : dataSource === 'estimated' ? 'AI estimate' : 'No data'}</span>
+                  <span className="score-label">{evidence.kind === 'category' ? 'No data' : evidence.countLabel}</span>
                 </div>
                 <button
                   className="nlm-mobile-detail-close"
@@ -943,7 +945,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               )}
 
               {/* Stars — only show for real community reviews */}
-              {dataSource === 'community' && (
+              {evidence.hasRealReviews && (
                 <div className="nlm-stars">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className={`nlm-star ${i <= starCount ? 'filled' : 'empty'}`}>

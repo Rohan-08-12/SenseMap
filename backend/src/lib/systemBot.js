@@ -16,6 +16,13 @@ export function isBotReview(review, user) {
         || user?.auth0Id === SYSTEM_BOT.auth0Id;
 }
 
+// Counts real visitor reviews vs bot/curated ones, so labels never call a bot-only place "community reviews".
+export function summarizeReviewSources(reviews = []) {
+    let bot = 0;
+    for (const r of reviews) if (isBotReview(r, r.user)) bot++;
+    return { total: reviews.length, real: reviews.length - bot, bot };
+}
+
 export async function getSystemUser() {
     return prisma.user.upsert({
         where: { auth0Id: SYSTEM_BOT.auth0Id },

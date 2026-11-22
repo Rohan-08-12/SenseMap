@@ -8,6 +8,7 @@ import { generateLocationEmbedding } from "../lib/embeddings.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { applyInsightConfidence } from "../lib/insightConfidence.js";
 import { insightsSchema, buildInsightsPrompt } from "../lib/insightsPrompt.js";
+import { gatherInsightText, NO_INSIGHT_DATA_MESSAGE } from "../lib/insightsSource.js";
 const router = express.Router();
 
 
@@ -94,26 +95,10 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
 
     if (!location) return res.status(404).json({ error: "Location not found" });
 
-    const reviewsWithText = location.reviews.filter((r) => r.bodyText && r.bodyText.trim().length > 0);
+    const reviewTexts = await gatherInsightText(location, { fetchSources: fetchAllSources });
 
-    let reviewTexts = reviewsWithText.map((r) => {
-      const timeTag = r.visitTime ? `[${r.visitTime}] ` : "";
-      return `${timeTag}${r.bodyText}`;
-    }).join("\n");
-
-    // No community reviews — fall back to Yelp/Foursquare/Reddit enrichment text
-    if (!reviewTexts && location.estimatedNoiseScore != null) {
-      const { combinedText } = await fetchAllSources({
-        name: location.name,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        existingYelpId: location.externalYelpId,
-      });
-      reviewTexts = combinedText;
-    }
-
-    if (!reviewTexts) return res.status(400).json({ error: "No review data available for this location" });
-
+    // Nothing to analyse: answer 200 with a clear status and skip Gemini and Claude entirely.
+    if (!reviewTexts) return res.json({ status: "no_data", message: NO_INSIGHT_DATA_MESSAGE });
 
     const prompt = buildInsightsPrompt(location, reviewTexts);
 

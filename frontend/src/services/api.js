@@ -108,8 +108,12 @@ export const updateSensoryProfile = (profileData) => {
 };
 
 // ─── AI Insights (Gemini) ───────────────────────────────────
-export const getAIInsights = (locationId) => {
-    return api.post(`/ai/insights/${locationId}`);
+// The server answers 200 { status: "no_data" } when there is nothing to analyse. Callers get data: null and
+// noData: true, so they keep showing the "not enough data" message without treating it as an error.
+export const getAIInsights = async (locationId) => {
+    const res = await api.post(`/ai/insights/${locationId}`);
+    if (res.data?.status === 'no_data') return { ...res, data: null, noData: true };
+    return res;
 };
 
 export const analyzeReview = (reviewText) => {

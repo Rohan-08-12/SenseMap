@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel, haversineDistance } from '../utils.js';
-import { describeDataSources, joinList, clampComfort, factorShares } from '../panelLabels.js';
+import { describeDataSources, joinList, clampComfort, factorShares, describeEvidence, radarValues } from '../panelLabels.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import MapView from './MapView';
 import Dashboard from './Dashboard';
@@ -126,12 +126,14 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioError, setAudioError] = useState(false);
+  const [audioUnavailable, setAudioUnavailable] = useState(false);   // server said there is no audio for this place
 
   // Reset audio state when the selected location changes
   useEffect(() => {
     setAudioLoading(false);
     setAudioPlaying(false);
     setAudioError(false);
+    setAudioUnavailable(false);
   }, [selectedLocation?.id]);
 
   // Apply accessibility + appearance settings from localStorage on mount
@@ -290,7 +292,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
       setAiLoading(true);
       await getAccessTokenSilently({ authorizationParams: { audience: import.meta.env.VITE_AUTH0_AUDIENCE } });
       const res = await getAIInsights(locId);
-      setAiInsights(res.data);
+      if (res.noData) setAiNoTextReviews(true);
+      else setAiInsights(res.data);
     } catch (err) {
       if (err?.response?.status === 400) setAiNoTextReviews(true);
       else setAiError(true);
@@ -611,11 +614,18 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   ];
 
   // Radar chart data
+  // Same 0-5 values as the weights card, one decimal (see radarValues).
+  const radar = radarValues({
+    noise: sensory.noiseScore ?? sensory.noise_score ?? 0,
+    lighting: sensory.lightingScore ?? sensory.lighting_score ?? 0,
+    crowd: sensory.crowdScore ?? sensory.crowd_score ?? 0,
+    comfort: comfortNum,
+  });
   const radarData = [
-    { axis: 'Noise', value: (sensory.noiseScore ?? sensory.noise_score ?? 0) * 2 },
-    { axis: 'Lighting', value: (sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2 },
-    { axis: 'Crowds', value: (sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2 },
-    { axis: 'Comfort', value: comfortNum * 2 },
+    { axis: 'Noise', value: radar.noise },
+    { axis: 'Lighting', value: radar.lighting },
+    { axis: 'Crowds', value: radar.crowd },
+    { axis: 'Comfort', value: radar.comfort },
   ];
 
   // Possible triggers
@@ -653,7 +663,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     return checks;
   })();
 
-  const reviewCount = locationDetail?.sensoryScores?.reviewCount ?? locationDetail?.reviews?.length ?? 0;
+  const evidence = describeEvidence({ dataSource, reviewSources: locationDetail?.reviewSources, reviews: locationDetail?.reviews, dataSourceField: locationDetail?.dataSource });
 
   const getDistance = useCallback((loc) => {
     if (!userCoords) return null;
@@ -669,6 +679,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     setAudioLoading(true);
     try {
       const { data } = await getLocationAudio(selectedLocation.id);
+      if (data?.available === false) { setAudioUnavailable(true); setAudioLoading(false); return; }
       if (!data?.audioUrl) throw new Error('No audio URL');
       const audio = new Audio(data.audioUrl);
       audio.onended = () => setAudioPlaying(false);
@@ -1071,7 +1082,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 <div className="lmv-loc-header-row">
                   <div className="lmv-loc-title">
                     <h2>{locName}</h2>
-                    <p>{reviewCount > 0 ? `${reviewCount} reviews` : dataSource === 'estimated' ? 'AI estimate' : 'No data yet'}</p>
+                    <p>{evidence.countLabel}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span className="lmv-match-badge">
@@ -1288,7 +1299,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               </div>
 
               {/* Stars — only show for real community reviews */}
-              {avgRating !== null && dataSource === 'community' && (
+              {avgRating !== null && evidence.hasRealReviews && (
                 <div style={{ display: 'flex', gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((i) => (
                     <svg key={i} width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -1302,18 +1313,12 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               )}
 
               {(() => {
-                const communityCount = locationDetail?.sensoryScores?.reviewCount ?? 0;
-                const allReviews = locationDetail?.reviews ?? [];
-                const allBot = allReviews.length > 0 && allReviews.every(r => r.isBot);
-                const realCount = allReviews.filter(r => !r.isBot).length;
-
                 if (dataSource === 'community') return (
                   <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#d6f5e1', color: '#05360d', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 6.5l2.5 2.5 4.5-4.5" stroke="#05360d" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {allBot
-                      ? `Curated by SenseMap — sourced from public accessibility research`
-                      : `${realCount || communityCount} community ${(realCount || communityCount) === 1 ? 'review' : 'reviews'} — real visitor data`
-                    }
+                    {evidence.hasRealReviews
+                      ? `${evidence.countLabel.replace(/^(\d+) /, '$1 community ')} — real visitor data`
+                      : 'Curated by SenseMap — sourced from public accessibility research'}
                   </div>
                 );
                 if (dataSource === 'estimated') return (
@@ -1453,8 +1458,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               )}
 
               {/* Audio summary pill */}
-              {/* Hidden for low-confidence places: the audio script is built server-side from community scores only, so it would read out made-up defaults. */}
-              {selectedLocation?.id && !lowConfidence && (
+              {/* Hidden when there is nothing honest to read out: no usable scores (category defaults), a low-confidence AI guess, or the server answered "no audio". */}
+              {selectedLocation?.id && !lowConfidence && dataSource !== 'category' && !audioUnavailable && (
                 <button
                   type="button"
                   onClick={handlePlayAudio}
@@ -1487,7 +1492,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               <div className="lmv-detail-card">
                 <div>
                   <h3 className="lmv-section-title">Noise through the day</h3>
-                  <p className="lmv-section-desc">{dataSource === 'community' ? 'Estimated trend based on community reviews — not real-time data.' : `Estimated trend based on AI analysis of public data (${joinList(describeDataSources(locationDetail?.dataSource))}) — not real-time data.`}</p>
+                  <p className="lmv-section-desc">{evidence.trend} — not real-time data.</p>
                 </div>
                 <div style={{ width: '100%', height: 120, minWidth: 0 }}>
                   <ResponsiveContainer width="99%" height={120} debounce={50}>
@@ -1511,7 +1516,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   AI insight
                   <span style={{ fontSize: 11, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>Gemini AI</span>
                 </h3>
-                <p className="lmv-section-desc">{dataSource === 'community' ? 'Generated by AI from community reviews.' : `Generated by AI from public data (${joinList(describeDataSources(locationDetail?.dataSource))}).`} Not a substitute for personal judgement.</p>
+                <p className="lmv-section-desc">{evidence.insight} Not a substitute for personal judgement.</p>
               </div>
 
               {dataSource === 'category' ? (
@@ -1638,16 +1643,16 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                       <RadarChart data={radarData} outerRadius={70}>
                         <PolarGrid stroke="#e5e7eb" />
                         <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
-                        <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                        <PolarRadiusAxis angle={90} domain={[0, 5]} tick={{ fontSize: 9, fill: '#94a3b8' }} />
                         <Radar dataKey="value" stroke="var(--theme-accent)" fill="var(--theme-accent)" fillOpacity={0.25} />
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
 
                   <div className="lmv-profile-grid">
-                    <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{((sensory.noiseScore ?? sensory.noise_score ?? 0) * 2).toFixed(0)}</span></div>
-                    <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{((sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2).toFixed(0)}</span></div>
-                    <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{((sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2).toFixed(0)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{radar.noise.toFixed(1)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{radar.lighting.toFixed(1)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{radar.crowd.toFixed(1)}</span></div>
                     <div className="lmv-profile-stat">
                       <span className="pstat-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         Comfort
@@ -1657,7 +1662,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                           aria-label="Comfort score explanation"
                         >i</span>
                       </span>
-                      <span className="pstat-value">{(comfortNum * 2).toFixed(0)}</span>
+                      <span className="pstat-value">{radar.comfort.toFixed(1)}</span>
                     </div>
                   </div>
                 </div>
