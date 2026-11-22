@@ -551,6 +551,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     ? { noiseScore: _ds.noise, lightingScore: _ds.lighting, crowdScore: _ds.crowd, comfortScore: _ds.comfort ?? (_ds.noise + _ds.lighting + _ds.crowd) / 3 }
     : (locationDetail?.sensoryScores || selectedLocation || {});
   const dataSource = _ds?.source ?? 'category';
+  // AI estimate with no real signal (all-floor or near-identical scores, no community reviews): don't
+  // present it as 'highly comfortable' or give it a match percentage.
+  const lowConfidence = _ds?.lowConfidence === true;
   const locName = selectedLocation?.name || 'Select a location';
   // Clamped for display only (the "X / 5" label and % bars below assume a 5-point
   // ceiling) — ranking/sort order elsewhere uses the true uncapped backend value.
@@ -562,7 +565,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const currentMatch = selectedLocation?.id
     ? matchScores.find((m) => m.locationId === selectedLocation.id)
     : null;
-  const matchPercent = currentMatch?.matchScore ?? null;
+  const matchPercent = lowConfidence ? null : (currentMatch?.matchScore ?? null);
 
   // Comfort score breakdown: shares of the three sensory loads only (they sum to 100%).
   // Comfort is their inverse, so it is shown separately as a fraction of its own 0-5 scale.
@@ -582,6 +585,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
 
   // Location tags from AI or sensory scores
   const locationTags = (() => {
+    if (lowConfidence) return ['Low confidence, limited data'];
     if (aiInsights?.tags?.length > 0) return aiInsights.tags;
     const tags = [];
     const ns = sensory.noiseScore ?? sensory.noise_score ?? 3;
@@ -636,7 +640,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
 
   // Match checks
   const matchChecks = (() => {
-    if (!userProfile || !selectedLocation) return [];
+    if (!userProfile || !selectedLocation || lowConfidence) return [];
     const checks = [];
     const ns = sensory.noiseScore ?? sensory.noise_score ?? 0;
     const ls = sensory.lightingScore ?? sensory.lighting_score ?? 0;
@@ -777,7 +781,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
         <Dashboard
           userProfile={userProfile}
           savedPlacesList={savedPlacesList}
-          bestMatch={matchScores?.[0] ?? null}
+          bestMatch={matchScores?.find((m) => m.matchScore != null) ?? null}
           userCoords={userCoords}
           snapshot={snapshot}
           onEditProfile={() => setActiveNav('profile')}
@@ -1333,11 +1337,11 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   <div className="lmv-stat-boxes">
                     <div className="lmv-stat-box">
                       <div className="box-label">Comfort</div>
-                      <div className="box-value">{comfortScore}</div>
+                      <div className="box-value">{lowConfidence ? '—' : comfortScore}</div>
                     </div>
                     <div className="lmv-stat-box">
                       <div className="box-label">Noise</div>
-                      <div className="box-value small">{noiseLevel}</div>
+                      <div className="box-value small">{lowConfidence ? '—' : noiseLevel}</div>
                     </div>
                     <div className="lmv-stat-box">
                       <div className="box-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1358,12 +1362,13 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                       </span>
                     )}
                     {locationTags.map((tag) => (
-                      <span key={tag} className="lmv-loc-tag">{tag}</span>
+                      <span key={tag} className="lmv-loc-tag" style={lowConfidence ? { background: 'var(--theme-tag-soft)', color: 'var(--theme-text-muted)', border: '1px solid var(--theme-border)' } : undefined}>{tag}</span>
                     ))}
                   </div>
 
                   {/* Rating tags */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {!lowConfidence && (<>
                     <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>
                       {Math.round(Math.min(5, sensory.comfortScore ?? sensory.comfort_score ?? 0) / 5 * 100)}% {dataSource === 'community' ? 'would revisit' : 'sensory comfort'}
                     </span>
@@ -1373,6 +1378,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                     {(sensory.crowdScore ?? sensory.crowd_score ?? 5) < 2 && (
                       <span className="lmv-loc-tag" style={{ background: '#d6f5e1', color: '#05360d' }}>Low-crowd spot</span>
                     )}
+                    </>)}
                     {aiInsights?.bestTime && (
                       <span className="lmv-loc-tag" style={{ background: '#ede9fe', color: '#5b21b6' }}>
                         <span style={{ fontSize: 10, fontWeight: 700, marginRight: 2 }}>AI</span>
@@ -1657,7 +1663,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               <div className="lmv-comfort-header">
                 <div className="lmv-comfort-score">
                   <div className="cscore-label">Sensory Comfort Score</div>
-                  <div className="cscore-value">{comfortScore} / 5</div>
+                  <div className="cscore-value">{lowConfidence ? '—' : `${comfortScore} / 5`}</div>
                 </div>
                 <span className="lmv-tag green">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -1714,7 +1720,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                     </div>
                   )) : (
                     <p style={{ color: 'var(--theme-text-muted)', fontSize: 13, margin: 0 }}>
-                      {userProfile ? 'Select a location to see match details.' : 'Set up your sensory profile to see matches.'}
+                      {lowConfidence ? 'Not enough data to calculate a match for this place yet.' : userProfile ? 'Select a location to see match details.' : 'Set up your sensory profile to see matches.'}
                     </p>
                   )}
                 </div>

@@ -4,7 +4,7 @@ import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
-import { getDisplayScore } from "../lib/scores.js";
+import { getDisplayScore, isLowConfidence } from "../lib/scores.js";
 import { computeMatch, compareMatches } from "../lib/matchScore.js";
 import { isBotReview } from "../lib/systemBot.js";
 
@@ -223,6 +223,7 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
                     longitude: loc.longitude,
                     latitude: loc.latitude,
                     matchScore:    m.matchScore,
+                    lowConfidence: m.lowConfidence,
                     noiseScore:    m.noise,
                     lightingScore: m.lighting,
                     crowdScore:    m.crowd,
@@ -436,7 +437,7 @@ router.get("/:id", async (req, res) => {
             isBot: isBotReview(review, user),
         }));
 
-        res.json({ ...location, reviews, displayScores, facilities });
+        res.json({ ...location, reviews, displayScores: { ...displayScores, lowConfidence: isLowConfidence(displayScores) }, facilities });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });

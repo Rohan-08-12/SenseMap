@@ -19,8 +19,8 @@ test("before/after for the three agreed cases", () => {
         const before = Math.round(oldFactor(score, t)), after = Math.round(factorMatch(score, t));
         console.log(`${name.padEnd(26)} before ${before}%  after ${after}%`);
         assert.equal(before, wasPct); assert.equal(after, nowPct);
-        // full location, all three factors identical
-        assert.equal(computeMatch(est(score, score, score), tol(t)).matchScore, nowPct);
+        // full location (spread kept >= 0.25 so it isn't flagged low-confidence): same result as the single factor
+        assert.equal(computeMatch(est(score, score + 0.3, score - 0.3 < 0.5 ? score : score - 0.3), tol(t, t + 5, t + 5)).matchScore, Math.round((factorMatch(score, t) + 100 + 100) / 3));
     }
 });
 
@@ -30,8 +30,9 @@ test("floor at 0 and ceiling at 100", () => {
     assert.equal(factorMatch(1, 5), 100);
 });
 
-test("The Gore (0.5/0.5/0.5) vs tolerances 2/2/2 is now 100, not 63", () => {
-    assert.equal(computeMatch(est(0.5, 0.5, 0.5), tol(2)).matchScore, 100);
+test("calm estimate with real spread (0.5/1.5/1) vs tolerances 2/2/2 is now 100, not the old 75", () => {
+    assert.equal(computeMatch(est(0.5, 1.5, 1), tol(2)).matchScore, 100);
+    assert.equal(Math.round((oldFactor(0.5, 2) + oldFactor(1.5, 2) + oldFactor(1, 2)) / 3), 75);
 });
 
 test("1-4 reviews use the 70/30 community/estimate blend (same as the panel)", () => {
@@ -62,7 +63,7 @@ test("sample ordering, old vs new (user tolerances 2/2/2)", () => {
     const sample = {
         "Quiet library (8 rev 1.5/2/1.5)": { ...none, sensoryScores: { reviewCount: 8, noiseScore: 1.5, lightingScore: 2, crowdScore: 1.5, comfortScore: 4 } },
         "Busy mall (6 rev 4/4/4.5)":       { ...none, sensoryScores: { reviewCount: 6, noiseScore: 4, lightingScore: 4, crowdScore: 4.5, comfortScore: 1.5 } },
-        "Cafe (est 2/2/2)":                est(2, 2, 2),
+        "Cafe (est 2/2.4/2)":              est(2, 2.4, 2),
         "Park (est 1/1.5/1)":              est(1, 1.5, 1),
         "Pub (est 4/3/4)":                 est(4, 3, 4),
         "The Gore (est 0.5/0.5/0.5)":      est(0.5, 0.5, 0.5),
@@ -79,7 +80,9 @@ test("sample ordering, old vs new (user tolerances 2/2/2)", () => {
     });
     console.log("OLD order:", [...rows].sort((a, b) => b.old - a.old).map(r => `${r.name} ${r.old}%`).join(" > "));
     console.log("NEW order:", [...rows].sort(compareMatches).map(r => `${r.name} ${r.now}%`).join(" > "));
-    assert.equal(rows.find(r => r.name.startsWith("The Gore")).now, 100);
+    const gore = rows.find(r => r.name.startsWith("The Gore"));
+    assert.equal(gore.now, null);                       // low-confidence: no percentage
+    assert.equal([...rows].sort(compareMatches).at(-1).name, gore.name); // and it sorts last
 });
 
 test("ties at 100% break toward community data, then lower load", () => {
@@ -90,4 +93,19 @@ test("ties at 100% break toward community data, then lower load", () => {
         { name: "worse",     matchScore: 90,  source: "community", noiseScore: 1, lightingScore: 1, crowdScore: 1 },
     ].sort(compareMatches).map(r => r.name);
     assert.deepEqual(rows, ["community", "est calm", "est mid", "worse"]);
+});
+
+test("low-confidence estimates get no match %, sort last, and never become best match", async () => {
+    const { isLowConfidence } = await import("../src/lib/scores.js");
+    assert.equal(computeMatch(est(0.5, 0.5, 0.5), tol(2)).matchScore, null);
+    assert.equal(computeMatch(est(0.5, 0.5, 0.5), tol(2)).lowConfidence, true);
+    assert.equal(computeMatch(est(3, 3.1, 3), tol(2)).lowConfidence, true);   // spread < 0.25
+    assert.equal(computeMatch(est(1, 2, 3), tol(3)).lowConfidence, false);
+    // community data is never low confidence, even when flat
+    const flat = { sensoryScores: { reviewCount: 6, noiseScore: 0.5, lightingScore: 0.5, crowdScore: 0.5, comfortScore: 5 }, estimatedNoiseScore: null, estimatedLightingScore: null, estimatedCrowdScore: null };
+    assert.equal(computeMatch(flat, tol(2)).lowConfidence, false);
+    assert.equal(isLowConfidence({ source: "estimated", noise: 2, lighting: 4, crowd: 1 }), false);
+    const sorted = [computeMatch(est(0.5, 0.5, 0.5), tol(2)), computeMatch(est(4, 4, 4.5), tol(2))]
+        .map((m, i) => ({ i, ...m })).sort(compareMatches);
+    assert.deepEqual(sorted.map(r => r.i), [1, 0]);
 });

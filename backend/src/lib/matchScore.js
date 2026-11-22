@@ -1,4 +1,4 @@
-import { getDisplayScore } from "./scores.js";
+import { getDisplayScore, isLowConfidence } from "./scores.js";
 
 const MISSING_FACTOR_DEFAULT = 3;
 
@@ -14,7 +14,7 @@ export const factorMatch = (score, tolerance) =>
  * Match % for one location (Prisma row with `sensoryScores` included) against a user's
  * tolerances. Scores come from getDisplayScore so this agrees with the place panel
  * (community >= 5 reviews, 70/30 community/estimate blend for 1-4, else the AI estimate).
- * Returns null when the place has no usable score at all.
+ * Returns null when the place has no usable score at all; matchScore is null for low-confidence estimates.
  */
 export function computeMatch(loc, { noiseTolerance = 3, lightingTolerance = 3, crowdTolerance = 3 } = {}) {
     const s = loc.sensoryScores;
@@ -40,7 +40,10 @@ export function computeMatch(loc, { noiseTolerance = 3, lightingTolerance = 3, c
     const matchScore = Math.round(
         (factorMatch(f(noise), noiseTolerance) + factorMatch(f(lighting), lightingTolerance) + factorMatch(f(crowd), crowdTolerance)) / 3,
     );
-    return { matchScore, noise, lighting, crowd, comfort: display.comfort ?? null, source: display.source };
+    // Low-confidence estimates get no percentage: with the one-sided formula an all-0.5 placeholder
+    // would otherwise score 100% and top every user's best-match list.
+    const lowConfidence = isLowConfidence({ ...display, noise, lighting, crowd });
+    return { matchScore: lowConfidence ? null : matchScore, lowConfidence, noise, lighting, crowd, comfort: display.comfort ?? null, source: display.source };
 }
 
 const SOURCE_RANK = { community: 0, estimated: 1, category: 2 };
@@ -51,7 +54,7 @@ const load = (m) => ((m.noiseScore ?? 3) + (m.lightingScore ?? 3) + (m.crowdScor
  * ties are common, so break them: real community data first, then the calmer overall load.
  */
 export function compareMatches(a, b) {
-    return (b.matchScore - a.matchScore)
+    return ((b.matchScore ?? -1) - (a.matchScore ?? -1))
         || ((SOURCE_RANK[a.source] ?? 3) - (SOURCE_RANK[b.source] ?? 3))
         || (load(a) - load(b));
 }
