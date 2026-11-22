@@ -1616,84 +1616,88 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             )}
 
             {/* Sensory Profile (Radar) */}
-            <div className="lmv-detail-card">
-              <div>
-                <h3 className="lmv-section-title">Sensory profile</h3>
-                <p className="lmv-section-desc">A simplified radar view for this location.</p>
-              </div>
-
-              <div className="lmv-radar-container">
-                <div style={{ width: 250, height: 200, minWidth: 0 }}>
-                  <ResponsiveContainer width={250} height={200} debounce={50}>
-                    <RadarChart data={radarData} outerRadius={70}>
-                      <PolarGrid stroke="#e5e7eb" />
-                      <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
-                      <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: '#94a3b8' }} />
-                      <Radar dataKey="value" stroke="var(--theme-accent)" fill="var(--theme-accent)" fillOpacity={0.25} />
-                    </RadarChart>
-                  </ResponsiveContainer>
+            {!lowConfidence && (
+              <div className="lmv-detail-card">
+                <div>
+                  <h3 className="lmv-section-title">Sensory profile</h3>
+                  <p className="lmv-section-desc">A simplified radar view for this location.</p>
                 </div>
 
-                <div className="lmv-profile-grid">
-                  <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{((sensory.noiseScore ?? sensory.noise_score ?? 0) * 2).toFixed(0)}</span></div>
-                  <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{((sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2).toFixed(0)}</span></div>
-                  <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{((sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2).toFixed(0)}</span></div>
-                  <div className="lmv-profile-stat">
-                    <span className="pstat-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      Comfort
-                      <span
-                        title="Comfort is the inverse of sensory load — a quiet, uncrowded, softly lit space scores high even though individual sensory values are low."
-                        style={{ cursor: 'help', fontSize: 10, fontWeight: 700, color: 'var(--theme-text-muted)', background: 'var(--theme-border)', borderRadius: '50%', width: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                        aria-label="Comfort score explanation"
-                      >i</span>
-                    </span>
-                    <span className="pstat-value">{(comfortNum * 2).toFixed(0)}</span>
+                <div className="lmv-radar-container">
+                  <div style={{ width: 250, height: 200, minWidth: 0 }}>
+                    <ResponsiveContainer width={250} height={200} debounce={50}>
+                      <RadarChart data={radarData} outerRadius={70}>
+                        <PolarGrid stroke="#e5e7eb" />
+                        <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
+                        <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                        <Radar dataKey="value" stroke="var(--theme-accent)" fill="var(--theme-accent)" fillOpacity={0.25} />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="lmv-profile-grid">
+                    <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{((sensory.noiseScore ?? sensory.noise_score ?? 0) * 2).toFixed(0)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{((sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2).toFixed(0)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{((sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2).toFixed(0)}</span></div>
+                    <div className="lmv-profile-stat">
+                      <span className="pstat-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Comfort
+                        <span
+                          title="Comfort is the inverse of sensory load — a quiet, uncrowded, softly lit space scores high even though individual sensory values are low."
+                          style={{ cursor: 'help', fontSize: 10, fontWeight: 700, color: 'var(--theme-text-muted)', background: 'var(--theme-border)', borderRadius: '50%', width: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                          aria-label="Comfort score explanation"
+                        >i</span>
+                      </span>
+                      <span className="pstat-value">{(comfortNum * 2).toFixed(0)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Comfort Score Breakdown */}
-            <div className="lmv-detail-card">
-              <div>
-                <h3 className="lmv-section-title">Comfort score</h3>
-                <p className="lmv-section-desc">How the score is calculated.</p>
-              </div>
+            {!lowConfidence && (
+              <div className="lmv-detail-card">
+                <div>
+                  <h3 className="lmv-section-title">Comfort score</h3>
+                  <p className="lmv-section-desc">How the score is calculated.</p>
+                </div>
 
-              <div className="lmv-comfort-header">
-                <div className="lmv-comfort-score">
-                  <div className="cscore-label">Sensory Comfort Score</div>
-                  <div className="cscore-value">{lowConfidence ? '—' : `${comfortScore} / 5`}</div>
+                <div className="lmv-comfort-header">
+                  <div className="lmv-comfort-score">
+                    <div className="cscore-label">Sensory Comfort Score</div>
+                    <div className="cscore-value">{lowConfidence ? '—' : `${comfortScore} / 5`}</div>
+                  </div>
+                  <span className="lmv-tag green">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    {dominantFactorLabel}
+                  </span>
                 </div>
-                <span className="lmv-tag green">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  {dominantFactorLabel}
-                </span>
-              </div>
 
-              <div className="lmv-score-bars">
-                <div className="lmv-score-row">
-                  <span className="sr-label">Noise</span>
-                  <div className="sr-bar"><div className="sr-fill blue" style={{ width: `${breakdown.noise}%` }} /></div>
-                  <span className="sr-percent">{breakdown.noise}%</span>
-                </div>
-                <div className="lmv-score-row">
-                  <span className="sr-label">Lighting</span>
-                  <div className="sr-bar"><div className="sr-fill teal" style={{ width: `${breakdown.lighting}%` }} /></div>
-                  <span className="sr-percent">{breakdown.lighting}%</span>
-                </div>
-                <div className="lmv-score-row">
-                  <span className="sr-label">Crowds</span>
-                  <div className="sr-bar"><div className="sr-fill yellow" style={{ width: `${breakdown.crowd}%` }} /></div>
-                  <span className="sr-percent">{breakdown.crowd}%</span>
-                </div>
-                <div className="lmv-score-row">
-                  <span className="sr-label">Comfort</span>
-                  <div className="sr-bar"><div className="sr-fill purple" style={{ width: `${breakdown.comfort}%` }} /></div>
-                  <span className="sr-percent">{breakdown.comfort}%</span>
+                <div className="lmv-score-bars">
+                  <div className="lmv-score-row">
+                    <span className="sr-label">Noise</span>
+                    <div className="sr-bar"><div className="sr-fill blue" style={{ width: `${breakdown.noise}%` }} /></div>
+                    <span className="sr-percent">{breakdown.noise}%</span>
+                  </div>
+                  <div className="lmv-score-row">
+                    <span className="sr-label">Lighting</span>
+                    <div className="sr-bar"><div className="sr-fill teal" style={{ width: `${breakdown.lighting}%` }} /></div>
+                    <span className="sr-percent">{breakdown.lighting}%</span>
+                  </div>
+                  <div className="lmv-score-row">
+                    <span className="sr-label">Crowds</span>
+                    <div className="sr-bar"><div className="sr-fill yellow" style={{ width: `${breakdown.crowd}%` }} /></div>
+                    <span className="sr-percent">{breakdown.crowd}%</span>
+                  </div>
+                  <div className="lmv-score-row">
+                    <span className="sr-label">Comfort</span>
+                    <div className="sr-bar"><div className="sr-fill purple" style={{ width: `${breakdown.comfort}%` }} /></div>
+                    <span className="sr-percent">{breakdown.comfort}%</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Why it fits you */}
             <div className="lmv-detail-card">

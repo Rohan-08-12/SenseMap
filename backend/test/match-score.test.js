@@ -95,11 +95,16 @@ test("ties at 100% break toward community data, then lower load", () => {
     assert.deepEqual(rows, ["community", "est calm", "est mid", "worse"]);
 });
 
-test("low-confidence estimates get no match %, sort last, and never become best match", async () => {
+test("only all-floor (<= 0.5) estimates are low confidence: no match %, sort last, and never become best match", async () => {
     const { isLowConfidence } = await import("../src/lib/scores.js");
     assert.equal(computeMatch(est(0.5, 0.5, 0.5), tol(2)).matchScore, null);
     assert.equal(computeMatch(est(0.5, 0.5, 0.5), tol(2)).lowConfidence, true);
-    assert.equal(computeMatch(est(3, 3.1, 3), tol(2)).lowConfidence, true);   // spread < 0.25
+    // flat-but-real estimates keep their percentage (only the all-floor case is flagged)
+    assert.equal(computeMatch(est(2, 2, 2), tol(2)).lowConfidence, false);
+    assert.equal(computeMatch(est(2, 2, 2), tol(2)).matchScore, 100);
+    assert.equal(computeMatch(est(3, 3, 3), tol(2)).matchScore, 75);
+    assert.equal(computeMatch(est(3, 3.1, 3), tol(2)).lowConfidence, false);
+    assert.equal(computeMatch(est(0.5, 0.5, 0.6), tol(2)).lowConfidence, false); // 0.6 is above the floor
     assert.equal(computeMatch(est(1, 2, 3), tol(3)).lowConfidence, false);
     // community data is never low confidence, even when flat
     const flat = { sensoryScores: { reviewCount: 6, noiseScore: 0.5, lightingScore: 0.5, crowdScore: 0.5, comfortScore: 5 }, estimatedNoiseScore: null, estimatedLightingScore: null, estimatedCrowdScore: null };
