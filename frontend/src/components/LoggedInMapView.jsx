@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel, haversineDistance } from '../utils.js';
-import { describeDataSources, joinList } from '../panelLabels.js';
+import { describeDataSources, joinList, clampComfort, factorShares } from '../panelLabels.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import MapView from './MapView';
 import Dashboard from './Dashboard';
@@ -554,7 +554,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const locName = selectedLocation?.name || 'Select a location';
   // Clamped for display only (the "X / 5" label and % bars below assume a 5-point
   // ceiling) — ranking/sort order elsewhere uses the true uncapped backend value.
-  const comfortScore = Math.min(5, sensory.comfortScore ?? sensory.comfort_score ?? 0).toFixed(1);
+  const comfortNum = clampComfort(sensory.comfortScore ?? sensory.comfort_score);
+  const comfortScore = comfortNum.toFixed(1);
   const noiseVal = sensory.noiseScore ?? sensory.noise_score ?? 0;
   const noiseLevel = scoreToLabel(noiseVal);
 
@@ -563,17 +564,21 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     : null;
   const matchPercent = currentMatch?.matchScore ?? null;
 
-  // Comfort score breakdown
-  const total = (sensory.noiseScore ?? sensory.noise_score ?? 0) +
-    (sensory.crowdScore ?? sensory.crowd_score ?? 0) +
-    (sensory.lightingScore ?? sensory.lighting_score ?? 0) +
-    (sensory.comfortScore ?? sensory.comfort_score ?? 0);
-  const breakdown = total > 0 ? {
-    noise: ((sensory.noiseScore ?? sensory.noise_score ?? 0) / total * 100).toFixed(0),
-    crowd: ((sensory.crowdScore ?? sensory.crowd_score ?? 0) / total * 100).toFixed(0),
-    lighting: ((sensory.lightingScore ?? sensory.lighting_score ?? 0) / total * 100).toFixed(0),
-    comfort: ((sensory.comfortScore ?? sensory.comfort_score ?? 0) / total * 100).toFixed(0),
-  } : { noise: '0', crowd: '0', lighting: '0', comfort: '0' };
+  // Comfort score breakdown: shares of the three sensory loads only (they sum to 100%).
+  // Comfort is their inverse, so it is shown separately as a fraction of its own 0-5 scale.
+  const shares = factorShares({
+    noise: sensory.noiseScore ?? sensory.noise_score ?? 0,
+    lighting: sensory.lightingScore ?? sensory.lighting_score ?? 0,
+    crowd: sensory.crowdScore ?? sensory.crowd_score ?? 0,
+  });
+  const breakdown = {
+    noise: String(shares.noise),
+    lighting: String(shares.lighting),
+    crowd: String(shares.crowd),
+    comfort: String(Math.round(comfortNum / 5 * 100)),
+  };
+  const dominantFactorLabel = { noise: 'Noise matters most', crowd: 'Crowds matter most', lighting: 'Lighting matters most' }[shares.dominant]
+    ?? 'All factors about equal';
 
   // Location tags from AI or sensory scores
   const locationTags = (() => {
@@ -606,7 +611,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     { axis: 'Noise', value: (sensory.noiseScore ?? sensory.noise_score ?? 0) * 2 },
     { axis: 'Lighting', value: (sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2 },
     { axis: 'Crowds', value: (sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2 },
-    { axis: 'Comfort', value: (sensory.comfortScore ?? sensory.comfort_score ?? 0) * 2 },
+    { axis: 'Comfort', value: comfortNum * 2 },
   ];
 
   // Possible triggers
@@ -1634,9 +1639,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                         title="Comfort is the inverse of sensory load — a quiet, uncrowded, softly lit space scores high even though individual sensory values are low."
                         style={{ cursor: 'help', fontSize: 10, fontWeight: 700, color: 'var(--theme-text-muted)', background: 'var(--theme-border)', borderRadius: '50%', width: 14, height: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                         aria-label="Comfort score explanation"
-                      >?</span>
+                      >i</span>
                     </span>
-                    <span className="pstat-value">{((sensory.comfortScore ?? sensory.comfort_score ?? 0) * 2).toFixed(0)}</span>
+                    <span className="pstat-value">{(comfortNum * 2).toFixed(0)}</span>
                   </div>
                 </div>
               </div>
@@ -1656,8 +1661,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 </div>
                 <span className="lmv-tag green">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.25 7A5.25 5.25 0 111.75 7a5.25 5.25 0 0110.5 0z" stroke="#05360d" strokeWidth="1.2" /><path d="M4.5 7l2 2 3.5-3.5" stroke="#05360d" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  {parseInt(breakdown.noise) >= parseInt(breakdown.crowd) && parseInt(breakdown.noise) >= parseInt(breakdown.lighting) ? 'Noise matters most' :
-                    parseInt(breakdown.crowd) >= parseInt(breakdown.lighting) ? 'Crowds matter most' : 'Lighting matters most'}
+                  {dominantFactorLabel}
                 </span>
               </div>
 
