@@ -292,7 +292,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
       setAiLoading(true);
       await getAccessTokenSilently({ authorizationParams: { audience: import.meta.env.VITE_AUTH0_AUDIENCE } });
       const res = await getAIInsights(locId);
-      setAiInsights(res.data);
+      if (res.noData) setAiNoTextReviews(true);
+      else setAiInsights(res.data);
     } catch (err) {
       if (err?.response?.status === 400) setAiNoTextReviews(true);
       else setAiError(true);
