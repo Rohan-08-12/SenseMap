@@ -125,12 +125,17 @@ async function enrichLocation(location) {
     return { updated: true, noise: newNoise, lighting: newLighting, crowd: newCrowd };
 }
 
-export async function runEnrichment({ force = false } = {}) {
+/**
+ * The places an enrichment run would process: stale (or never enriched) and not inside the
+ * incomplete-scores backoff, oldest first, capped at NIGHTLY_BATCH_LIMIT unless forced.
+ * Exported so scripts/check_backoff_query.js can exercise the exact production query.
+ */
+export async function selectLocationsToEnrich({ force = false } = {}) {
     const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
     // Places whose last analysis was incomplete are left alone for 30 days (a forced run ignores this).
     const backoffIds = force ? [] : await idsInIncompleteBackoff(prisma);
 
-    const locations = await prisma.location.findMany({
+    return prisma.location.findMany({
         // force=true (manual backfill trigger) ignores staleness and the nightly cap, re-processing
         // every location — used e.g. to seed estimatedFacilities onto locations enriched before
         // that field existed. An unforced (cron) run processes at most NIGHTLY_BATCH_LIMIT of the
@@ -145,6 +150,10 @@ export async function runEnrichment({ force = false } = {}) {
             estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true,
         },
     });
+}
+
+export async function runEnrichment({ force = false } = {}) {
+    const locations = await selectLocationsToEnrich({ force });
 
     if (locations.length === 0) {
         console.log("[Enrichment] All locations up to date.");
