@@ -142,25 +142,29 @@ export async function selectLocationsToEnrich({ force = false, limit } = {}) {
             id: true, name: true, latitude: true, longitude: true,
             category: true, externalYelpId: true, googlePlaceId: true,
             estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true,
+            lastEnrichedAt: true,
         },
     });
 }
 
 /**
  * Claims the run lock and records a run row. Returns the row, or null if a run is already
- * in progress (callers should skip / respond 409). Pair with executeEnrichmentRun(run).
+ * in progress (callers should skip / respond 409). Pair with executeEnrichmentRun(run). `limit` (optional,
+ * clamped 1-1000) sizes a manual batch; otherwise ENRICHMENT_MAX_PER_RUN applies.
  */
-export function startEnrichmentRun({ trigger = "cron", force = false } = {}) {
-    return acquireRun({ trigger, force });
+export async function startEnrichmentRun({ trigger = "cron", force = false, limit } = {}) {
+    const run = await acquireRun({ trigger, force });
+    // `limit` is not stored on the run row; it travels with the returned object into executeEnrichmentRun.
+    return run ? { ...run, limit: resolveLimit(limit) } : null;
 }
 
 export async function executeEnrichmentRun(run) {
-    const { force } = run;
+    const { force, limit } = run;
     const counts = { planned: 0, updated: 0, skipped: 0, failed: 0 };
     const errors = [];
 
     try {
-        const locations = await selectLocationsToEnrich({ force });
+        const locations = await selectLocationsToEnrich({ force, limit });
 
         counts.planned = locations.length;
 
@@ -209,8 +213,8 @@ export async function executeEnrichmentRun(run) {
 
 // Acquire the lock and run to completion. Used by the cron; the trigger endpoint calls the two
 // halves separately so it can answer 409 immediately when a run is already in progress.
-export async function runEnrichment({ force = false, trigger = "cron" } = {}) {
-    const run = await startEnrichmentRun({ trigger, force });
+export async function runEnrichment({ force = false, trigger = "cron", limit } = {}) {
+    const run = await startEnrichmentRun({ trigger, force, limit });
     if (!run) {
         console.log("[Enrichment] Skipped — another run is already in progress.");
         return null;

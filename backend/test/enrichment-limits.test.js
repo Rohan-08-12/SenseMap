@@ -45,7 +45,7 @@ mock.module("../src/lib/gemini.js", { namedExports: {
 const cfg = await import("../src/lib/enrichmentConfig.js");
 const { selectLocationsToEnrich } = await import("../src/lib/enrichmentCron.js");
 
-const place = (i) => ({ id: `loc${i}`, name: `Place ${i}`, latitude: 43.6, longitude: -79.4, category: "cafe", externalYelpId: null, googlePlaceId: `g${i}`, estimatedNoiseScore: null, estimatedLightingScore: null, estimatedCrowdScore: null });
+const place = (i) => ({ id: `loc${i}`, name: `Place ${i}`, latitude: 43.6, longitude: -79.4, category: "cafe", externalYelpId: null, googlePlaceId: `g${i}`, estimatedNoiseScore: null, estimatedLightingScore: null, estimatedCrowdScore: null, lastEnrichedAt: null });
 const places = (n) => Array.from({ length: n }, (_, i) => place(i + 1));
 
 const originalEnv = { max: process.env.ENRICHMENT_MAX_PER_RUN };
@@ -127,4 +127,108 @@ test("a run pauses ENRICHMENT_DELAY_MS between places (not after the last), and 
     assert.ok(took >= 600, `2 pauses of 300ms expected, took ${took}ms`);
     assert.ok(took < 1500, `but not a pause after the last place, took ${took}ms`);
     process.env.ENRICHMENT_DELAY_MS = "0";
+});
+
+// ---- 3. POST /enrichment/trigger ?limit= and GET /enrichment/stale preview -------------------------------------
+const http = await import("node:http");
+const { default: express } = await import("express");
+const { default: enrichmentRouter } = await import("../src/routes/enrichment.js");
+
+let server, base;
+before(async () => {
+    const app = express(); app.use("/enrichment", enrichmentRouter);
+    server = http.createServer(app);
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    base = `http://127.0.0.1:${server.address().port}`;
+});
+after(() => server.close());
+
+const H = { "x-n8n-secret": "test-secret" };
+const post = (path) => fetch(base + path, { method: "POST", headers: H });
+const get = (path, headers = H) => fetch(base + path, { headers });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const runFinished = async () => { for (let i = 0; i < 200; i++) { if (runUpdates.some((u) => u.finishedAt)) return true; await sleep(10); } return false; };
+
+test("POST /trigger?limit=25: the limit reaches the selection and is echoed back", async () => {
+    locationRows = places(2);
+    const r = await post("/enrichment/trigger?limit=25");
+    assert.equal(r.status, 200);
+    const body = await r.json();
+    assert.equal(body.triggered, true); assert.equal(body.limit, 25); assert.equal(body.force, false); assert.equal(body.runId, "run1");
+    assert.ok(await runFinished());
+    assert.equal(findManyArgs.at(-1).take, 25);
+    assert.equal(runCreates[0].trigger, "trigger");
+});
+
+test("POST /trigger?force=true&limit=25: force and limit combine (still capped)", async () => {
+    locationRows = places(1);
+    const body = await (await post("/enrichment/trigger?force=true&limit=25")).json();
+    assert.equal(body.force, true); assert.equal(body.limit, 25);
+    assert.ok(await runFinished());
+    assert.equal(findManyArgs.at(-1).take, 25);
+    assert.deepEqual(findManyArgs.at(-1).where, {});
+    assert.equal(runCreates[0].trigger, "trigger-force");
+});
+
+test("POST /trigger without a limit uses ENRICHMENT_MAX_PER_RUN (default 50), forced or not", async () => {
+    locationRows = places(1);
+    assert.equal((await (await post("/enrichment/trigger?force=true")).json()).limit, 50);
+    assert.ok(await runFinished());
+    assert.equal(findManyArgs.at(-1).take, 50);
+});
+
+test("POST /trigger?limit is clamped to the 1000 ceiling", async () => {
+    locationRows = places(1);
+    assert.equal((await (await post("/enrichment/trigger?limit=999999")).json()).limit, 1000);
+    assert.ok(await runFinished());
+    assert.equal(findManyArgs.at(-1).take, 1000);
+});
+
+test("POST /trigger rejects a bad limit with 400 before it takes the lock", async () => {
+    for (const bad of ["0", "-5", "abc", "2.5", "", "1e3", "10;drop", "5&limit=6"]) {
+        const r = await post(`/enrichment/trigger?limit=${encodeURIComponent(bad)}`);
+        assert.equal(r.status, 400, `limit=${bad}`);
+        assert.match((await r.json()).error, /positive integer/);
+    }
+    assert.equal(runCreates.length, 0, "no run was started");
+    assert.equal(findManyArgs.length, 0);
+});
+
+test("POST /trigger still returns 409 while a run is active, and requires the secret", async () => {
+    const original = prismaMock.enrichmentRun.create;
+    prismaMock.enrichmentRun.create = async () => { throw Object.assign(new Error("unique"), { code: "P2002" }); };
+    try {
+        const r = await post("/enrichment/trigger?limit=10");
+        assert.equal(r.status, 409);
+        assert.equal((await r.json()).triggered, false);
+    } finally { prismaMock.enrichmentRun.create = original; }
+    assert.equal((await fetch(base + "/enrichment/trigger", { method: "POST" })).status, 401);
+});
+
+test("GET /stale previews the same selection: same cap, force, backoff and a limit param", async () => {
+    locationRows = places(3);
+    let body = await (await get("/enrichment/stale")).json();
+    assert.equal(body.limit, 50); assert.equal(body.force, false); assert.equal(body.count, 3);
+    assert.equal(findManyArgs.at(-1).take, 50);
+    assert.ok("OR" in findManyArgs.at(-1).where, "stale rule applies");
+    assert.ok("lastEnrichedAt" in body.locations[0] && "externalYelpId" in body.locations[0], "preview rows keep the fields n8n reads");
+
+    body = await (await get("/enrichment/stale?limit=7")).json();
+    assert.equal(body.limit, 7); assert.equal(findManyArgs.at(-1).take, 7);
+
+    body = await (await get("/enrichment/stale?force=true&limit=7")).json();
+    assert.equal(body.force, true); assert.deepEqual(findManyArgs.at(-1).where, {});
+
+    assert.equal((await get("/enrichment/stale?limit=0")).status, 400);
+    assert.equal((await get("/enrichment/stale", {})).status, 401);
+});
+
+test("ENRICHMENT_MAX_PER_RUN applies to trigger and stale alike", async () => {
+    process.env.ENRICHMENT_MAX_PER_RUN = "5";
+    locationRows = places(1);
+    await get("/enrichment/stale");
+    assert.equal(findManyArgs.at(-1).take, 5);
+    await post("/enrichment/trigger?force=true");
+    assert.ok(await runFinished());
+    assert.equal(findManyArgs.at(-1).take, 5);
 });
