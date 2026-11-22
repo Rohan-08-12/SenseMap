@@ -39,18 +39,46 @@ Reviews:
 ${text}`;
 }
 
+// Below this confidence (0-10) the estimates are not stored.
+export const MIN_ENRICHMENT_CONFIDENCE = 4;
+
+const validConfidence = (c) => (typeof c === "number" && Number.isFinite(c) && c >= 0 && c <= 10 ? c : null);
+
 /**
  * Turns Gemini's parsed JSON into a decision.
- *  { action: "write", noise, lighting, crowd }  -> store the (0.5-5) estimates
- *  { action: "skip",  reason }                  -> do NOT write estimates
- * Reasons: no_sensory_signal (all three null: the model says the text has nothing),
- * incomplete_scores (some null — we never store a partial estimate), invalid_scores (bad type/range).
+ *  { action: "write", noise, lighting, crowd, confidence }  -> store the (0.5-5) estimates
+ *  { action: "skip",  reason, confidence }                  -> do NOT write estimates
+ * `confidence` is the model's 0-10 value, or null if it was missing/invalid.
+ * Skip reasons: no_sensory_signal (all three scores null), incomplete_scores (some null — a partial
+ * estimate is never stored), invalid_scores (bad type/range), invalid_confidence (missing or not a
+ * number in 0-10), low_confidence (< MIN_ENRICHMENT_CONFIDENCE).
  */
 export function interpretAnalysis(analysis) {
+    const confidence = validConfidence(analysis?.confidence);
     const raw = [analysis?.noise_score, analysis?.lighting_score, analysis?.crowd_score];
-    if (raw.every((v) => v === null)) return { action: "skip", reason: "no_sensory_signal" };
-    if (raw.some((v) => v === null)) return { action: "skip", reason: "incomplete_scores" };
+    if (raw.every((v) => v === null)) return { action: "skip", reason: "no_sensory_signal", confidence };
+    if (raw.some((v) => v === null)) return { action: "skip", reason: "incomplete_scores", confidence };
     const validated = validateScores(analysis);
-    if (!validated.ok) return { action: "skip", reason: validated.reason };
-    return { action: "write", noise: validated.noise, lighting: validated.lighting, crowd: validated.crowd };
+    if (!validated.ok) return { action: "skip", reason: validated.reason, confidence };
+    if (confidence === null) return { action: "skip", reason: "invalid_confidence", confidence };
+    if (confidence < MIN_ENRICHMENT_CONFIDENCE) return { action: "skip", reason: "low_confidence", confidence };
+    return { action: "write", noise: validated.noise, lighting: validated.lighting, crowd: validated.crowd, confidence };
+}
+
+/**
+ * Row update for a skipped result, or null if there is nothing to save. enrichmentConfidence is
+ * always stored when the model gave a valid one, so affected rows can be found later. Note it then
+ * describes the LATEST attempt, which for a gated result is not the confidence of any stored scores.
+ * Definite "nothing here" answers (no signal / low confidence) mark the place enriched so it is not
+ * retried every night; malformed output is only marked when OSM facilities were saved, as before.
+ */
+export function skipUpdateData(decision, { yelpId, osmFacilities }) {
+    const markEnriched = decision.reason === "no_sensory_signal" || decision.reason === "low_confidence" || !!osmFacilities;
+    const data = {
+        ...(yelpId && { externalYelpId: yelpId }),
+        ...(osmFacilities && { estimatedFacilities: osmFacilities }),
+        ...(decision.confidence != null && { enrichmentConfidence: decision.confidence }),
+        ...(markEnriched && { lastEnrichedAt: new Date() }),
+    };
+    return Object.keys(data).length > 0 ? data : null;
 }

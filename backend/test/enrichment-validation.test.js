@@ -39,7 +39,7 @@ const { runEnrichment } = await import("../src/lib/enrichmentCron.js");
 const { default: enrichmentRouter } = await import("../src/routes/enrichment.js");
 const { default: express } = await import("express");
 
-const good = { noise_score: 6, lighting_score: 4, crowd_score: 2, sentiment: "neutral", tags: [], summary: "s" };
+const good = { noise_score: 6, lighting_score: 4, crowd_score: 2, confidence: 8, sentiment: "neutral", tags: [], summary: "s" };
 
 let server, base;
 before(async () => {
@@ -145,9 +145,9 @@ test("prompt tells the model to use null instead of guessing", () => {
 
 test("interpretAnalysis: all null -> no_sensory_signal; some null -> incomplete; bad -> invalid; good -> write", () => {
     const nul = { noise_score: null, lighting_score: null, crowd_score: null };
-    assert.deepEqual(interpretAnalysis({ ...good, ...nul }), { action: "skip", reason: "no_sensory_signal" });
-    assert.deepEqual(interpretAnalysis({ ...good, noise_score: null }), { action: "skip", reason: "incomplete_scores" });
-    assert.deepEqual(interpretAnalysis({ ...good, noise_score: "x" }), { action: "skip", reason: "invalid_scores" });
+    assert.deepEqual(interpretAnalysis({ ...good, ...nul }), { action: "skip", reason: "no_sensory_signal", confidence: 8 });
+    assert.deepEqual(interpretAnalysis({ ...good, noise_score: null }), { action: "skip", reason: "incomplete_scores", confidence: 8 });
+    assert.deepEqual(interpretAnalysis({ ...good, noise_score: "x" }), { action: "skip", reason: "invalid_scores", confidence: 8 });
     assert.equal(interpretAnalysis(good).action, "write");
 });
 
@@ -165,5 +165,60 @@ for (const [name, run] of [["nightly cron", viaCron], ["POST /enrichment/locatio
         const r = await run({ ...good, lighting_score: null });
         assert.equal(wroteScores(r.updates), false);
         if (r.body) assert.equal(r.body.reason, "incomplete_scores");
+    });
+}
+
+// ---- 3. confidence gate + enrichmentConfidence ------------------------------------------------
+const { MIN_ENRICHMENT_CONFIDENCE } = await import("../src/lib/enrichmentAnalysis.js");
+
+test("interpretAnalysis: confidence gate", () => {
+    assert.equal(MIN_ENRICHMENT_CONFIDENCE, 4);
+    assert.equal(interpretAnalysis({ ...good, confidence: 4 }).action, "write");       // threshold itself passes
+    assert.equal(interpretAnalysis({ ...good, confidence: 10 }).action, "write");
+    assert.deepEqual(interpretAnalysis({ ...good, confidence: 3.9 }), { action: "skip", reason: "low_confidence", confidence: 3.9 });
+    assert.deepEqual(interpretAnalysis({ ...good, confidence: 0 }), { action: "skip", reason: "low_confidence", confidence: 0 });
+    for (const bad of [undefined, null, NaN, "9", -1, 11])
+        assert.deepEqual(interpretAnalysis({ ...good, confidence: bad }), { action: "skip", reason: "invalid_confidence", confidence: null }, String(bad));
+});
+
+for (const [name, run] of [["nightly cron", viaCron], ["POST /enrichment/location", viaRoute]]) {
+    test(`${name}: confidence below 4 writes no estimates but records enrichmentConfidence`, async () => {
+        const r = await run({ ...good, confidence: 3 });
+        assert.equal(wroteScores(r.updates), false);
+        assert.equal(logs.length, 0);
+        assert.equal(r.updates.length, 1);
+        assert.equal(r.updates[0].enrichmentConfidence, 3);
+        assert.ok(r.updates[0].lastEnrichedAt instanceof Date);   // definite answer: not retried nightly
+        if (r.body) { assert.equal(r.body.reason, "low_confidence"); assert.equal(r.body.confidence, 3); }
+    });
+
+    test(`${name}: missing confidence writes nothing and is not marked enriched (retried soon)`, async () => {
+        const { confidence, ...noConf } = good;
+        const r = await run(noConf);
+        assert.equal(wroteScores(r.updates), false);
+        assert.equal(r.updates.length, 0);
+        if (r.body) assert.equal(r.body.reason, "invalid_confidence");
+    });
+
+    test(`${name}: an accepted result stores enrichmentConfidence with the scores`, async () => {
+        const r = await run({ ...good, confidence: 6 });
+        const w = r.updates.find(d => "estimatedNoiseScore" in d);
+        assert.equal(w.enrichmentConfidence, 6);
+        assert.equal(logs[0].scores.confidence, 6);
+    });
+
+    test(`${name}: unchanged scores still refresh enrichmentConfidence`, async () => {
+        currentLocation = { ...baseLocation, lastEnrichedAt: new Date(), estimatedNoiseScore: 3, estimatedLightingScore: 2, estimatedCrowdScore: 1 };
+        const r = await run({ ...good, confidence: 7 });
+        assert.equal(wroteScores(r.updates), false);
+        assert.equal(r.updates[0].enrichmentConfidence, 7);
+    });
+
+    test(`${name}: invalid scores with a valid confidence still record the confidence`, async () => {
+        const r = await run({ ...good, noise_score: "low", confidence: 9 });
+        assert.equal(wroteScores(r.updates), false);
+        assert.equal(r.updates.length, 1);
+        assert.equal(r.updates[0].enrichmentConfidence, 9);
+        assert.equal("lastEnrichedAt" in r.updates[0], false);     // malformed output: retried soon
     });
 }

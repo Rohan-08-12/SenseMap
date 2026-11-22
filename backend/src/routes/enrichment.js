@@ -5,7 +5,7 @@ import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
 import { runEnrichment, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
-import { analyzeSchema, buildAnalysisPrompt, interpretAnalysis } from "../lib/enrichmentAnalysis.js";
+import { analyzeSchema, buildAnalysisPrompt, interpretAnalysis, skipUpdateData } from "../lib/enrichmentAnalysis.js";
 
 const router = express.Router();
 
@@ -85,15 +85,11 @@ router.post("/location", requireN8nSecret, async (req, res) => {
         // instead of saving them, but still keep the deterministic OSM facilities.
         const decision = interpretAnalysis(analysis);
         if (decision.action === "skip") {
-            const markEnriched = decision.reason === "no_sensory_signal" || !!osmFacilities;
-            if (markEnriched) {
-                await prisma.location.update({
-                    where: { id: locationId },
-                    data: { ...(yelpId && { externalYelpId: yelpId }), ...(osmFacilities && { estimatedFacilities: osmFacilities }), lastEnrichedAt: new Date() },
-                });
-            }
-            return res.json({ updated: false, reason: decision.reason, sources });
+            const data = skipUpdateData(decision, { yelpId, osmFacilities });
+            if (data) await prisma.location.update({ where: { id: locationId }, data });
+            return res.json({ updated: false, reason: decision.reason, confidence: decision.confidence, sources });
         }
+
         const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = decision;
 
         // OSM tags are exact/deterministic, so they take precedence over Gemini's
@@ -107,13 +103,14 @@ router.post("/location", requireN8nSecret, async (req, res) => {
                 data: {
                     ...(yelpId && { externalYelpId: yelpId }),
                     ...(facilities && { estimatedFacilities: facilities }),
+                    enrichmentConfidence: decision.confidence,
                     lastEnrichedAt: new Date(),
                 },
             });
             return res.json({ updated: false, reason: "scores_unchanged", sources });
         }
 
-        const confidence = analysis.confidence ?? null;
+        const confidence = decision.confidence;
         const dataSource = sources.join(",") || "category";
 
         await prisma.location.update({

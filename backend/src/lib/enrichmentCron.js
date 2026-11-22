@@ -4,7 +4,7 @@ import { model } from "./gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
-import { analyzeSchema, buildAnalysisPrompt, interpretAnalysis } from "./enrichmentAnalysis.js";
+import { analyzeSchema, buildAnalysisPrompt, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
 
 const STALE_THRESHOLD_HOURS = 24 * 7;
 const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
@@ -88,18 +88,11 @@ async function enrichLocation(location) {
     // reported no sensory signal (null scores) — see enrichmentAnalysis.interpretAnalysis.
     const decision = interpretAnalysis(analysis);
     if (decision.action === "skip") {
-        const markEnriched = decision.reason === "no_sensory_signal" || !!osmFacilities;
-        // The (deterministic, Gemini-independent) OSM facilities are still worth saving. For
-        // no_sensory_signal the result is a definite answer, so mark the place enriched (it won't be
-        // retried nightly); for malformed output keep the old behaviour of retrying soon.
-        if (markEnriched) {
-            await prisma.location.update({
-                where: { id: location.id },
-                data: { ...(yelpId && { externalYelpId: yelpId }), ...(osmFacilities && { estimatedFacilities: osmFacilities }), lastEnrichedAt: new Date() },
-            });
-        }
+        const data = skipUpdateData(decision, { yelpId, osmFacilities });
+        if (data) await prisma.location.update({ where: { id: location.id }, data });
         return { updated: false, reason: decision.reason };
     }
+
     const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = decision;
 
     if (!scoresDiffer(location, newNoise, newLighting, newCrowd)) {
@@ -108,6 +101,7 @@ async function enrichLocation(location) {
             data: {
                 ...(yelpId && { externalYelpId: yelpId }),
                 ...(facilities && { estimatedFacilities: facilities }),
+                enrichmentConfidence: decision.confidence,
                 lastEnrichedAt: new Date(),
             },
         });
@@ -121,6 +115,7 @@ async function enrichLocation(location) {
             estimatedNoiseScore:    newNoise,
             estimatedLightingScore: newLighting,
             estimatedCrowdScore:    newCrowd,
+            enrichmentConfidence:   decision.confidence,
             ...(facilities && { estimatedFacilities: facilities }),
             dataSource:             sources.join(",") || "category",
             lastEnrichedAt:         new Date(),
@@ -128,7 +123,7 @@ async function enrichLocation(location) {
     });
 
     await prisma.enrichmentLog.create({
-        data: { locationId: location.id, scores: { noise: newNoise, lighting: newLighting, crowd: newCrowd, sources } },
+        data: { locationId: location.id, scores: { noise: newNoise, lighting: newLighting, crowd: newCrowd, confidence: decision.confidence, sources } },
     });
 
     return { updated: true, noise: newNoise, lighting: newLighting, crowd: newCrowd };
