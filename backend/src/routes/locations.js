@@ -5,6 +5,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
 import { getDisplayScore } from "../lib/scores.js";
+import { computeMatch, compareMatches } from "../lib/matchScore.js";
 import { isBotReview } from "../lib/systemBot.js";
 
 
@@ -210,24 +211,10 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
             include: { sensoryScores: true }
         });
 
-        const safeScore = (score) => score != null ? score : 3;
-
         const matches = locations
             .map(loc => {
-                const s = loc.sensoryScores;
-                // Community scores when real reviews exist; AI-estimated next; OSM defaults last
-                // Use || null to treat 0 as invalid (Gemini occasionally returns 0 outside valid range)
-                const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) || loc.estimatedNoiseScore || s?.noiseScore;
-                const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) || loc.estimatedLightingScore || s?.lightingScore;
-                const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) || loc.estimatedCrowdScore || s?.crowdScore;
-
-                if (noise == null && lighting == null && crowd == null) return null;
-
-                const noiseMatch    = Math.max(0, 100 - Math.abs(safeScore(noise)    - noiseTolerance)    * 25);
-                const lightingMatch = Math.max(0, 100 - Math.abs(safeScore(lighting) - lightingTolerance) * 25);
-                const crowdMatch    = Math.max(0, 100 - Math.abs(safeScore(crowd)    - crowdTolerance)    * 25);
-                const matchScore    = Math.min(100, Math.max(0, Math.round((noiseMatch + lightingMatch + crowdMatch) / 3)));
-
+                const m = computeMatch(loc, { noiseTolerance, lightingTolerance, crowdTolerance });
+                if (!m) return null;
                 return {
                     locationId: loc.id,
                     name: loc.name,
@@ -235,15 +222,16 @@ router.get("/match", requireAuth, syncUser, async (req, res) => {
                     address: loc.address,
                     longitude: loc.longitude,
                     latitude: loc.latitude,
-                    matchScore,
-                    noiseScore:    noise,
-                    lightingScore: lighting,
-                    crowdScore:    crowd,
-                    comfortScore:  s?.comfortScore ?? null,
+                    matchScore:    m.matchScore,
+                    noiseScore:    m.noise,
+                    lightingScore: m.lighting,
+                    crowdScore:    m.crowd,
+                    comfortScore:  loc.sensoryScores?.comfortScore ?? null,
+                    source:        m.source,
                 };
             })
             .filter(Boolean)
-            .sort((a, b) => b.matchScore - a.matchScore);
+            .sort(compareMatches);
 
         res.json(matches);
     } catch (error) {
