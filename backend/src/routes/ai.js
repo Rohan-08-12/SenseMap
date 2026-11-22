@@ -6,6 +6,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { generateLocationEmbedding } from "../lib/embeddings.js";
 import { fetchAllSources } from "../services/scraper.js";
+import { applyInsightConfidence } from "../lib/insightConfidence.js";
 const router = express.Router();
 
 
@@ -152,7 +153,7 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
 
 Analyze the available information for "${location.name}" (category: ${location.category ?? "unknown"}) and produce a structured sensory profile.
 
-Use the data below as your primary source. If specific sensory details are missing, make reasonable category-based estimates — for example, cafes tend to have moderate-to-high noise, bright lighting, and variable crowds; libraries tend to be quiet with soft lighting; parks tend to have natural light and low indoor crowds. Always produce useful estimates rather than saying "no information available". Set confidence lower (20-40) when relying mostly on category inference, and higher (60-90) when specific sensory signals are present.
+Base every statement only on the data below. Do not present guesses as findings. If the data says nothing about noise, lighting or crowds, say so plainly in that summary (for example "No information available about noise.") instead of inventing details, and keep scores neutral. You may mention what is typical for this kind of place only if you clearly label it as a general expectation for the category, not something known about this place. Set confidence low (below 40) when the data contains little or no specific sensory information, and higher (60-90) only when specific sensory signals are present.
 
 Available data:
 ${reviewTexts}`;
@@ -202,11 +203,16 @@ ${reviewTexts}`;
       parsed.validationSource = "gemini";
     }
 
-    generateLocationEmbedding(location, parsed)
-      .then((embedding) => prisma.location.update({ where: { id: locationId }, data: { embedding } }))
-      .catch((e) => console.error("Embedding generation failed:", e));
+    // Below the confidence threshold, hide the guessed sensory text and don't build an embedding from it.
+    const result = applyInsightConfidence(parsed);
 
-    res.json(parsed);
+    if (!result.lowConfidence) {
+      generateLocationEmbedding(location, parsed)
+        .then((embedding) => prisma.location.update({ where: { id: locationId }, data: { embedding } }))
+        .catch((e) => console.error("Embedding generation failed:", e));
+    }
+
+    res.json(result);
   } catch (error) {
     console.error("AI error:", error);
     res.status(500).json({ error: "Internal server error" });

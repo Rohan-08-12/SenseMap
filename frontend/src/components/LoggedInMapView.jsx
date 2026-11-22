@@ -1546,35 +1546,43 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                     <div className="lmv-ai-bar-fill" style={{ width: `${aiInsights.confidence}%` }} />
                   </div>
 
-                  <div className="lmv-ai-insights">
-                    <div className="lmv-ai-item">
-                      <div className="lmv-ai-item-icon">
-                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2.5 7.5a5 5 0 0110 0" stroke="#f59e0b" strokeWidth="1.3" strokeLinecap="round" /><path d="M5 10.5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5" stroke="#f59e0b" strokeWidth="1.3" strokeLinecap="round" /></svg>
+                  {aiInsights.lowConfidence ? (
+                    <p style={{ color: 'var(--theme-text-muted)', fontSize: 13, margin: '8px 0 0' }}>
+                      {aiInsights.lowConfidenceNote || 'Low confidence: not enough information to describe this place reliably.'}
+                    </p>
+                  ) : (
+                    <>
+                    <div className="lmv-ai-insights">
+                      <div className="lmv-ai-item">
+                        <div className="lmv-ai-item-icon">
+                          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2.5 7.5a5 5 0 0110 0" stroke="#f59e0b" strokeWidth="1.3" strokeLinecap="round" /><path d="M5 10.5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5" stroke="#f59e0b" strokeWidth="1.3" strokeLinecap="round" /></svg>
+                        </div>
+                        <div className="lmv-ai-item-text">
+                          <h5>Noise</h5>
+                          <p>{aiInsights.noise?.summary ?? '—'}</p>
+                        </div>
                       </div>
-                      <div className="lmv-ai-item-text">
-                        <h5>Noise</h5>
-                        <p>{aiInsights.noise?.summary ?? '—'}</p>
+                      <div className="lmv-ai-item">
+                        <div className="lmv-ai-item-icon">
+                          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="4" r="2" stroke="#8b5cf6" strokeWidth="1.3" /><path d="M7.5 6v5M5.5 8.5l2 2.5 2-2.5" stroke="#8b5cf6" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </div>
+                        <div className="lmv-ai-item-text">
+                          <h5>Lighting</h5>
+                          <p>{aiInsights.lighting?.summary ?? '—'}</p>
+                        </div>
+                      </div>
+                      <div className="lmv-ai-item">
+                        <div className="lmv-ai-item-icon">
+                          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="5" stroke="#6b7280" strokeWidth="1.3" /><path d="M7.5 4v3.5l2.5 1.5" stroke="#6b7280" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </div>
+                        <div className="lmv-ai-item-text">
+                          <h5>Best time</h5>
+                          <p>{aiInsights.bestTime ? aiInsights.bestTime.split(' ').slice(0, 6).join(' ').replace(/[.,]$/, '') : '—'}</p>
+                        </div>
                       </div>
                     </div>
-                    <div className="lmv-ai-item">
-                      <div className="lmv-ai-item-icon">
-                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="4" r="2" stroke="#8b5cf6" strokeWidth="1.3" /><path d="M7.5 6v5M5.5 8.5l2 2.5 2-2.5" stroke="#8b5cf6" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      </div>
-                      <div className="lmv-ai-item-text">
-                        <h5>Lighting</h5>
-                        <p>{aiInsights.lighting?.summary ?? '—'}</p>
-                      </div>
-                    </div>
-                    <div className="lmv-ai-item">
-                      <div className="lmv-ai-item-icon">
-                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="5" stroke="#6b7280" strokeWidth="1.3" /><path d="M7.5 4v3.5l2.5 1.5" stroke="#6b7280" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      </div>
-                      <div className="lmv-ai-item-text">
-                        <h5>Best time</h5>
-                        <p>{aiInsights.bestTime ? aiInsights.bestTime.split(' ').slice(0, 6).join(' ').replace(/[.,]$/, '') : '—'}</p>
-                      </div>
-                    </div>
-                  </div>
+                    </>
+                  )}
                 </>
               ) : aiError ? (
                 <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>AI insights unavailable right now. Try again later.</p>
