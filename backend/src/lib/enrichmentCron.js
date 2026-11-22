@@ -44,7 +44,7 @@ function scoresDiffer(location, newNoise, newLighting, newCrowd, threshold = 0.5
 }
 
 async function enrichLocation(location) {
-    const { combinedText, sources, yelpId, osmFacilities } = await fetchAllSources({
+    const { combinedText, sources, yelpId, osmFacilities, googleIssue = null } = await fetchAllSources({
         name: location.name,
         latitude: location.latitude,
         longitude: location.longitude,
@@ -65,7 +65,8 @@ async function enrichLocation(location) {
                 dataSource: "category",
             },
         });
-        return { updated: false, reason: "no_review_text" };
+        // When Google was one of the sources and failed, say so: the empty result is a Google problem, not a quiet place.
+        return { updated: false, reason: googleIssue ? "google_error" : "no_text", googleIssue };
     }
 
     const analysis = await requestAnalysis(model, location.name, combinedText);
@@ -80,7 +81,7 @@ async function enrichLocation(location) {
         const data = skipUpdateData(decision, { yelpId, osmFacilities });
         if (data) await prisma.location.update({ where: { id: location.id }, data });
         if (decision.reason === "incomplete_scores") await logIncomplete(prisma, location.id, decision, sources);
-        return { updated: false, reason: decision.reason };
+        return { updated: false, reason: decision.reason, googleIssue };
     }
 
     const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = decision;
@@ -95,7 +96,7 @@ async function enrichLocation(location) {
                 lastEnrichedAt: new Date(),
             },
         });
-        return { updated: false, reason: "scores_unchanged" };
+        return { updated: false, reason: "scores_unchanged", googleIssue };
     }
 
     await prisma.location.update({
@@ -116,7 +117,7 @@ async function enrichLocation(location) {
         data: { locationId: location.id, scores: { noise: newNoise, lighting: newLighting, crowd: newCrowd, confidence: decision.confidence, sources } },
     });
 
-    return { updated: true, noise: newNoise, lighting: newLighting, crowd: newCrowd };
+    return { updated: true, noise: newNoise, lighting: newLighting, crowd: newCrowd, googleIssue };
 }
 
 /**
@@ -162,15 +163,28 @@ export async function startEnrichmentRun({ trigger = "cron", force = false, limi
 function logRunStart(run, { force, limit, planned, pauseMs }) {
     console.log(`[Enrichment] run ${run.id} started trigger=${run.trigger ?? "?"} force=${force} limit=${limit} delayMs=${pauseMs} planned=${planned}`);
 }
-function logRunEnd(run, status, counts, startedMs, note) {
+const tally = (obj) => Object.entries(obj).map(([k, n]) => `${k}:${n}`).join(",");
+function logRunEnd(run, status, counts, startedMs, note, summary) {
     const secs = Math.round((Date.now() - startedMs) / 1000);
-    console.log(`[Enrichment] run ${run.id} ended status=${status} planned=${counts.planned} updated=${counts.updated} skipped=${counts.skipped} failed=${counts.failed} durationSec=${secs}${note ? ` note="${note}"` : ""}`);
+    const skip = summary && Object.keys(summary.skipReasons).length ? ` skipReasons=${tally(summary.skipReasons)}` : "";
+    const goog = summary && Object.keys(summary.googleIssues).length ? ` googleIssues=${tally(summary.googleIssues)}` : "";
+    console.log(`[Enrichment] run ${run.id} ended status=${status} planned=${counts.planned} updated=${counts.updated} skipped=${counts.skipped} failed=${counts.failed}${skip}${goog} durationSec=${secs}${note ? ` note="${note}"` : ""}`);
+}
+
+const GOOGLE_FLAG_MIN = 3;   // flag a run when at least this many (or all, for tiny runs) places had a Google issue AND they were at least half of the places tried
+/** Returns a message when a run had many Google Places denials/errors, else undefined. */
+export function googleIssueFlag(googleIssues, processed) {
+    const n = Object.values(googleIssues).reduce((a, b) => a + b, 0);
+    if (n === 0 || processed === 0) return undefined;
+    if (n < Math.min(GOOGLE_FLAG_MIN, processed) || n / processed < 0.5) return undefined;
+    return `Google Places problems for ${n} of ${processed} places (${tally(googleIssues)}) - check the key, quota and billing`;
 }
 
 export async function executeEnrichmentRun(run) {
     const { force, limit } = run;
     const counts = { planned: 0, updated: 0, skipped: 0, failed: 0 };
     const errors = [];
+    const summary = { skipReasons: {}, googleIssues: {} };   // stored in EnrichmentRun.errors (JSON): no migration
     const startedMs = Date.now();
     const pauseMs = delayMs();   // ENRICHMENT_DELAY_MS, default 2000
 
@@ -195,9 +209,13 @@ export async function executeEnrichmentRun(run) {
             try {
                 const result = await enrichLocation(location);
                 if (result.updated) counts.updated++;
-                else counts.skipped++;
-                // Every outcome except "no review text" came after a successful Gemini call.
-                if (result.reason !== "no_review_text") geminiStreak = 0;
+                else {
+                    counts.skipped++;
+                    summary.skipReasons[result.reason] = (summary.skipReasons[result.reason] ?? 0) + 1;
+                }
+                if (result.googleIssue) summary.googleIssues[result.googleIssue] = (summary.googleIssues[result.googleIssue] ?? 0) + 1;
+                // Every outcome except "no text" came after a successful Gemini call.
+                if (result.reason !== "no_text" && result.reason !== "google_error") geminiStreak = 0;
             } catch (err) {
                 console.error(`[Enrichment] Failed ${location.name}:`, err.message);
                 counts.failed++;
@@ -218,8 +236,8 @@ export async function executeEnrichmentRun(run) {
         if (stoppedEarly) {
             // Status "failed" (the existing non-success status): a run that bailed must not count as healthy. Finishing the
             // row also releases the lock, so the next trigger or the next night's cron can start normally.
-            await finishRun(run.id, { status: "failed", counts, errors, errorMessage: stoppedEarly });
-            logRunEnd(run, "failed", counts, startedMs, stoppedEarly);
+            await finishRun(run.id, { status: "failed", counts, errors, summary, errorMessage: stoppedEarly });
+            logRunEnd(run, "failed", counts, startedMs, stoppedEarly, summary);
             return;
         }
 
@@ -227,17 +245,15 @@ export async function executeEnrichmentRun(run) {
         // let that count as a "successful" run or the freshness alert would never fire.
         const allFailed = counts.failed === counts.planned;
         const status = allFailed ? "failed" : "success";
-        await finishRun(run.id, {
-            status,
-            counts, errors,
-            errorMessage: allFailed ? "Every location failed" : undefined,
-        });
-        logRunEnd(run, status, counts, startedMs, allFailed ? "every location failed" : undefined);
+        const googleFlag = googleIssueFlag(summary.googleIssues, counts.updated + counts.skipped + counts.failed);
+        const errorMessage = [allFailed ? "Every location failed" : null, googleFlag].filter(Boolean).join("; ") || undefined;
+        await finishRun(run.id, { status, counts, errors, summary, errorMessage });
+        logRunEnd(run, status, counts, startedMs, errorMessage, summary);
     } catch (err) {
         console.error("[Enrichment] Run aborted:", err.message);
-        await finishRun(run.id, { status: "failed", counts, errors, errorMessage: String(err.message).slice(0, 500) })
+        await finishRun(run.id, { status: "failed", counts, errors, summary, errorMessage: String(err.message).slice(0, 500) })
             .catch(e => console.error("[Enrichment] Could not record failure:", e.message));
-        logRunEnd(run, "failed", counts, startedMs, `aborted: ${String(err.message).slice(0, 120)}`);
+        logRunEnd(run, "failed", counts, startedMs, `aborted: ${String(err.message).slice(0, 120)}`, summary);
         throw err;
     }
 }

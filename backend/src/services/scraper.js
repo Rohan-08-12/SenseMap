@@ -64,41 +64,72 @@ async function fetchFoursquare(name, lat, lng) {
     }
 }
 
-async function fetchGooglePlaces(name, lat, lng) {
+// Statuses that mean "Google answered fine" (ZERO_RESULTS just means no match).
+const GOOGLE_OK_STATUSES = new Set(["OK", "ZERO_RESULTS"]);
+
+// Strips anything key-shaped before text goes to a log line.
+const redact = (s) => String(s ?? "").replace(/key=[^&\s"]+/gi, "key=[redacted]").replace(/AIza[\w-]{10,}/g, "[redacted]").slice(0, 200);
+
+function logGoogleIssue(endpoint, name, issue, detail) {
+    console.warn(`[Google Places] ${endpoint} issue=${issue} place="${String(name).slice(0, 80)}"${detail ? ` detail="${redact(detail)}"` : ""}`);
+}
+
+/**
+ * Returns { text, issue }. `issue` is null when Google answered normally, else the Google status
+ * (REQUEST_DENIED, OVER_QUERY_LIMIT, INVALID_REQUEST, ...) or "http_<code>" / "network_<code>" for a
+ * transport error. Missing key is reported as "no_api_key". One log line per issue; the key is never logged.
+ */
+export async function fetchGooglePlaces(name, lat, lng) {
+    let endpoint = "textsearch";
     try {
-        if (!process.env.GOOGLE_PLACES_KEY) return "";
+        if (!process.env.GOOGLE_PLACES_KEY) { logGoogleIssue(endpoint, name, "no_api_key"); return { text: "", issue: "no_api_key" }; }
 
         const searchRes = await axios.get("https://maps.googleapis.com/maps/api/place/textsearch/json", {
             params: { query: `${name} Toronto`, location: `${lat},${lng}`, radius: 500, key: process.env.GOOGLE_PLACES_KEY },
             timeout: 8000,
         });
 
+        const searchStatus = searchRes.data.status;
+        if (searchStatus && !GOOGLE_OK_STATUSES.has(searchStatus)) {
+            logGoogleIssue(endpoint, name, searchStatus, searchRes.data.error_message);
+            return { text: "", issue: searchStatus };
+        }
+
         const result = searchRes.data.results?.[0];
-        if (!result?.place_id) return "";
+        if (!result?.place_id) return { text: "", issue: null };
 
         const placeLat = result.geometry?.location?.lat;
         const placeLng = result.geometry?.location?.lng;
         if (placeLat != null && placeLng != null) {
             const distanceM = haversineMetres(lat, lng, placeLat, placeLng);
-            if (distanceM > 1000) return "";
+            if (distanceM > 1000) return { text: "", issue: null };
         }
 
         const placeId = result.place_id;
 
         // Fetch rating and editorial summary only — Google ToS prohibits feeding
         // user-generated review text into AI models to generate derived content
+        endpoint = "details";
         const detailsRes = await axios.get("https://maps.googleapis.com/maps/api/place/details/json", {
             params: { place_id: placeId, fields: "rating,user_ratings_total,editorial_summary", key: process.env.GOOGLE_PLACES_KEY },
             timeout: 8000,
         });
 
+        const detailsStatus = detailsRes.data.status;
+        if (detailsStatus && !GOOGLE_OK_STATUSES.has(detailsStatus)) {
+            logGoogleIssue(endpoint, name, detailsStatus, detailsRes.data.error_message);
+            return { text: "", issue: detailsStatus };
+        }
+
         const detail = detailsRes.data.result ?? {};
         const parts = [];
         if (detail.rating) parts.push(`Google rating: ${detail.rating}/5 based on ${detail.user_ratings_total ?? 0} reviews.`);
         if (detail.editorial_summary?.overview) parts.push(detail.editorial_summary.overview);
-        return parts.join(" ");
-    } catch {
-        return "";
+        return { text: parts.join(" "), issue: null };
+    } catch (err) {
+        const issue = err.response?.status ? `http_${err.response.status}` : `network_${err.code ?? "error"}`;
+        logGoogleIssue(endpoint, name, issue, err.response?.data?.error_message ?? err.message);
+        return { text: "", issue };
     }
 }
 
@@ -215,7 +246,7 @@ function mapOsmTagsToFacilities(tags) {
 }
 
 export async function fetchAllSources({ name, latitude, longitude, category = null, existingYelpId = null, googlePlaceId = null }) {
-    const [yelpResult, foursquareText, googleText, torontoText, osmTags] = await Promise.all([
+    const [yelpResult, foursquareText, googleResult, torontoText, osmTags] = await Promise.all([
         existingYelpId
             ? fetchYelpById(existingYelpId).then((text) => ({ text, yelpId: existingYelpId }))
             : fetchYelp(name, latitude, longitude),
@@ -225,6 +256,7 @@ export async function fetchAllSources({ name, latitude, longitude, category = nu
         fetchOsmTags(googlePlaceId),
     ]);
 
+    const googleText = googleResult.text;
     const parts = [];
     const sources = [];
 
@@ -255,6 +287,7 @@ export async function fetchAllSources({ name, latitude, longitude, category = nu
         characterCount: combinedText.length,
         yelpId: yelpResult.yelpId,
         osmFacilities,
+        googleIssue: googleResult.issue,      // null, or why Google Places gave us nothing (see fetchGooglePlaces)
     };
 }
 

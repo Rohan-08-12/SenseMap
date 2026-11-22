@@ -89,7 +89,7 @@ test("3. every place failing => failed; partial failure => success", async () =>
     const r = await prisma.enrichmentRun.findUnique({ where: { id } });
     assert.equal(r.status, "failed");
     assert.equal(r.planned, 3); assert.equal(r.failed, 3);
-    assert.equal(r.errors.length, 3);
+    assert.equal(r.errors.items.length, 3);
     assert.match(r.errorMessage, /Every location failed/);
 
     let n = 0;
@@ -130,6 +130,29 @@ test("4. /enrichment/freshness numbers, auth, and ?strict=true 503 after 36h", a
     const plain = await get("/enrichment/freshness");
     assert.equal(plain.status, 200);
     assert.equal((await plain.json()).healthy, false);
+});
+
+test("4b. /enrichment/freshness lastRun shows skip reasons and Google issues (and still reads old array-shaped errors)", async () => {
+    const get = (path) => fetch(base + path, { headers: { "x-n8n-secret": "test-secret" } });
+    const r = await acquireRun({ trigger: "cron" });
+    await finishRun(r.id, {
+        status: "success", counts: { planned: 5, updated: 0, skipped: 5, failed: 0 },
+        errors: [], summary: { skipReasons: { no_text: 3, low_confidence: 2 }, googleIssues: { REQUEST_DENIED: 3 } },
+        errorMessage: "Google Places problems for 3 of 5 places (REQUEST_DENIED:3) - check the key, quota and billing",
+    });
+    const j = await (await get("/enrichment/freshness")).json();
+    assert.deepEqual(j.lastRun.skipReasons, { no_text: 3, low_confidence: 2 });
+    assert.deepEqual(j.lastRun.googleIssues, { REQUEST_DENIED: 3 });
+    assert.deepEqual(j.lastRun.errors, []);
+    assert.match(j.lastRun.errorMessage, /Google Places problems/);
+    assert.equal(j.lastRun.skipped, 5);
+
+    // a row written before this change stores a bare array: still served, with null summaries
+    await prisma.enrichmentRun.deleteMany();
+    await run({ status: "failed", startedAt: ago(1), finishedAt: ago(1), planned: 1, failed: 1, errors: [{ location: "A", message: "boom" }] });
+    const old = (await (await get("/enrichment/freshness")).json()).lastRun;
+    assert.deepEqual(old.errors, [{ location: "A", message: "boom" }]);
+    assert.equal(old.skipReasons, null); assert.equal(old.googleIssues, null);
 });
 
 test("5. catch-up skips when a run is active or last run started <1h ago; starts when due", async () => {
