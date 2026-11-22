@@ -5,16 +5,9 @@ import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
 import { acquireRun, heartbeat, finishRun } from "./enrichmentRuns.js";
-import { requestAnalysis, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
+import { requestAnalysis, interpretAnalysis, skipUpdateData, GeminiRequestError } from "./enrichmentAnalysis.js";
 import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "./enrichmentBackoff.js";
-
-const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
-
-// Caps how many locations a single unforced nightly run touches. Without this, a backlog of
-// simultaneously-stale locations (e.g. all last enriched in the same original batch job) would
-// get reprocessed in one lump instead of trickling in — spiking Google Places/Yelp/Foursquare
-// spend and quota in a single run. force=true (manual backfill trigger) ignores this cap.
-const NIGHTLY_BATCH_LIMIT = 200;
+import { resolveLimit, delayMs, MAX_CONSECUTIVE_GEMINI_FAILURES } from "./enrichmentConfig.js";
 
 // Maps the Gemini schema's *_tags keys to the canonical facilities field names
 // used everywhere else (Review columns, FACILITIES_OPTIONS, frontend pills).
@@ -128,94 +121,131 @@ async function enrichLocation(location) {
 
 /**
  * The places an enrichment run would process: stale (or never enriched) and not inside the
- * incomplete-scores backoff, oldest first, capped at NIGHTLY_BATCH_LIMIT unless forced.
+ * incomplete-scores backoff, oldest first. Every selection is capped (ENRICHMENT_MAX_PER_RUN, default 50,
+ * or an explicit `limit`, both clamped to 1-1000), forced runs included, so no run is unbounded.
  * Exported so scripts/check_backoff_query.js can exercise the exact production query.
  */
-export async function selectLocationsToEnrich({ force = false } = {}) {
+export async function selectLocationsToEnrich({ force = false, limit } = {}) {
     const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
     // Places whose last analysis was incomplete are left alone for 30 days (a forced run ignores this).
     const backoffIds = force ? [] : await idsInIncompleteBackoff(prisma);
 
     return prisma.location.findMany({
-        // force=true (manual backfill trigger) ignores staleness and the nightly cap, re-processing
-        // every location — used e.g. to seed estimatedFacilities onto locations enriched before
-        // that field existed. An unforced (cron) run processes at most NIGHTLY_BATCH_LIMIT of the
-        // oldest-stale locations, so a backlog trickles in over several nights instead of spiking
-        // API spend in one run.
+        // force=true (manual backfill trigger) ignores staleness, re-processing places regardless of
+        // when they were last enriched (e.g. to seed estimatedFacilities onto places enriched before
+        // that field existed) but is still capped, so a backlog is worked through in batches instead
+        // of spiking Gemini / Google Places spend and quota in one run.
         where: force ? {} : staleWhere(cutoff, backoffIds),
         orderBy: [{ lastEnrichedAt: { sort: "asc", nulls: "first" } }],
-        ...(force ? {} : { take: NIGHTLY_BATCH_LIMIT }),
+        take: resolveLimit(limit),
         select: {
             id: true, name: true, latitude: true, longitude: true,
             category: true, externalYelpId: true, googlePlaceId: true,
             estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true,
+            lastEnrichedAt: true,
         },
     });
 }
 
 /**
  * Claims the run lock and records a run row. Returns the row, or null if a run is already
- * in progress (callers should skip / respond 409). Pair with executeEnrichmentRun(run).
+ * in progress (callers should skip / respond 409). Pair with executeEnrichmentRun(run). `limit` (optional,
+ * clamped 1-1000) sizes a manual batch; otherwise ENRICHMENT_MAX_PER_RUN applies.
  */
-export function startEnrichmentRun({ trigger = "cron", force = false } = {}) {
-    return acquireRun({ trigger, force });
+export async function startEnrichmentRun({ trigger = "cron", force = false, limit } = {}) {
+    const run = await acquireRun({ trigger, force });
+    // `limit` is not stored on the run row; it travels with the returned object into executeEnrichmentRun.
+    return run ? { ...run, limit: resolveLimit(limit) } : null;
+}
+
+// One greppable line when a run starts and one when it ends (all triggers, the cron included).
+function logRunStart(run, { force, limit, planned, pauseMs }) {
+    console.log(`[Enrichment] run ${run.id} started trigger=${run.trigger ?? "?"} force=${force} limit=${limit} delayMs=${pauseMs} planned=${planned}`);
+}
+function logRunEnd(run, status, counts, startedMs, note) {
+    const secs = Math.round((Date.now() - startedMs) / 1000);
+    console.log(`[Enrichment] run ${run.id} ended status=${status} planned=${counts.planned} updated=${counts.updated} skipped=${counts.skipped} failed=${counts.failed} durationSec=${secs}${note ? ` note="${note}"` : ""}`);
 }
 
 export async function executeEnrichmentRun(run) {
-    const { force } = run;
+    const { force, limit } = run;
     const counts = { planned: 0, updated: 0, skipped: 0, failed: 0 };
     const errors = [];
+    const startedMs = Date.now();
+    const pauseMs = delayMs();   // ENRICHMENT_DELAY_MS, default 2000
 
     try {
-        const locations = await selectLocationsToEnrich({ force });
+        const locations = await selectLocationsToEnrich({ force, limit });
 
         counts.planned = locations.length;
+        logRunStart(run, { force, limit, planned: counts.planned, pauseMs });
 
         if (locations.length === 0) {
-            console.log("[Enrichment] All locations up to date.");
             await finishRun(run.id, { status: "success", counts });
+            logRunEnd(run, "success", counts, startedMs, "nothing to enrich");
             return;
         }
 
-        console.log(`[Enrichment] Starting — ${locations.length} locations to process`);
         await heartbeat(run.id, counts);
 
-        for (const location of locations) {
+        let geminiStreak = 0;        // consecutive Gemini failures; any successful Gemini call resets it
+        let stoppedEarly = null;
+        for (let i = 0; i < locations.length; i++) {
+            const location = locations[i];
             try {
                 const result = await enrichLocation(location);
                 if (result.updated) counts.updated++;
                 else counts.skipped++;
+                // Every outcome except "no review text" came after a successful Gemini call.
+                if (result.reason !== "no_review_text") geminiStreak = 0;
             } catch (err) {
                 console.error(`[Enrichment] Failed ${location.name}:`, err.message);
                 counts.failed++;
                 errors.push({ location: location.name, message: String(err.message).slice(0, 300) });
+                if (err instanceof GeminiRequestError) geminiStreak++;   // other errors neither extend nor reset the streak
             }
             // A heartbeat failure (e.g. transient DB blip) must not abort the whole run.
             await heartbeat(run.id, counts).catch(err => console.error("[Enrichment] Heartbeat failed:", err.message));
-            await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+
+            if (geminiStreak >= MAX_CONSECUTIVE_GEMINI_FAILURES) {
+                const last = errors.at(-1)?.message ?? "unknown error";
+                stoppedEarly = `Stopped early after ${MAX_CONSECUTIVE_GEMINI_FAILURES} consecutive Gemini failures (last: ${last})`.slice(0, 500);
+                break;
+            }
+            if (pauseMs > 0 && i < locations.length - 1) await new Promise(r => setTimeout(r, pauseMs));
         }
 
-        console.log(`[Enrichment] Done — updated: ${counts.updated}, skipped: ${counts.skipped}, failed: ${counts.failed}`);
+        if (stoppedEarly) {
+            // Status "failed" (the existing non-success status): a run that bailed must not count as healthy. Finishing the
+            // row also releases the lock, so the next trigger or the next night's cron can start normally.
+            await finishRun(run.id, { status: "failed", counts, errors, errorMessage: stoppedEarly });
+            logRunEnd(run, "failed", counts, startedMs, stoppedEarly);
+            return;
+        }
+
         // Every location failing means something systemic (bad API key, quota, outage) — don't
         // let that count as a "successful" run or the freshness alert would never fire.
         const allFailed = counts.failed === counts.planned;
+        const status = allFailed ? "failed" : "success";
         await finishRun(run.id, {
-            status: allFailed ? "failed" : "success",
+            status,
             counts, errors,
             errorMessage: allFailed ? "Every location failed" : undefined,
         });
+        logRunEnd(run, status, counts, startedMs, allFailed ? "every location failed" : undefined);
     } catch (err) {
         console.error("[Enrichment] Run aborted:", err.message);
         await finishRun(run.id, { status: "failed", counts, errors, errorMessage: String(err.message).slice(0, 500) })
             .catch(e => console.error("[Enrichment] Could not record failure:", e.message));
+        logRunEnd(run, "failed", counts, startedMs, `aborted: ${String(err.message).slice(0, 120)}`);
         throw err;
     }
 }
 
 // Acquire the lock and run to completion. Used by the cron; the trigger endpoint calls the two
 // halves separately so it can answer 409 immediately when a run is already in progress.
-export async function runEnrichment({ force = false, trigger = "cron" } = {}) {
-    const run = await startEnrichmentRun({ trigger, force });
+export async function runEnrichment({ force = false, trigger = "cron", limit } = {}) {
+    const run = await startEnrichmentRun({ trigger, force, limit });
     if (!run) {
         console.log("[Enrichment] Skipped — another run is already in progress.");
         return null;

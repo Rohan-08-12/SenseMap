@@ -3,11 +3,12 @@ import prisma from "../lib/prisma.js";
 import { model } from "../lib/gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
-import { startEnrichmentRun, executeEnrichmentRun, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
+import { startEnrichmentRun, executeEnrichmentRun, selectLocationsToEnrich, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
+import { resolveLimit } from "../lib/enrichmentConfig.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
 import { getFreshness } from "../lib/enrichmentRuns.js";
 import { requestAnalysis, interpretAnalysis, skipUpdateData } from "../lib/enrichmentAnalysis.js";
-import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "../lib/enrichmentBackoff.js";
+import { logIncomplete } from "../lib/enrichmentBackoff.js";
 
 const router = express.Router();
 
@@ -136,30 +137,27 @@ router.post("/location", requireN8nSecret, async (req, res) => {
     }
 });
 
-// GET /enrichment/stale — returns locations due for enrichment
-router.get("/stale", requireN8nSecret, async (_req, res) => {
+const LIMIT_ERROR = "limit must be a positive integer";
+// ?limit=N: absent -> default (ENRICHMENT_MAX_PER_RUN); a positive integer -> clamped to 1-1000 later by
+// resolveLimit(); anything else (0, negative, decimal, text) is rejected rather than guessed at.
+function parseLimit(raw) {
+    if (raw === undefined) return { ok: true, limit: undefined };
+    if (typeof raw !== "string" || !/^[1-9]\d*$/.test(raw.trim())) return { ok: false };
+    return { ok: true, limit: Number(raw.trim()) };
+}
+
+// GET /enrichment/stale: a preview of exactly what the next run would process (same selection as the cron and
+// /trigger, including the per-run cap and the incomplete-scores backoff). ?limit=N sizes the preview;
+// ?force=true previews a forced run.
+router.get("/stale", requireN8nSecret, async (req, res) => {
     try {
-        const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
+        const parsed = parseLimit(req.query.limit);
+        if (!parsed.ok) return res.status(400).json({ error: LIMIT_ERROR });
+        const force = req.query.force === "true";
+        const limit = resolveLimit(parsed.limit);
 
-        const backoffIds = await idsInIncompleteBackoff(prisma);
-        const locations = await prisma.location.findMany({
-            where: staleWhere(cutoff, backoffIds),
-            take: 450,
-            orderBy: [
-                { lastEnrichedAt: { sort: "asc", nulls: "first" } },
-            ],
-            select: {
-                id: true,
-                name: true,
-                latitude: true,
-                longitude: true,
-                category: true,
-                lastEnrichedAt: true,
-                externalYelpId: true,
-            },
-        });
-
-        res.json({ count: locations.length, locations });
+        const locations = await selectLocationsToEnrich({ force, limit });
+        res.json({ count: locations.length, limit, force, locations });
     } catch (error) {
         console.error("Stale locations error:", error);
         res.status(500).json({ error: "Internal server error" });
@@ -167,16 +165,18 @@ router.get("/stale", requireN8nSecret, async (_req, res) => {
 });
 
 // POST /enrichment/trigger — kicks off a background enrichment run
-// ?force=true ignores the staleness window and re-processes every location —
-// useful for backfilling a newly added field (e.g. estimatedFacilities) without waiting a week.
+// ?force=true ignores the staleness window (useful for backfilling a newly added field, e.g. estimatedFacilities)
+// ?limit=N sizes a manual batch (positive integer, clamped to 1-1000); every run is capped, forced ones included.
 router.post("/trigger", requireN8nSecret, async (req, res) => {
     try {
+        const parsed = parseLimit(req.query.limit);
+        if (!parsed.ok) return res.status(400).json({ triggered: false, error: LIMIT_ERROR });
         const force = req.query.force === "true";
-        const run = await startEnrichmentRun({ trigger: force ? "trigger-force" : "trigger", force });
+        const run = await startEnrichmentRun({ trigger: force ? "trigger-force" : "trigger", force, limit: parsed.limit });
         if (!run) return res.status(409).json({ triggered: false, error: "An enrichment run is already in progress" });
 
         executeEnrichmentRun(run).catch(err => console.error("[Enrichment] Trigger error:", err.message));
-        res.json({ triggered: true, force, runId: run.id, message: "Enrichment started in background" });
+        res.json({ triggered: true, force, limit: run.limit, runId: run.id, message: "Enrichment started in background" });
     } catch (error) {
         console.error("Enrichment trigger error:", error);
         res.status(500).json({ error: "Internal server error" });
