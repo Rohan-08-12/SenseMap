@@ -1,6 +1,15 @@
-// Run: DATABASE_URL=postgresql://test@127.0.0.1:55433/freshness_test \
-//      node --experimental-test-module-mocks --test test/enrichment-lock-extra.test.js
-// Throwaway LOCAL Postgres only (refuses otherwise). Scraper, Gemini and Resend are mocked: no API is called.
+// !!! INTEGRATION TEST: NEEDS A THROWAWAY LOCAL POSTGRES !!!
+//  - Refuses to run unless DATABASE_URL's host is localhost / 127.0.0.1.
+//  - It DELETES ALL ROWS in the "EnrichmentRun" and "Location" tables before EVERY test. Never point it at a
+//    database whose data you want to keep.
+//  - It must NOT run in parallel with the other lock test file (enrichment-freshness.test.js and
+//    enrichment-lock-extra.test.js share one database and wipe each other's rows, giving false failures).
+//    Use `npm run test:db`, which sets --test-concurrency=1.
+//  - The scraper, Gemini and Resend are mocked: no external or paid API is called.
+//
+// Run (from backend/, with the throwaway database's migrations applied):
+//   export DATABASE_URL=postgresql://test@127.0.0.1:55433/freshness_test
+//   npm run test:db
 import { test, mock, before, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
