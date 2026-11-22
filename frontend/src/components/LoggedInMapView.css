@@ -948,7 +948,8 @@
 /* Stat boxes */
 .lmv-stat-boxes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: column;       /* 2 or 3 boxes (no 'Best time' box without a value) share the row equally */
+  grid-auto-columns: minmax(0, 1fr);
   gap: 10px;
 }
 

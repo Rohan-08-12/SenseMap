@@ -5,8 +5,9 @@ import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
 import { acquireRun, heartbeat, finishRun } from "./enrichmentRuns.js";
+import { requestAnalysis, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
+import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "./enrichmentBackoff.js";
 
-const STALE_THRESHOLD_HOURS = 24 * 7;
 const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
 
 // Caps how many locations a single unforced nightly run touches. Without this, a backlog of
@@ -14,23 +15,6 @@ const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemi
 // get reprocessed in one lump instead of trickling in — spiking Google Places/Yelp/Foursquare
 // spend and quota in a single run. force=true (manual backfill trigger) ignores this cap.
 const NIGHTLY_BATCH_LIMIT = 200;
-
-const analyzeSchema = {
-    type: "object",
-    properties: {
-        noise_score:    { type: "number", description: "Noise level 1-10, where 1=silent and 10=extremely loud" },
-        lighting_score: { type: "number", description: "Lighting intensity 1-10, where 1=dim and 10=harsh/bright" },
-        crowd_score:    { type: "number", description: "Crowd density 1-10, where 1=empty and 10=packed" },
-        sentiment:      { type: "string", enum: ["positive", "neutral", "negative"] },
-        tags:           { type: "array",  items: { type: "string" } },
-        summary:        { type: "string" },
-        temperature_tags:         { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.temperature } },
-        seating_tags:              { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.seating } },
-        bathroom_tags:             { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.bathrooms } },
-        social_interaction_tags:   { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.socialInteractions } },
-    },
-    required: ["noise_score", "lighting_score", "crowd_score", "sentiment", "tags", "summary"],
-};
 
 // Maps the Gemini schema's *_tags keys to the canonical facilities field names
 // used everywhere else (Review columns, FACILITIES_OPTIONS, frontend pills).
@@ -91,32 +75,22 @@ async function enrichLocation(location) {
         return { updated: false, reason: "no_review_text" };
     }
 
-    const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: `You are a sensory analysis assistant for autistic and sensory-sensitive people.\n\nAnalyze these reviews for "${location.name}" and extract structured sensory scores. Also infer, where the text gives any signal, the facility characteristics below — only include tags the text actually supports; leave a category's array empty if there's no signal for it. Use only the exact option strings listed (no new values):\n- temperature_tags, from: ${FACILITIES_OPTIONS.temperature.join(", ")}\n- seating_tags, from: ${FACILITIES_OPTIONS.seating.join(", ")}\n- bathroom_tags, from: ${FACILITIES_OPTIONS.bathrooms.join(", ")}\n- social_interaction_tags, from: ${FACILITIES_OPTIONS.socialInteractions.join(", ")}\n\nReviews:\n${combinedText}` }] }],
-        generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
-    });
-
-    const analysis = JSON.parse(result.response.text());
+    const analysis = await requestAnalysis(model, location.name, combinedText);
     // OSM tags are exact/deterministic, so they take precedence over Gemini's text-inferred
     // guesses per category; Gemini only fills categories OSM has no tag for.
     const facilities = mergeFacilities(osmFacilities, extractFacilities(analysis));
 
-    const newNoise    = analysis.noise_score    / 2;
-    const newLighting = analysis.lighting_score / 2;
-    const newCrowd    = analysis.crowd_score    / 2;
-
-    // Reject invalid scores — Gemini occasionally returns 0 which is outside the 1-10 range
-    if (newNoise < 0.5 || newLighting < 0.5 || newCrowd < 0.5) {
-        // Scores are unusable, but the (deterministic, Gemini-independent) OSM facilities are
-        // still worth saving rather than discarding along with the bad score analysis.
-        if (osmFacilities) {
-            await prisma.location.update({
-                where: { id: location.id },
-                data: { ...(yelpId && { externalYelpId: yelpId }), estimatedFacilities: osmFacilities, lastEnrichedAt: new Date() },
-            });
-        }
-        return { updated: false, reason: "invalid_scores" };
+    // Reject anything that is not a finite number in 1-10, and never store estimates when the model
+    // reported no sensory signal (null scores) — see enrichmentAnalysis.interpretAnalysis.
+    const decision = interpretAnalysis(analysis);
+    if (decision.action === "skip") {
+        const data = skipUpdateData(decision, { yelpId, osmFacilities });
+        if (data) await prisma.location.update({ where: { id: location.id }, data });
+        if (decision.reason === "incomplete_scores") await logIncomplete(prisma, location.id, decision, sources);
+        return { updated: false, reason: decision.reason };
     }
+
+    const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = decision;
 
     if (!scoresDiffer(location, newNoise, newLighting, newCrowd)) {
         await prisma.location.update({
@@ -124,6 +98,7 @@ async function enrichLocation(location) {
             data: {
                 ...(yelpId && { externalYelpId: yelpId }),
                 ...(facilities && { estimatedFacilities: facilities }),
+                enrichmentConfidence: decision.confidence,
                 lastEnrichedAt: new Date(),
             },
         });
@@ -137,6 +112,7 @@ async function enrichLocation(location) {
             estimatedNoiseScore:    newNoise,
             estimatedLightingScore: newLighting,
             estimatedCrowdScore:    newCrowd,
+            enrichmentConfidence:   decision.confidence,
             ...(facilities && { estimatedFacilities: facilities }),
             dataSource:             sources.join(",") || "category",
             lastEnrichedAt:         new Date(),
@@ -144,10 +120,37 @@ async function enrichLocation(location) {
     });
 
     await prisma.enrichmentLog.create({
-        data: { locationId: location.id, scores: { noise: newNoise, lighting: newLighting, crowd: newCrowd, sources } },
+        data: { locationId: location.id, scores: { noise: newNoise, lighting: newLighting, crowd: newCrowd, confidence: decision.confidence, sources } },
     });
 
     return { updated: true, noise: newNoise, lighting: newLighting, crowd: newCrowd };
+}
+
+/**
+ * The places an enrichment run would process: stale (or never enriched) and not inside the
+ * incomplete-scores backoff, oldest first, capped at NIGHTLY_BATCH_LIMIT unless forced.
+ * Exported so scripts/check_backoff_query.js can exercise the exact production query.
+ */
+export async function selectLocationsToEnrich({ force = false } = {}) {
+    const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
+    // Places whose last analysis was incomplete are left alone for 30 days (a forced run ignores this).
+    const backoffIds = force ? [] : await idsInIncompleteBackoff(prisma);
+
+    return prisma.location.findMany({
+        // force=true (manual backfill trigger) ignores staleness and the nightly cap, re-processing
+        // every location — used e.g. to seed estimatedFacilities onto locations enriched before
+        // that field existed. An unforced (cron) run processes at most NIGHTLY_BATCH_LIMIT of the
+        // oldest-stale locations, so a backlog trickles in over several nights instead of spiking
+        // API spend in one run.
+        where: force ? {} : staleWhere(cutoff, backoffIds),
+        orderBy: [{ lastEnrichedAt: { sort: "asc", nulls: "first" } }],
+        ...(force ? {} : { take: NIGHTLY_BATCH_LIMIT }),
+        select: {
+            id: true, name: true, latitude: true, longitude: true,
+            category: true, externalYelpId: true, googlePlaceId: true,
+            estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true,
+        },
+    });
 }
 
 /**
@@ -164,23 +167,7 @@ export async function executeEnrichmentRun(run) {
     const errors = [];
 
     try {
-        const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
-
-        const locations = await prisma.location.findMany({
-            // force=true (manual backfill trigger) ignores staleness and the nightly cap, re-processing
-            // every location — used e.g. to seed estimatedFacilities onto locations enriched before
-            // that field existed. An unforced (cron) run processes at most NIGHTLY_BATCH_LIMIT of the
-            // oldest-stale locations, so a backlog trickles in over several nights instead of spiking
-            // API spend in one run.
-            where: force ? {} : { OR: [{ lastEnrichedAt: null }, { lastEnrichedAt: { lt: cutoff } }] },
-            orderBy: [{ lastEnrichedAt: { sort: "asc", nulls: "first" } }],
-            ...(force ? {} : { take: NIGHTLY_BATCH_LIMIT }),
-            select: {
-                id: true, name: true, latitude: true, longitude: true,
-                category: true, externalYelpId: true, googlePlaceId: true,
-                estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true,
-            },
-        });
+        const locations = await selectLocationsToEnrich({ force });
 
         counts.planned = locations.length;
 
