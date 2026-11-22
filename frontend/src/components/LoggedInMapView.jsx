@@ -611,11 +611,18 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   ];
 
   // Radar chart data
+  // Same 0-5 values as the weights card, one decimal (see radarValues).
+  const radar = radarValues({
+    noise: sensory.noiseScore ?? sensory.noise_score ?? 0,
+    lighting: sensory.lightingScore ?? sensory.lighting_score ?? 0,
+    crowd: sensory.crowdScore ?? sensory.crowd_score ?? 0,
+    comfort: comfortNum,
+  });
   const radarData = [
-    { axis: 'Noise', value: (sensory.noiseScore ?? sensory.noise_score ?? 0) * 2 },
-    { axis: 'Lighting', value: (sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2 },
-    { axis: 'Crowds', value: (sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2 },
-    { axis: 'Comfort', value: comfortNum * 2 },
+    { axis: 'Noise', value: radar.noise },
+    { axis: 'Lighting', value: radar.lighting },
+    { axis: 'Crowds', value: radar.crowd },
+    { axis: 'Comfort', value: radar.comfort },
   ];
 
   // Possible triggers
@@ -1632,16 +1639,16 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                       <RadarChart data={radarData} outerRadius={70}>
                         <PolarGrid stroke="#e5e7eb" />
                         <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: 'var(--theme-text-muted)' }} />
-                        <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                        <PolarRadiusAxis angle={90} domain={[0, 5]} tick={{ fontSize: 9, fill: '#94a3b8' }} />
                         <Radar dataKey="value" stroke="var(--theme-accent)" fill="var(--theme-accent)" fillOpacity={0.25} />
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
 
                   <div className="lmv-profile-grid">
-                    <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{((sensory.noiseScore ?? sensory.noise_score ?? 0) * 2).toFixed(0)}</span></div>
-                    <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{((sensory.lightingScore ?? sensory.lighting_score ?? 0) * 2).toFixed(0)}</span></div>
-                    <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{((sensory.crowdScore ?? sensory.crowd_score ?? 0) * 2).toFixed(0)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Noise</span><span className="pstat-value">{radar.noise.toFixed(1)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Lighting</span><span className="pstat-value">{radar.lighting.toFixed(1)}</span></div>
+                    <div className="lmv-profile-stat"><span className="pstat-label">Crowds</span><span className="pstat-value">{radar.crowd.toFixed(1)}</span></div>
                     <div className="lmv-profile-stat">
                       <span className="pstat-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         Comfort
@@ -1651,7 +1658,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                           aria-label="Comfort score explanation"
                         >i</span>
                       </span>
-                      <span className="pstat-value">{(comfortNum * 2).toFixed(0)}</span>
+                      <span className="pstat-value">{radar.comfort.toFixed(1)}</span>
                     </div>
                   </div>
                 </div>
