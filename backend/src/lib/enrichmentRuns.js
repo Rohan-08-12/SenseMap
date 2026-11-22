@@ -36,7 +36,16 @@ export function heartbeat(runId, counts) {
     });
 }
 
-export function finishRun(runId, { status, counts = {}, errors, errorMessage }) {
+// `errors` (a JSON column) was a bare array of { location, message }. It now holds
+// { items, skipReasons, googleIssues } when a summary is given; readers go through normalizeRunErrors().
+export function normalizeRunErrors(raw) {
+    if (Array.isArray(raw)) return { items: raw, skipReasons: null, googleIssues: null };
+    return { items: raw?.items ?? [], skipReasons: raw?.skipReasons ?? null, googleIssues: raw?.googleIssues ?? null };
+}
+
+export function finishRun(runId, { status, counts = {}, errors, summary, errorMessage }) {
+    const items = errors?.length ? errors.slice(0, MAX_RECORDED_ERRORS) : [];
+    const stored = summary ? { items, skipReasons: summary.skipReasons ?? {}, googleIssues: summary.googleIssues ?? {} } : (items.length ? items : undefined);
     return prisma.enrichmentRun.update({
         where: { id: runId },
         data: {
@@ -44,7 +53,7 @@ export function finishRun(runId, { status, counts = {}, errors, errorMessage }) 
             finishedAt: new Date(),
             heartbeatAt: new Date(),
             ...counts,
-            errors: errors?.length ? errors.slice(0, MAX_RECORDED_ERRORS) : undefined,
+            errors: stored,
             errorMessage: errorMessage ?? null,
         },
     });
@@ -82,7 +91,8 @@ export async function getFreshness() {
         id: r.id, trigger: r.trigger, force: r.force, status: r.status,
         startedAt: r.startedAt, finishedAt: r.finishedAt,
         planned: r.planned, updated: r.updated, skipped: r.skipped, failed: r.failed,
-        errorMessage: r.errorMessage, errors: r.errors,
+        errorMessage: r.errorMessage,
+        ...(({ items, skipReasons, googleIssues }) => ({ errors: items, skipReasons, googleIssues }))(normalizeRunErrors(r.errors)),
     };
 
     return {

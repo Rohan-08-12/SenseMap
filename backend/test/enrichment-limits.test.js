@@ -251,7 +251,7 @@ test("5 Gemini failures in a row stop the run: status failed, reason recorded, l
     assert.match(f.errorMessage, /429 quota exceeded/);
     assert.ok(f.finishedAt instanceof Date, "finishing the row releases the lock");
     assert.equal(f.planned, 8); assert.equal(f.failed, 5);
-    assert.equal(f.errors.length, 5);
+    assert.equal(f.errors.items.length, 5);
     assert.equal(updates.length, 0);
 });
 
