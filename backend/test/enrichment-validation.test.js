@@ -9,6 +9,8 @@ process.env.N8N_WEBHOOK_SECRET = "test-secret";
 // ---- mocks -------------------------------------------------------------------------------
 const updates = [];          // every prisma.location.update({ data }) call
 const findManyArgs = [];     // every prisma.location.findMany(args)
+const runCreates = [];       // every prisma.enrichmentRun.create({ data }) (lock acquisitions)
+const runUpdates = [];       // every prisma.enrichmentRun.update({ data }) (heartbeats and the final status)
 const logFindManyArgs = [];  // every prisma.enrichmentLog.findMany(args)
 let backoffRows = [];        // rows the mocked enrichmentLog.findMany returns (places in incomplete-scores backoff)
 let osmFacilities = null;
@@ -30,6 +32,12 @@ const prismaMock = {
     enrichmentLog: {
         create: async ({ data }) => { logs.push(data); return {}; },
         findMany: async (args) => { logFindManyArgs.push(args); return backoffRows; },
+    },
+    // run tracking + lock (lib/enrichmentRuns.js): runEnrichment now claims a run row before doing any work
+    enrichmentRun: {
+        updateMany: async () => ({ count: 0 }),
+        create: async ({ data }) => { runCreates.push(data); return { id: "run1", force: false, ...data }; },
+        update: async ({ data }) => { runUpdates.push(data); return {}; },
     },
 };
 mock.module("../src/lib/prisma.js", { defaultExport: prismaMock });
@@ -56,7 +64,7 @@ before(async () => {
     base = `http://127.0.0.1:${server.address().port}`;
 });
 after(() => server.close());
-beforeEach(() => { findManyArgs.length = 0; logFindManyArgs.length = 0; backoffRows = []; osmFacilities = null; updates.length = 0; logs.length = 0; geminiCalls = 0; currentLocation = baseLocation; sourceText = "A quiet cafe on a side street."; });
+beforeEach(() => { runCreates.length = 0; runUpdates.length = 0; findManyArgs.length = 0; logFindManyArgs.length = 0; backoffRows = []; osmFacilities = null; updates.length = 0; logs.length = 0; geminiCalls = 0; currentLocation = baseLocation; sourceText = "A quiet cafe on a side street."; });
 
 // run the same Gemini response through BOTH writers
 async function viaCron(resp) { geminiResponse = resp; await runEnrichment({ force: true }); return { updates: [...updates] }; }
@@ -315,4 +323,27 @@ test("GET /enrichment/stale excludes places in backoff", async () => {
     backoffRows = [];
     await fetch(base + "/enrichment/stale", { headers: { "x-n8n-secret": "test-secret" } });
     assert.equal("AND" in findManyArgs.at(-1).where, false);
+});
+
+// ---- 5. integration with the run lock (data-freshness) ------------------------------------------------
+test("runEnrichment takes the run lock, tracks the run, and finishes it as success", async () => {
+    geminiResponse = good;
+    const id = await runEnrichment({ force: true, trigger: "trigger-force" });
+    assert.equal(id, "run1");
+    assert.equal(runCreates.length, 1);
+    assert.equal(runCreates[0].trigger, "trigger-force");
+    assert.equal(runCreates[0].force, true);
+    const final = runUpdates.at(-1);
+    assert.equal(final.status, "success");
+    assert.equal(final.planned, 1);
+    assert.equal(final.updated, 1);
+    assert.ok(runUpdates.some((u) => !("status" in u)), "a heartbeat was written before the final status");
+});
+
+test("runEnrichment uses selectLocationsToEnrich (backoff applies inside a tracked run)", async () => {
+    backoffRows = [{ locationId: "loc1" }];
+    geminiResponse = good;
+    await runEnrichment({ force: false });
+    assert.deepEqual(findManyArgs.at(-1).where.AND[1], { id: { notIn: ["loc1"] } });
+    assert.equal(runCreates.length, 1);
 });

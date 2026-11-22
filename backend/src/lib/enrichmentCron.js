@@ -4,6 +4,7 @@ import { model } from "./gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
+import { acquireRun, heartbeat, finishRun } from "./enrichmentRuns.js";
 import { requestAnalysis, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
 import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "./enrichmentBackoff.js";
 
@@ -152,30 +153,75 @@ export async function selectLocationsToEnrich({ force = false } = {}) {
     });
 }
 
-export async function runEnrichment({ force = false } = {}) {
-    const locations = await selectLocationsToEnrich({ force });
+/**
+ * Claims the run lock and records a run row. Returns the row, or null if a run is already
+ * in progress (callers should skip / respond 409). Pair with executeEnrichmentRun(run).
+ */
+export function startEnrichmentRun({ trigger = "cron", force = false } = {}) {
+    return acquireRun({ trigger, force });
+}
 
-    if (locations.length === 0) {
-        console.log("[Enrichment] All locations up to date.");
-        return;
-    }
+export async function executeEnrichmentRun(run) {
+    const { force } = run;
+    const counts = { planned: 0, updated: 0, skipped: 0, failed: 0 };
+    const errors = [];
 
-    console.log(`[Enrichment] Starting — ${locations.length} locations to process`);
-    let updated = 0, skipped = 0, failed = 0;
+    try {
+        const locations = await selectLocationsToEnrich({ force });
 
-    for (const location of locations) {
-        try {
-            const result = await enrichLocation(location);
-            if (result.updated) updated++;
-            else skipped++;
-        } catch (err) {
-            console.error(`[Enrichment] Failed ${location.name}:`, err.message);
-            failed++;
+        counts.planned = locations.length;
+
+        if (locations.length === 0) {
+            console.log("[Enrichment] All locations up to date.");
+            await finishRun(run.id, { status: "success", counts });
+            return;
         }
-        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
-    }
 
-    console.log(`[Enrichment] Done — updated: ${updated}, skipped: ${skipped}, failed: ${failed}`);
+        console.log(`[Enrichment] Starting — ${locations.length} locations to process`);
+        await heartbeat(run.id, counts);
+
+        for (const location of locations) {
+            try {
+                const result = await enrichLocation(location);
+                if (result.updated) counts.updated++;
+                else counts.skipped++;
+            } catch (err) {
+                console.error(`[Enrichment] Failed ${location.name}:`, err.message);
+                counts.failed++;
+                errors.push({ location: location.name, message: String(err.message).slice(0, 300) });
+            }
+            // A heartbeat failure (e.g. transient DB blip) must not abort the whole run.
+            await heartbeat(run.id, counts).catch(err => console.error("[Enrichment] Heartbeat failed:", err.message));
+            await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+        }
+
+        console.log(`[Enrichment] Done — updated: ${counts.updated}, skipped: ${counts.skipped}, failed: ${counts.failed}`);
+        // Every location failing means something systemic (bad API key, quota, outage) — don't
+        // let that count as a "successful" run or the freshness alert would never fire.
+        const allFailed = counts.failed === counts.planned;
+        await finishRun(run.id, {
+            status: allFailed ? "failed" : "success",
+            counts, errors,
+            errorMessage: allFailed ? "Every location failed" : undefined,
+        });
+    } catch (err) {
+        console.error("[Enrichment] Run aborted:", err.message);
+        await finishRun(run.id, { status: "failed", counts, errors, errorMessage: String(err.message).slice(0, 500) })
+            .catch(e => console.error("[Enrichment] Could not record failure:", e.message));
+        throw err;
+    }
+}
+
+// Acquire the lock and run to completion. Used by the cron; the trigger endpoint calls the two
+// halves separately so it can answer 409 immediately when a run is already in progress.
+export async function runEnrichment({ force = false, trigger = "cron" } = {}) {
+    const run = await startEnrichmentRun({ trigger, force });
+    if (!run) {
+        console.log("[Enrichment] Skipped — another run is already in progress.");
+        return null;
+    }
+    await executeEnrichmentRun(run);
+    return run.id;
 }
 
 export async function runPhotoEnrichment() {
