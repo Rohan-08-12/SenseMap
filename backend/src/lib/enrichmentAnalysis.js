@@ -84,11 +84,25 @@ export function skipUpdateData(decision, { yelpId, osmFacilities }) {
     return Object.keys(data).length > 0 ? data : null;
 }
 
-/** The one Gemini request both writers (and scripts/dry_run_enrichment.js) make. Returns the parsed JSON. */
+/** A Gemini call that threw (network, quota, bad key, retired model, blocked) or returned unparseable JSON. */
+export class GeminiRequestError extends Error {
+    constructor(message, cause) {
+        super(message);
+        this.name = "GeminiRequestError";
+        this.cause = cause;
+    }
+}
+
+/** The one Gemini request both writers (and scripts/dry_run_enrichment.js) make. Returns the parsed JSON.
+ *  Any failure is rethrown as a GeminiRequestError so a run can tell Gemini outages from other errors. */
 export async function requestAnalysis(model, name, text) {
-    const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: buildAnalysisPrompt(name, text) }] }],
-        generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
-    });
-    return JSON.parse(result.response.text());
+    try {
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: buildAnalysisPrompt(name, text) }] }],
+            generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
+        });
+        return JSON.parse(result.response.text());
+    } catch (err) {
+        throw new GeminiRequestError(err?.message ?? String(err), err);
+    }
 }

@@ -5,9 +5,9 @@ import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
 import { acquireRun, heartbeat, finishRun } from "./enrichmentRuns.js";
-import { requestAnalysis, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
+import { requestAnalysis, interpretAnalysis, skipUpdateData, GeminiRequestError } from "./enrichmentAnalysis.js";
 import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "./enrichmentBackoff.js";
-import { resolveLimit, delayMs } from "./enrichmentConfig.js";
+import { resolveLimit, delayMs, MAX_CONSECUTIVE_GEMINI_FAILURES } from "./enrichmentConfig.js";
 
 // Maps the Gemini schema's *_tags keys to the canonical facilities field names
 // used everywhere else (Review columns, FACILITIES_OPTIONS, frontend pills).
@@ -178,23 +178,41 @@ export async function executeEnrichmentRun(run) {
         await heartbeat(run.id, counts);
 
         const pauseMs = delayMs();   // ENRICHMENT_DELAY_MS, default 2000
+        let geminiStreak = 0;        // consecutive Gemini failures; any successful Gemini call resets it
+        let stoppedEarly = null;
         for (let i = 0; i < locations.length; i++) {
             const location = locations[i];
             try {
                 const result = await enrichLocation(location);
                 if (result.updated) counts.updated++;
                 else counts.skipped++;
+                // Every outcome except "no review text" came after a successful Gemini call.
+                if (result.reason !== "no_review_text") geminiStreak = 0;
             } catch (err) {
                 console.error(`[Enrichment] Failed ${location.name}:`, err.message);
                 counts.failed++;
                 errors.push({ location: location.name, message: String(err.message).slice(0, 300) });
+                if (err instanceof GeminiRequestError) geminiStreak++;   // other errors neither extend nor reset the streak
             }
             // A heartbeat failure (e.g. transient DB blip) must not abort the whole run.
             await heartbeat(run.id, counts).catch(err => console.error("[Enrichment] Heartbeat failed:", err.message));
+
+            if (geminiStreak >= MAX_CONSECUTIVE_GEMINI_FAILURES) {
+                const last = errors.at(-1)?.message ?? "unknown error";
+                stoppedEarly = `Stopped early after ${MAX_CONSECUTIVE_GEMINI_FAILURES} consecutive Gemini failures (last: ${last})`.slice(0, 500);
+                break;
+            }
             if (pauseMs > 0 && i < locations.length - 1) await new Promise(r => setTimeout(r, pauseMs));
         }
 
         console.log(`[Enrichment] Done — updated: ${counts.updated}, skipped: ${counts.skipped}, failed: ${counts.failed}`);
+        if (stoppedEarly) {
+            // Status "failed" (the existing non-success status): a run that bailed must not count as healthy. Finishing the
+            // row also releases the lock, so the next trigger or the next night's cron can start normally.
+            console.error(`[Enrichment] ${stoppedEarly}`);
+            await finishRun(run.id, { status: "failed", counts, errors, errorMessage: stoppedEarly });
+            return;
+        }
         // Every location failing means something systemic (bad API key, quota, outage) — don't
         // let that count as a "successful" run or the freshness alert would never fire.
         const allFailed = counts.failed === counts.planned;

@@ -14,11 +14,13 @@ let locationRows = [];        // what location.findMany returns
 let geminiBehaviour = () => ({ ok: true });   // (placeName) => { ok: true } | { error: "..." }
 const geminiCalls = [];
 const logLines = [];
+const noTextNames = new Set();   // places whose sources return no text (so Gemini is never called for them)
+let updateThrows = false;        // make prisma.location.update fail (a non-Gemini error)
 
 const prismaMock = {
     location: {
         findMany: async (args) => { findManyArgs.push(args); return locationRows; },
-        update: async ({ data }) => { updates.push(data); return {}; },
+        update: async ({ data }) => { if (updateThrows) throw new Error("db write failed"); updates.push(data); return {}; },
     },
     enrichmentLog: { create: async () => ({}), findMany: async () => [] },
     enrichmentRun: {
@@ -29,7 +31,7 @@ const prismaMock = {
 };
 mock.module("../src/lib/prisma.js", { defaultExport: prismaMock });
 mock.module("../src/services/scraper.js", { namedExports: {
-    fetchAllSources: async ({ name }) => ({ combinedText: `text about ${name}`, sources: ["google"], yelpId: null, osmFacilities: null }),
+    fetchAllSources: async ({ name }) => ({ combinedText: noTextNames.has(name) ? "" : `text about ${name}`, sources: ["google"], yelpId: null, osmFacilities: null }),
 } });
 mock.module("../src/lib/gemini.js", { namedExports: {
     model: { generateContent: async ({ contents }) => {
@@ -51,7 +53,7 @@ const places = (n) => Array.from({ length: n }, (_, i) => place(i + 1));
 const originalEnv = { max: process.env.ENRICHMENT_MAX_PER_RUN };
 beforeEach(() => {
     findManyArgs.length = 0; updates.length = 0; runCreates.length = 0; runUpdates.length = 0; geminiCalls.length = 0; logLines.length = 0;
-    locationRows = []; geminiBehaviour = () => ({ ok: true });
+    locationRows = []; geminiBehaviour = () => ({ ok: true }); noTextNames.clear(); updateThrows = false;
     delete process.env.ENRICHMENT_MAX_PER_RUN;
 });
 after(() => { if (originalEnv.max === undefined) delete process.env.ENRICHMENT_MAX_PER_RUN; });
@@ -231,4 +233,71 @@ test("ENRICHMENT_MAX_PER_RUN applies to trigger and stale alike", async () => {
     await post("/enrichment/trigger?force=true");
     assert.ok(await runFinished());
     assert.equal(findManyArgs.at(-1).take, 5);
+});
+
+// ---- 4. stop early after 5 consecutive Gemini failures --------------------------------------------------------------
+const finalRun = () => runUpdates.findLast((u) => u.finishedAt);
+const failing = (set) => (name) => (set.has(name) ? { error: "429 quota exceeded" } : { ok: true });
+
+test("5 Gemini failures in a row stop the run: status failed, reason recorded, lock released, no more Gemini calls", async () => {
+    locationRows = places(8);
+    geminiBehaviour = () => ({ error: "429 quota exceeded" });
+    const id = await runEnrichment({ force: false, trigger: "test" });
+    assert.equal(id, "run1");
+    assert.equal(geminiCalls.length, 5, "the run stopped after the 5th failure instead of burning 8 calls");
+    const f = finalRun();
+    assert.equal(f.status, "failed");
+    assert.match(f.errorMessage, /Stopped early after 5 consecutive Gemini failures/);
+    assert.match(f.errorMessage, /429 quota exceeded/);
+    assert.ok(f.finishedAt instanceof Date, "finishing the row releases the lock");
+    assert.equal(f.planned, 8); assert.equal(f.failed, 5);
+    assert.equal(f.errors.length, 5);
+    assert.equal(updates.length, 0);
+});
+
+test("a successful Gemini call resets the streak (4 failures, a success, 4 failures: no early stop)", async () => {
+    locationRows = places(10);
+    geminiBehaviour = failing(new Set(["Place 1", "Place 2", "Place 3", "Place 4", "Place 6", "Place 7", "Place 8", "Place 9"]));
+    await runEnrichment({ force: false, trigger: "test" });
+    assert.equal(geminiCalls.length, 10, "every place was attempted");
+    const f = finalRun();
+    assert.equal(f.status, "success");
+    assert.equal(f.errorMessage ?? null, null);
+    assert.equal(f.failed, 8);
+});
+
+test("only Gemini failures count: database errors don't extend the streak", async () => {
+    locationRows = places(7);
+    updateThrows = true;
+    await runEnrichment({ force: false, trigger: "test" });
+    assert.equal(geminiCalls.length, 7, "no early stop for non-Gemini errors");
+    const f = finalRun();
+    assert.equal(f.status, "failed");
+    assert.equal(f.errorMessage, "Every location failed");
+});
+
+test("places with no text neither extend nor reset the streak", async () => {
+    locationRows = places(6);
+    noTextNames.add("Place 5");
+    geminiBehaviour = (name) => (name === "Place 5" ? { ok: true } : { error: "boom" });
+    await runEnrichment({ force: false, trigger: "test" });
+    // fails: 1,2,3,4 (streak 4), place 5 has no text (no Gemini call, streak stays 4), place 6 fails -> streak 5 -> stop
+    assert.deepEqual(geminiCalls, ["Place 1", "Place 2", "Place 3", "Place 4", "Place 6"]);
+    assert.match(finalRun().errorMessage, /Stopped early/);
+});
+
+test("4 failures at the end of the list is not an early stop", async () => {
+    locationRows = places(4);
+    geminiBehaviour = () => ({ error: "boom" });
+    await runEnrichment({ force: false, trigger: "test" });
+    assert.equal(geminiCalls.length, 4);
+    assert.equal(finalRun().errorMessage, "Every location failed");   // the pre-existing all-failed rule, not the streak
+});
+
+test("an unparseable Gemini response counts as a Gemini failure", async () => {
+    const { GeminiRequestError, requestAnalysis } = await import("../src/lib/enrichmentAnalysis.js");
+    const badModel = { generateContent: async () => ({ response: { text: () => "not json" } }) };
+    await assert.rejects(requestAnalysis(badModel, "X", "text"), (e) => e instanceof GeminiRequestError);
+    const throwing = { generateContent: async () => { throw new Error("quota"); } };
+    await assert.rejects(requestAnalysis(throwing, "X", "text"), (e) => e instanceof GeminiRequestError && /quota/.test(e.message));
 });

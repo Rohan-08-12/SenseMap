@@ -35,3 +35,6 @@ export function delayMs(env = process.env) {
     const n = toInt(env.ENRICHMENT_DELAY_MS);
     return n === null ? DEFAULT_DELAY_MS : clamp(n, 0, MAX_DELAY_MS);
 }
+
+/** A run stops early after this many Gemini failures in a row (a bad key, quota or outage fails every call). */
+export const MAX_CONSECUTIVE_GEMINI_FAILURES = 5;
