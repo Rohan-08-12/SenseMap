@@ -655,8 +655,6 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
 
   const reviewCount = locationDetail?.sensoryScores?.reviewCount ?? locationDetail?.reviews?.length ?? 0;
 
-  const bestTimeText = aiInsights?.bestTime ?? '—';
-
   const getDistance = useCallback((loc) => {
     if (!userCoords) return null;
     const lat = loc.latitude ?? loc.position?.[1];
@@ -1343,15 +1341,17 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                       <div className="box-label">Noise</div>
                       <div className="box-value small">{lowConfidence ? '—' : noiseLevel}</div>
                     </div>
-                    <div className="lmv-stat-box">
-                      <div className="box-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        Best time
-                        {aiInsights?.bestTime && (
-                          <span style={{ fontSize: 10, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 4px', fontWeight: 600 }}>AI</span>
-                        )}
+                    {aiInsights?.bestTime && (
+                      <div className="lmv-stat-box">
+                        <div className="box-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          Best time
+                          {aiInsights?.bestTime && (
+                            <span style={{ fontSize: 10, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '1px 4px', fontWeight: 600 }}>AI</span>
+                          )}
+                        </div>
+                        <div className="box-value small">{aiInsights.bestTime}</div>
                       </div>
-                      <div className="box-value small">{bestTimeText}</div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="lmv-loc-tags">
