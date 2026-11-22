@@ -6,7 +6,7 @@ import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
 import { getDisplayScore, isLowConfidence } from "../lib/scores.js";
 import { computeMatch, compareMatches } from "../lib/matchScore.js";
-import { isBotReview } from "../lib/systemBot.js";
+import { isBotReview, summarizeReviewSources } from "../lib/systemBot.js";
 
 
 const router = express.Router()
@@ -437,7 +437,15 @@ router.get("/:id", async (req, res) => {
             isBot: isBotReview(review, user),
         }));
 
-        res.json({ ...location, reviews, displayScores: { ...displayScores, lowConfidence: isLowConfidence(displayScores) }, facilities });
+        // Counted over ALL reviews (the list above is only the latest 10) so labels can tell real visitor
+        // reviews from bot/curated ones.
+        const allReviews = await prisma.review.findMany({
+            where: { locationId: req.params.id },
+            select: { isAiGenerated: true, user: { select: { email: true, auth0Id: true } } },
+        });
+        const reviewSources = summarizeReviewSources(allReviews);
+
+        res.json({ ...location, reviews, reviewSources, displayScores: { ...displayScores, lowConfidence: isLowConfidence(displayScores) }, facilities });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });

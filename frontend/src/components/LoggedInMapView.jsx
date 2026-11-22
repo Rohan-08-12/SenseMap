@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel, haversineDistance } from '../utils.js';
-import { describeDataSources, joinList, clampComfort, factorShares } from '../panelLabels.js';
+import { describeDataSources, joinList, clampComfort, factorShares, describeEvidence, radarValues } from '../panelLabels.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import MapView from './MapView';
 import Dashboard from './Dashboard';
@@ -653,7 +653,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
     return checks;
   })();
 
-  const reviewCount = locationDetail?.sensoryScores?.reviewCount ?? locationDetail?.reviews?.length ?? 0;
+  const evidence = describeEvidence({ dataSource, reviewSources: locationDetail?.reviewSources, reviews: locationDetail?.reviews, dataSourceField: locationDetail?.dataSource });
 
   const getDistance = useCallback((loc) => {
     if (!userCoords) return null;
@@ -1071,7 +1071,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                 <div className="lmv-loc-header-row">
                   <div className="lmv-loc-title">
                     <h2>{locName}</h2>
-                    <p>{reviewCount > 0 ? `${reviewCount} reviews` : dataSource === 'estimated' ? 'AI estimate' : 'No data yet'}</p>
+                    <p>{evidence.countLabel}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span className="lmv-match-badge">
@@ -1288,7 +1288,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               </div>
 
               {/* Stars — only show for real community reviews */}
-              {avgRating !== null && dataSource === 'community' && (
+              {avgRating !== null && evidence.hasRealReviews && (
                 <div style={{ display: 'flex', gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((i) => (
                     <svg key={i} width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -1302,18 +1302,12 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               )}
 
               {(() => {
-                const communityCount = locationDetail?.sensoryScores?.reviewCount ?? 0;
-                const allReviews = locationDetail?.reviews ?? [];
-                const allBot = allReviews.length > 0 && allReviews.every(r => r.isBot);
-                const realCount = allReviews.filter(r => !r.isBot).length;
-
                 if (dataSource === 'community') return (
                   <div style={{ padding: '10px 12px', fontSize: 12, borderRadius: 8, marginTop: 8, background: '#d6f5e1', color: '#05360d', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M3 6.5l2.5 2.5 4.5-4.5" stroke="#05360d" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    {allBot
-                      ? `Curated by SenseMap — sourced from public accessibility research`
-                      : `${realCount || communityCount} community ${(realCount || communityCount) === 1 ? 'review' : 'reviews'} — real visitor data`
-                    }
+                    {evidence.hasRealReviews
+                      ? `${evidence.countLabel.replace(/^(\d+) /, '$1 community ')} — real visitor data`
+                      : 'Curated by SenseMap — sourced from public accessibility research'}
                   </div>
                 );
                 if (dataSource === 'estimated') return (
@@ -1487,7 +1481,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               <div className="lmv-detail-card">
                 <div>
                   <h3 className="lmv-section-title">Noise through the day</h3>
-                  <p className="lmv-section-desc">{dataSource === 'community' ? 'Estimated trend based on community reviews — not real-time data.' : `Estimated trend based on AI analysis of public data (${joinList(describeDataSources(locationDetail?.dataSource))}) — not real-time data.`}</p>
+                  <p className="lmv-section-desc">{evidence.trend} — not real-time data.</p>
                 </div>
                 <div style={{ width: '100%', height: 120, minWidth: 0 }}>
                   <ResponsiveContainer width="99%" height={120} debounce={50}>
@@ -1511,7 +1505,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                   AI insight
                   <span style={{ fontSize: 11, background: '#ede9fe', color: '#5b21b6', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>Gemini AI</span>
                 </h3>
-                <p className="lmv-section-desc">{dataSource === 'community' ? 'Generated by AI from community reviews.' : `Generated by AI from public data (${joinList(describeDataSources(locationDetail?.dataSource))}).`} Not a substitute for personal judgement.</p>
+                <p className="lmv-section-desc">{evidence.insight} Not a substitute for personal judgement.</p>
               </div>
 
               {dataSource === 'category' ? (
