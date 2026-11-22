@@ -1453,7 +1453,8 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               )}
 
               {/* Audio summary pill */}
-              {selectedLocation?.id && (
+              {/* Hidden for low-confidence places: the audio script is built server-side from community scores only, so it would read out made-up defaults. */}
+              {selectedLocation?.id && !lowConfidence && (
                 <button
                   type="button"
                   onClick={handlePlayAudio}
@@ -1482,11 +1483,11 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             </div>
 
             {/* Noise through the day */}
-            {dataSource !== 'category' && (
+            {dataSource !== 'category' && !lowConfidence && (
               <div className="lmv-detail-card">
                 <div>
                   <h3 className="lmv-section-title">Noise through the day</h3>
-                  <p className="lmv-section-desc">{dataSource === 'community' ? 'Estimated trend based on community reviews — not real-time data.' : 'Estimated trend based on AI-analysed external reviews — not real-time data.'}</p>
+                  <p className="lmv-section-desc">{dataSource === 'community' ? 'Estimated trend based on community reviews — not real-time data.' : `Estimated trend based on AI analysis of public data (${joinList(describeDataSources(locationDetail?.dataSource))}) — not real-time data.`}</p>
                 </div>
                 <div style={{ width: '100%', height: 120, minWidth: 0 }}>
                   <ResponsiveContainer width="99%" height={120} debounce={50}>
@@ -1520,7 +1521,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
               ) : aiNoTextReviews ? (
                 <p style={{ color: 'var(--theme-text-muted)', fontSize: 13 }}>
                   {dataSource === 'estimated'
-                    ? 'Not enough external data found to generate AI insights. Be the first to leave a review.'
+                    ? 'Not enough public data found to generate AI insights. Be the first to leave a review.'
                     : 'Write a review describing your experience to unlock AI insights for this place.'}
                 </p>
               ) : aiLoading ? (
@@ -1700,51 +1701,53 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
             )}
 
             {/* Why it fits you */}
-            <div className="lmv-detail-card">
-              <div>
-                <h3 className="lmv-section-title">Why it fits you</h3>
-                <p className="lmv-section-desc">A short recommendation and a soft alert.</p>
-              </div>
+            {!lowConfidence && (
+              <div className="lmv-detail-card">
+                <div>
+                  <h3 className="lmv-section-title">Why it fits you</h3>
+                  <p className="lmv-section-desc">A short recommendation and a soft alert.</p>
+                </div>
 
-              <div className="lmv-match-card">
-                <div className="lmv-match-card-header">
-                  <h4>Match score</h4>
-                  <span className="lmv-match-badge">{matchPercent !== null ? `${matchPercent}%` : '—'}</span>
-                </div>
-                <div className="lmv-match-bar">
-                  <div className="lmv-match-bar-fill" style={{ width: `${matchPercent ?? 0}%` }} />
-                </div>
-                <div className="lmv-match-checks">
-                  {matchChecks.length > 0 ? matchChecks.map((check) => (
-                    <div key={check} className="lmv-match-check">
-                      <span className="lmv-check-icon">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 7l2.5 2.5L10.5 5" stroke="#05360d" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      </span>
-                      {check}
-                    </div>
-                  )) : (
-                    <p style={{ color: 'var(--theme-text-muted)', fontSize: 13, margin: 0 }}>
-                      {lowConfidence ? 'Not enough data to calculate a match for this place yet.' : userProfile ? 'Select a location to see match details.' : 'Set up your sensory profile to see matches.'}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {triggers.length > 0 && (
-                <div className="lmv-trigger-card">
-                  <h4>Possible triggers later today</h4>
-                  <div className="lmv-trigger-chips">
-                    {triggers.map((t) => (
-                      <span key={t} className="lmv-trigger-chip">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75v3.5L9.33 7" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="7" cy="7" r="5.25" stroke="#0f1720" strokeWidth="1.2" /></svg>
-                        {t}
-                      </span>
-                    ))}
+                <div className="lmv-match-card">
+                  <div className="lmv-match-card-header">
+                    <h4>Match score</h4>
+                    <span className="lmv-match-badge">{matchPercent !== null ? `${matchPercent}%` : '—'}</span>
                   </div>
-                  {triggerTip && <p className="lmv-trigger-tip">Tip: {triggerTip}</p>}
+                  <div className="lmv-match-bar">
+                    <div className="lmv-match-bar-fill" style={{ width: `${matchPercent ?? 0}%` }} />
+                  </div>
+                  <div className="lmv-match-checks">
+                    {matchChecks.length > 0 ? matchChecks.map((check) => (
+                      <div key={check} className="lmv-match-check">
+                        <span className="lmv-check-icon">
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 7l2.5 2.5L10.5 5" stroke="#05360d" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </span>
+                        {check}
+                      </div>
+                    )) : (
+                      <p style={{ color: 'var(--theme-text-muted)', fontSize: 13, margin: 0 }}>
+                        {lowConfidence ? 'Not enough data to calculate a match for this place yet.' : userProfile ? 'Select a location to see match details.' : 'Set up your sensory profile to see matches.'}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {triggers.length > 0 && (
+                  <div className="lmv-trigger-card">
+                    <h4>Possible triggers later today</h4>
+                    <div className="lmv-trigger-chips">
+                      {triggers.map((t) => (
+                        <span key={t} className="lmv-trigger-chip">
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.75v3.5L9.33 7" stroke="#0f1720" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="7" cy="7" r="5.25" stroke="#0f1720" strokeWidth="1.2" /></svg>
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                    {triggerTip && <p className="lmv-trigger-tip">Tip: {triggerTip}</p>}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Similar Places */}
             {similarLocations.length > 0 && (
