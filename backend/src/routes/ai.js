@@ -6,6 +6,8 @@ import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { generateLocationEmbedding } from "../lib/embeddings.js";
 import { fetchAllSources } from "../services/scraper.js";
+import { applyInsightConfidence } from "../lib/insightConfidence.js";
+import { insightsSchema, buildInsightsPrompt } from "../lib/insightsPrompt.js";
 const router = express.Router();
 
 
@@ -112,50 +114,8 @@ router.post("/insights/:locationId", requireAuth, syncUser, async (req, res) => 
 
     if (!reviewTexts) return res.status(400).json({ error: "No review data available for this location" });
 
-    const insightsSchema = {
-      type: "object",
-      properties: {
-        confidence: { type: "number", description: "0-100 confidence in analysis based on review quantity and quality" },
-        noise: {
-          type: "object",
-          properties: {
-            score:   { type: "number", description: "Noise level 1-5, where 1=silent and 5=very loud" },
-            summary: { type: "string", description: "One sentence describing the noise environment" },
-          },
-          required: ["score", "summary"],
-        },
-        lighting: {
-          type: "object",
-          properties: {
-            score:   { type: "number", description: "Lighting intensity 1-5, where 1=dim and 5=harsh" },
-            summary: { type: "string", description: "One sentence describing the lighting environment" },
-          },
-          required: ["score", "summary"],
-        },
-        crowd: {
-          type: "object",
-          properties: {
-            score:   { type: "number", description: "Crowd density 1-5, where 1=empty and 5=packed" },
-            summary: { type: "string", description: "One sentence describing crowd levels" },
-          },
-          required: ["score", "summary"],
-        },
-        bestTime:         { type: "string",  description: "Short phrase only, max 6 words, e.g. 'Mid-morning or late afternoon' or 'Weekday mornings'. No full sentences." },
-        sentiment:        { type: "string",  enum: ["positive", "neutral", "negative"] },
-        tags:             { type: "array",   items: { type: "string" }, description: "Short sensory descriptor tags" },
-        preparationGuide: { type: "array",   items: { type: "string" }, description: "Practical sensory preparation tips" },
-      },
-      required: ["confidence", "noise", "lighting", "crowd", "bestTime", "sentiment", "tags", "preparationGuide"],
-    };
 
-    const prompt = `You are a sensory analysis assistant helping autistic and sensory-sensitive people find comfortable public spaces.
-
-Analyze the available information for "${location.name}" (category: ${location.category ?? "unknown"}) and produce a structured sensory profile.
-
-Use the data below as your primary source. If specific sensory details are missing, make reasonable category-based estimates — for example, cafes tend to have moderate-to-high noise, bright lighting, and variable crowds; libraries tend to be quiet with soft lighting; parks tend to have natural light and low indoor crowds. Always produce useful estimates rather than saying "no information available". Set confidence lower (20-40) when relying mostly on category inference, and higher (60-90) when specific sensory signals are present.
-
-Available data:
-${reviewTexts}`;
+    const prompt = buildInsightsPrompt(location, reviewTexts);
 
     // Run Gemini and Claude cross-validation in parallel
     // Wrap Gemini separately — it can fail on very short/low-quality text, return 400 not 500
@@ -202,11 +162,16 @@ ${reviewTexts}`;
       parsed.validationSource = "gemini";
     }
 
-    generateLocationEmbedding(location, parsed)
-      .then((embedding) => prisma.location.update({ where: { id: locationId }, data: { embedding } }))
-      .catch((e) => console.error("Embedding generation failed:", e));
+    // Below the confidence threshold, hide the guessed sensory text and don't build an embedding from it.
+    const result = applyInsightConfidence(parsed);
 
-    res.json(parsed);
+    if (!result.lowConfidence) {
+      generateLocationEmbedding(location, parsed)
+        .then((embedding) => prisma.location.update({ where: { id: locationId }, data: { embedding } }))
+        .catch((e) => console.error("Embedding generation failed:", e));
+    }
+
+    res.json(result);
   } catch (error) {
     console.error("AI error:", error);
     res.status(500).json({ error: "Internal server error" });

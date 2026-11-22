@@ -3,53 +3,20 @@ import prisma from "../lib/prisma.js";
 import { model } from "../lib/gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
-import { runEnrichment, runPhotoEnrichment, extractFacilities, hasInvalidScores } from "../lib/enrichmentCron.js";
+import { runEnrichment, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
+import { requestAnalysis, interpretAnalysis, skipUpdateData } from "../lib/enrichmentAnalysis.js";
+import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "../lib/enrichmentBackoff.js";
 
 const router = express.Router();
 
-const STALE_THRESHOLD_HOURS = 24 * 7; // weekly — stays within Yelp 5000/month limit
-
-const analyzeSchema = {
-    type: "object",
-    properties: {
-        noise_score:    { type: "number", description: "Noise level 1-10, where 1=silent and 10=extremely loud" },
-        lighting_score: { type: "number", description: "Lighting intensity 1-10, where 1=dim and 10=harsh/bright" },
-        crowd_score:    { type: "number", description: "Crowd density 1-10, where 1=empty and 10=packed" },
-        confidence:     { type: "number", description: "Confidence in the scores 1-10, where 10=very confident" },
-        sentiment:      { type: "string", enum: ["positive", "neutral", "negative"] },
-        tags:           { type: "array",  items: { type: "string" } },
-        summary:        { type: "string" },
-        temperature_tags:         { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.temperature } },
-        seating_tags:              { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.seating } },
-        bathroom_tags:             { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.bathrooms } },
-        social_interaction_tags:   { type: "array", items: { type: "string", enum: FACILITIES_OPTIONS.socialInteractions } },
-    },
-    required: ["noise_score", "lighting_score", "crowd_score", "confidence", "sentiment", "tags", "summary"],
-};
 
 // Gemini-only for background enrichment — Claude validation reserved for
 // user-submitted reviews in /ai/analyze where accuracy matters most
 async function analyzeText(name, reviewText) {
     if (!reviewText.trim()) return null;
 
-    const prompt = `You are a sensory analysis assistant for autistic and sensory-sensitive people.
-
-Analyze these reviews for "${name}" and extract structured sensory scores. Also infer, where the text gives any signal, the facility characteristics below — only include tags the text actually supports; leave a category's array empty if there's no signal for it. Use only the exact option strings listed (no new values):
-- temperature_tags, from: ${FACILITIES_OPTIONS.temperature.join(", ")}
-- seating_tags, from: ${FACILITIES_OPTIONS.seating.join(", ")}
-- bathroom_tags, from: ${FACILITIES_OPTIONS.bathrooms.join(", ")}
-- social_interaction_tags, from: ${FACILITIES_OPTIONS.socialInteractions.join(", ")}
-
-Reviews:
-${reviewText}`;
-
-    const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
-    });
-
-    return JSON.parse(result.response.text());
+    return requestAnalysis(model, name, reviewText);
 }
 
 function scoresDiffer(current, newNoise, newLighting, newCrowd, threshold = 0.5) {
@@ -107,22 +74,17 @@ router.post("/location", requireN8nSecret, async (req, res) => {
             return res.json({ updated: false, reason: "analysis_failed", sources });
         }
 
-        // Convert 1-10 scores to 1-5
-        const newNoise    = analysis.noise_score    / 2;
-        const newLighting = analysis.lighting_score / 2;
-        const newCrowd    = analysis.crowd_score    / 2;
-
         // Same guard as the nightly cron: reject out-of-range scores (e.g. Gemini returning 0)
         // instead of saving them, but still keep the deterministic OSM facilities.
-        if (hasInvalidScores(newNoise, newLighting, newCrowd)) {
-            if (osmFacilities) {
-                await prisma.location.update({
-                    where: { id: locationId },
-                    data: { ...(yelpId && { externalYelpId: yelpId }), estimatedFacilities: osmFacilities, lastEnrichedAt: new Date() },
-                });
-            }
-            return res.json({ updated: false, reason: "invalid_scores", sources });
+        const decision = interpretAnalysis(analysis);
+        if (decision.action === "skip") {
+            const data = skipUpdateData(decision, { yelpId, osmFacilities });
+            if (data) await prisma.location.update({ where: { id: locationId }, data });
+            if (decision.reason === "incomplete_scores") await logIncomplete(prisma, locationId, decision, sources);
+            return res.json({ updated: false, reason: decision.reason, confidence: decision.confidence, sources });
         }
+
+        const { noise: newNoise, lighting: newLighting, crowd: newCrowd } = decision;
 
         // OSM tags are exact/deterministic, so they take precedence over Gemini's
         // text-inferred guesses per category; Gemini only fills categories OSM has no tag for.
@@ -135,13 +97,14 @@ router.post("/location", requireN8nSecret, async (req, res) => {
                 data: {
                     ...(yelpId && { externalYelpId: yelpId }),
                     ...(facilities && { estimatedFacilities: facilities }),
+                    enrichmentConfidence: decision.confidence,
                     lastEnrichedAt: new Date(),
                 },
             });
             return res.json({ updated: false, reason: "scores_unchanged", sources });
         }
 
-        const confidence = analysis.confidence ?? null;
+        const confidence = decision.confidence;
         const dataSource = sources.join(",") || "category";
 
         await prisma.location.update({
@@ -177,13 +140,9 @@ router.get("/stale", requireN8nSecret, async (_req, res) => {
     try {
         const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
 
+        const backoffIds = await idsInIncompleteBackoff(prisma);
         const locations = await prisma.location.findMany({
-            where: {
-                OR: [
-                    { lastEnrichedAt: null },
-                    { lastEnrichedAt: { lt: cutoff } },
-                ],
-            },
+            where: staleWhere(cutoff, backoffIds),
             take: 450,
             orderBy: [
                 { lastEnrichedAt: { sort: "asc", nulls: "first" } },
