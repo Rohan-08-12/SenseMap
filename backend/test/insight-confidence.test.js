@@ -40,3 +40,13 @@ test("does not mutate its input", () => {
     const input = insight(10); applyInsightConfidence(input);
     assert.equal(input.noise.summary, "Moderate noise.");
 });
+
+test("insights prompt/schema live in lib/insightsPrompt.js and keep the no-guessing wording", async () => {
+    const { buildInsightsPrompt, insightsSchema } = await import("../src/lib/insightsPrompt.js");
+    const p = buildInsightsPrompt({ name: "X", category: null }, "BODY");
+    assert.match(p, /"X" \(category: unknown\)/);
+    assert.match(p, /Do not present guesses as findings/);
+    assert.doesNotMatch(p, /reasonable category-based estimates/);
+    assert.ok(p.endsWith("Available data:\nBODY"));
+    assert.deepEqual(insightsSchema.required, ["confidence", "noise", "lighting", "crowd", "bestTime", "sentiment", "tags", "preparationGuide"]);
+});

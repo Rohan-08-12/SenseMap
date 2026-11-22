@@ -5,7 +5,7 @@ import { fetchAllSources } from "../services/scraper.js";
 import { requireN8nSecret } from "../middleware/n8nAuth.js";
 import { runEnrichment, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
-import { analyzeSchema, buildAnalysisPrompt, interpretAnalysis, skipUpdateData } from "../lib/enrichmentAnalysis.js";
+import { requestAnalysis, interpretAnalysis, skipUpdateData } from "../lib/enrichmentAnalysis.js";
 
 const router = express.Router();
 
@@ -16,14 +16,7 @@ const STALE_THRESHOLD_HOURS = 24 * 7; // weekly — stays within Yelp 5000/month
 async function analyzeText(name, reviewText) {
     if (!reviewText.trim()) return null;
 
-    const prompt = buildAnalysisPrompt(name, reviewText);
-
-    const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
-    });
-
-    return JSON.parse(result.response.text());
+    return requestAnalysis(model, name, reviewText);
 }
 
 function scoresDiffer(current, newNoise, newLighting, newCrowd, threshold = 0.5) {

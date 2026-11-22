@@ -4,7 +4,7 @@ import { model } from "./gemini.js";
 import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
-import { analyzeSchema, buildAnalysisPrompt, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
+import { requestAnalysis, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
 
 const STALE_THRESHOLD_HOURS = 24 * 7;
 const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
@@ -74,12 +74,7 @@ async function enrichLocation(location) {
         return { updated: false, reason: "no_review_text" };
     }
 
-    const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: buildAnalysisPrompt(location.name, combinedText) }] }],
-        generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
-    });
-
-    const analysis = JSON.parse(result.response.text());
+    const analysis = await requestAnalysis(model, location.name, combinedText);
     // OSM tags are exact/deterministic, so they take precedence over Gemini's text-inferred
     // guesses per category; Gemini only fills categories OSM has no tag for.
     const facilities = mergeFacilities(osmFacilities, extractFacilities(analysis));

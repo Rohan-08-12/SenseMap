@@ -82,3 +82,12 @@ export function skipUpdateData(decision, { yelpId, osmFacilities }) {
     };
     return Object.keys(data).length > 0 ? data : null;
 }
+
+/** The one Gemini request both writers (and scripts/dry_run_enrichment.js) make. Returns the parsed JSON. */
+export async function requestAnalysis(model, name, text) {
+    const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: buildAnalysisPrompt(name, text) }] }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: analyzeSchema },
+    });
+    return JSON.parse(result.response.text());
+}
