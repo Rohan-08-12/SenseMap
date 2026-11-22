@@ -158,26 +158,36 @@ export async function startEnrichmentRun({ trigger = "cron", force = false, limi
     return run ? { ...run, limit: resolveLimit(limit) } : null;
 }
 
+// One greppable line when a run starts and one when it ends (all triggers, the cron included).
+function logRunStart(run, { force, limit, planned, pauseMs }) {
+    console.log(`[Enrichment] run ${run.id} started trigger=${run.trigger ?? "?"} force=${force} limit=${limit} delayMs=${pauseMs} planned=${planned}`);
+}
+function logRunEnd(run, status, counts, startedMs, note) {
+    const secs = Math.round((Date.now() - startedMs) / 1000);
+    console.log(`[Enrichment] run ${run.id} ended status=${status} planned=${counts.planned} updated=${counts.updated} skipped=${counts.skipped} failed=${counts.failed} durationSec=${secs}${note ? ` note="${note}"` : ""}`);
+}
+
 export async function executeEnrichmentRun(run) {
     const { force, limit } = run;
     const counts = { planned: 0, updated: 0, skipped: 0, failed: 0 };
     const errors = [];
+    const startedMs = Date.now();
+    const pauseMs = delayMs();   // ENRICHMENT_DELAY_MS, default 2000
 
     try {
         const locations = await selectLocationsToEnrich({ force, limit });
 
         counts.planned = locations.length;
+        logRunStart(run, { force, limit, planned: counts.planned, pauseMs });
 
         if (locations.length === 0) {
-            console.log("[Enrichment] All locations up to date.");
             await finishRun(run.id, { status: "success", counts });
+            logRunEnd(run, "success", counts, startedMs, "nothing to enrich");
             return;
         }
 
-        console.log(`[Enrichment] Starting — ${locations.length} locations to process`);
         await heartbeat(run.id, counts);
 
-        const pauseMs = delayMs();   // ENRICHMENT_DELAY_MS, default 2000
         let geminiStreak = 0;        // consecutive Gemini failures; any successful Gemini call resets it
         let stoppedEarly = null;
         for (let i = 0; i < locations.length; i++) {
@@ -205,26 +215,29 @@ export async function executeEnrichmentRun(run) {
             if (pauseMs > 0 && i < locations.length - 1) await new Promise(r => setTimeout(r, pauseMs));
         }
 
-        console.log(`[Enrichment] Done — updated: ${counts.updated}, skipped: ${counts.skipped}, failed: ${counts.failed}`);
         if (stoppedEarly) {
             // Status "failed" (the existing non-success status): a run that bailed must not count as healthy. Finishing the
             // row also releases the lock, so the next trigger or the next night's cron can start normally.
-            console.error(`[Enrichment] ${stoppedEarly}`);
             await finishRun(run.id, { status: "failed", counts, errors, errorMessage: stoppedEarly });
+            logRunEnd(run, "failed", counts, startedMs, stoppedEarly);
             return;
         }
+
         // Every location failing means something systemic (bad API key, quota, outage) — don't
         // let that count as a "successful" run or the freshness alert would never fire.
         const allFailed = counts.failed === counts.planned;
+        const status = allFailed ? "failed" : "success";
         await finishRun(run.id, {
-            status: allFailed ? "failed" : "success",
+            status,
             counts, errors,
             errorMessage: allFailed ? "Every location failed" : undefined,
         });
+        logRunEnd(run, status, counts, startedMs, allFailed ? "every location failed" : undefined);
     } catch (err) {
         console.error("[Enrichment] Run aborted:", err.message);
         await finishRun(run.id, { status: "failed", counts, errors, errorMessage: String(err.message).slice(0, 500) })
             .catch(e => console.error("[Enrichment] Could not record failure:", e.message));
+        logRunEnd(run, "failed", counts, startedMs, `aborted: ${String(err.message).slice(0, 120)}`);
         throw err;
     }
 }

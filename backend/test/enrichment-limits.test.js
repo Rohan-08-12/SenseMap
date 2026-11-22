@@ -301,3 +301,54 @@ test("an unparseable Gemini response counts as a Gemini failure", async () => {
     const throwing = { generateContent: async () => { throw new Error("quota"); } };
     await assert.rejects(requestAnalysis(throwing, "X", "text"), (e) => e instanceof GeminiRequestError && /quota/.test(e.message));
 });
+
+// ---- 5. one start line and one end line per run --------------------------------------------------------------------
+async function captureLogs(fn) {
+    const lines = [];
+    const origLog = console.log, origErr = console.error;
+    console.log = (...a) => lines.push(a.join(" "));
+    console.error = (...a) => lines.push(a.join(" "));
+    try { await fn(); } finally { console.log = origLog; console.error = origErr; }
+    return lines;
+}
+const runLines = (lines, kind) => lines.filter((l) => l.startsWith("[Enrichment] run ") && l.includes(` ${kind} `));
+
+test("a normal run logs exactly one start line and one end line with the counts", async () => {
+    locationRows = places(3);
+    const lines = await captureLogs(() => runEnrichment({ force: false, trigger: "cron" }));
+    const start = runLines(lines, "started"), end = runLines(lines, "ended");
+    assert.equal(start.length, 1); assert.equal(end.length, 1);
+    assert.match(start[0], /^\[Enrichment\] run run1 started trigger=cron force=false limit=50 delayMs=0 planned=3$/);
+    assert.match(end[0], /^\[Enrichment\] run run1 ended status=success planned=3 updated=3 skipped=0 failed=0 durationSec=\d+$/);
+    assert.ok(!lines.some((l) => /Starting —|Done —/.test(l)), "the old per-phase lines are gone");
+});
+
+test("the end line carries the counts and the reason when a run stops early", async () => {
+    locationRows = places(8);
+    geminiBehaviour = () => ({ error: "429 quota exceeded" });
+    const lines = await captureLogs(() => runEnrichment({ force: true, trigger: "trigger-force", limit: 8 }));
+    assert.match(runLines(lines, "started")[0], /trigger=trigger-force force=true limit=8 delayMs=0 planned=8/);
+    const end = runLines(lines, "ended");
+    assert.equal(end.length, 1);
+    assert.match(end[0], /status=failed planned=8 updated=0 skipped=0 failed=5 durationSec=\d+ note="Stopped early after 5 consecutive Gemini failures/);
+});
+
+test("a run with nothing to enrich still logs a start and an end line", async () => {
+    locationRows = [];
+    const lines = await captureLogs(() => runEnrichment({ force: false, trigger: "cron" }));
+    assert.equal(runLines(lines, "started").length, 1);
+    const end = runLines(lines, "ended");
+    assert.equal(end.length, 1);
+    assert.match(end[0], /status=success planned=0 updated=0 skipped=0 failed=0 .*note="nothing to enrich"/);
+});
+
+test("a run that aborts (selection throws) still logs its end line", async () => {
+    const original = prismaMock.location.findMany;
+    prismaMock.location.findMany = async () => { throw new Error("db down"); };
+    try {
+        const lines = await captureLogs(async () => { await assert.rejects(runEnrichment({ force: false, trigger: "cron" }), /db down/); });
+        const end = runLines(lines, "ended");
+        assert.equal(end.length, 1);
+        assert.match(end[0], /status=failed .*note="aborted: db down"/);
+    } finally { prismaMock.location.findMany = original; }
+});
