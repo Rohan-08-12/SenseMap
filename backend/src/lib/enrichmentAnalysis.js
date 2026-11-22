@@ -69,11 +69,12 @@ export function interpretAnalysis(analysis) {
  * Row update for a skipped result, or null if there is nothing to save. enrichmentConfidence is
  * always stored when the model gave a valid one, so affected rows can be found later. Note it then
  * describes the LATEST attempt, which for a gated result is not the confidence of any stored scores.
- * Definite "nothing here" answers (no signal / low confidence) mark the place enriched so it is not
- * retried every night; malformed output is only marked when OSM facilities were saved, as before.
+ * Definite "nothing reliable here" answers (no signal / incomplete scores / low confidence) mark the place
+ * enriched so it is not retried every night (incomplete_scores additionally backs off for 30 days, see
+ * enrichmentBackoff.js); malformed output is only marked when OSM facilities were saved, as before.
  */
 export function skipUpdateData(decision, { yelpId, osmFacilities }) {
-    const markEnriched = decision.reason === "no_sensory_signal" || decision.reason === "low_confidence" || !!osmFacilities;
+    const markEnriched = ["no_sensory_signal", "incomplete_scores", "low_confidence"].includes(decision.reason) || !!osmFacilities;
     const data = {
         ...(yelpId && { externalYelpId: yelpId }),
         ...(osmFacilities && { estimatedFacilities: osmFacilities }),

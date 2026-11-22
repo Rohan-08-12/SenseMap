@@ -6,10 +6,10 @@ import { requireN8nSecret } from "../middleware/n8nAuth.js";
 import { runEnrichment, runPhotoEnrichment, extractFacilities } from "../lib/enrichmentCron.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "../lib/facilitiesOptions.js";
 import { requestAnalysis, interpretAnalysis, skipUpdateData } from "../lib/enrichmentAnalysis.js";
+import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "../lib/enrichmentBackoff.js";
 
 const router = express.Router();
 
-const STALE_THRESHOLD_HOURS = 24 * 7; // weekly — stays within Yelp 5000/month limit
 
 // Gemini-only for background enrichment — Claude validation reserved for
 // user-submitted reviews in /ai/analyze where accuracy matters most
@@ -80,6 +80,7 @@ router.post("/location", requireN8nSecret, async (req, res) => {
         if (decision.action === "skip") {
             const data = skipUpdateData(decision, { yelpId, osmFacilities });
             if (data) await prisma.location.update({ where: { id: locationId }, data });
+            if (decision.reason === "incomplete_scores") await logIncomplete(prisma, locationId, decision, sources);
             return res.json({ updated: false, reason: decision.reason, confidence: decision.confidence, sources });
         }
 
@@ -139,13 +140,9 @@ router.get("/stale", requireN8nSecret, async (_req, res) => {
     try {
         const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
 
+        const backoffIds = await idsInIncompleteBackoff(prisma);
         const locations = await prisma.location.findMany({
-            where: {
-                OR: [
-                    { lastEnrichedAt: null },
-                    { lastEnrichedAt: { lt: cutoff } },
-                ],
-            },
+            where: staleWhere(cutoff, backoffIds),
             take: 450,
             orderBy: [
                 { lastEnrichedAt: { sort: "asc", nulls: "first" } },

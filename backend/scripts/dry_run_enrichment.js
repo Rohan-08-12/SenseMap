@@ -130,7 +130,7 @@ async function main() {
             out(`  validator    ${decision.action === "write" ? "ACCEPTED" : `REJECTED (${decision.reason})`}`);
             out(`  would write  ${decision.action === "write"
                 ? `YES -> noise ${decision.noise}, lighting ${decision.lighting}, crowd ${decision.crowd} (0.5-5 scale), enrichmentConfidence ${decision.confidence}`
-                : `NO estimates (would record enrichmentConfidence=${decision.confidence ?? "none"}${decision.reason === "invalid_scores" || decision.reason === "invalid_confidence" || decision.reason === "incomplete_scores" ? "; place would be retried soon (unless OSM tags were saved)" : "; place marked enriched"})`}`);
+                : `NO estimates (would record enrichmentConfidence=${decision.confidence ?? "none"}${decision.reason === "invalid_scores" || decision.reason === "invalid_confidence" ? "; place would be retried soon (unless OSM tags were saved)" : decision.reason === "incomplete_scores" ? "; place marked enriched, logged as incomplete_scores, not retried for 30 days" : "; place marked enriched"})`}`);
         } catch (err) {
             out(`  ANALYSIS CALL FAILED: ${err.message}`);
         }

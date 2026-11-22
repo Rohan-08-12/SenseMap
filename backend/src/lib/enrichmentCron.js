@@ -5,8 +5,8 @@ import { fetchAllSources } from "../services/scraper.js";
 import { searchGooglePlaces, getGooglePlaceDetails, uploadPlacePhoto } from "./placesService.js";
 import { FACILITIES_OPTIONS, mergeFacilities } from "./facilitiesOptions.js";
 import { requestAnalysis, interpretAnalysis, skipUpdateData } from "./enrichmentAnalysis.js";
+import { STALE_THRESHOLD_HOURS, idsInIncompleteBackoff, logIncomplete, staleWhere } from "./enrichmentBackoff.js";
 
-const STALE_THRESHOLD_HOURS = 24 * 7;
 const BATCH_DELAY_MS = 1500; // 1.5s between calls — well within 1000 RPM Gemini limit
 
 // Caps how many locations a single unforced nightly run touches. Without this, a backlog of
@@ -85,6 +85,7 @@ async function enrichLocation(location) {
     if (decision.action === "skip") {
         const data = skipUpdateData(decision, { yelpId, osmFacilities });
         if (data) await prisma.location.update({ where: { id: location.id }, data });
+        if (decision.reason === "incomplete_scores") await logIncomplete(prisma, location.id, decision, sources);
         return { updated: false, reason: decision.reason };
     }
 
@@ -126,6 +127,8 @@ async function enrichLocation(location) {
 
 export async function runEnrichment({ force = false } = {}) {
     const cutoff = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000);
+    // Places whose last analysis was incomplete are left alone for 30 days (a forced run ignores this).
+    const backoffIds = force ? [] : await idsInIncompleteBackoff(prisma);
 
     const locations = await prisma.location.findMany({
         // force=true (manual backfill trigger) ignores staleness and the nightly cap, re-processing
@@ -133,7 +136,7 @@ export async function runEnrichment({ force = false } = {}) {
         // that field existed. An unforced (cron) run processes at most NIGHTLY_BATCH_LIMIT of the
         // oldest-stale locations, so a backlog trickles in over several nights instead of spiking
         // API spend in one run.
-        where: force ? {} : { OR: [{ lastEnrichedAt: null }, { lastEnrichedAt: { lt: cutoff } }] },
+        where: force ? {} : staleWhere(cutoff, backoffIds),
         orderBy: [{ lastEnrichedAt: { sort: "asc", nulls: "first" } }],
         ...(force ? {} : { take: NIGHTLY_BATCH_LIMIT }),
         select: {

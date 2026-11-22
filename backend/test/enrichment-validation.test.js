@@ -8,6 +8,10 @@ process.env.N8N_WEBHOOK_SECRET = "test-secret";
 
 // ---- mocks -------------------------------------------------------------------------------
 const updates = [];          // every prisma.location.update({ data }) call
+const findManyArgs = [];     // every prisma.location.findMany(args)
+const logFindManyArgs = [];  // every prisma.enrichmentLog.findMany(args)
+let backoffRows = [];        // rows the mocked enrichmentLog.findMany returns (places in incomplete-scores backoff)
+let osmFacilities = null;
 const logs = [];             // every enrichmentLog.create call
 let geminiCalls = 0;
 let geminiResponse = {};     // what the mocked Gemini returns (object, or a raw string)
@@ -19,15 +23,18 @@ let currentLocation = baseLocation;
 
 const prismaMock = {
     location: {
-        findMany: async () => [currentLocation],
+        findMany: async (args) => { findManyArgs.push(args); return [currentLocation]; },
         findUnique: async () => currentLocation,
         update: async ({ data }) => { updates.push(data); return {}; },
     },
-    enrichmentLog: { create: async ({ data }) => { logs.push(data); return {}; } },
+    enrichmentLog: {
+        create: async ({ data }) => { logs.push(data); return {}; },
+        findMany: async (args) => { logFindManyArgs.push(args); return backoffRows; },
+    },
 };
 mock.module("../src/lib/prisma.js", { defaultExport: prismaMock });
 mock.module("../src/services/scraper.js", { namedExports: {
-    fetchAllSources: async () => ({ combinedText: sourceText, sources: ["google"], yelpId: null, osmFacilities: null }),
+    fetchAllSources: async () => ({ combinedText: sourceText, sources: ["google"], yelpId: null, osmFacilities }),
 } });
 mock.module("../src/lib/gemini.js", { namedExports: {
     model: { generateContent: async () => { geminiCalls++; return { response: { text: () => typeof geminiResponse === "string" ? geminiResponse : JSON.stringify(geminiResponse) } }; } },
@@ -49,7 +56,7 @@ before(async () => {
     base = `http://127.0.0.1:${server.address().port}`;
 });
 after(() => server.close());
-beforeEach(() => { updates.length = 0; logs.length = 0; geminiCalls = 0; currentLocation = baseLocation; sourceText = "A quiet cafe on a side street."; });
+beforeEach(() => { findManyArgs.length = 0; logFindManyArgs.length = 0; backoffRows = []; osmFacilities = null; updates.length = 0; logs.length = 0; geminiCalls = 0; currentLocation = baseLocation; sourceText = "A quiet cafe on a side street."; });
 
 // run the same Gemini response through BOTH writers
 async function viaCron(resp) { geminiResponse = resp; await runEnrichment({ force: true }); return { updates: [...updates] }; }
@@ -106,7 +113,8 @@ for (const [name, run] of [["nightly cron", viaCron], ["POST /enrichment/locatio
         test(`${name}: ${label} is rejected, nothing is written`, async () => {
             const r = await run({ ...good, ...patch });
             assert.equal(wroteScores(r.updates), false);
-            assert.equal(logs.length, 0);
+            // no score-history row; the only thing ever logged is the incomplete_scores outcome (a lone null score)
+            assert.ok(logs.every((l) => l.scores.outcome === "incomplete_scores"));
         });
     }
 
@@ -161,7 +169,7 @@ for (const [name, run] of [["nightly cron", viaCron], ["POST /enrichment/locatio
         if (r.body) assert.equal(r.body.reason, "no_sensory_signal");
     });
 
-    test(`${name}: partially null scores write nothing (no half estimates)`, async () => {
+    test(`${name}: partially null scores write no estimates (no half estimates)`, async () => {
         const r = await run({ ...good, lighting_score: null });
         assert.equal(wroteScores(r.updates), false);
         if (r.body) assert.equal(r.body.reason, "incomplete_scores");
@@ -222,3 +230,89 @@ for (const [name, run] of [["nightly cron", viaCron], ["POST /enrichment/locatio
         assert.equal("lastEnrichedAt" in r.updates[0], false);     // malformed output: retried soon
     });
 }
+
+// ---- 4. incomplete_scores: no estimates, marked enriched, 30-day backoff, logged -----------------
+const { skipUpdateData } = await import("../src/lib/enrichmentAnalysis.js");
+const { INCOMPLETE_RETRY_HOURS, STALE_THRESHOLD_HOURS, retryHoursFor, idsInIncompleteBackoff, staleWhere } = await import("../src/lib/enrichmentBackoff.js");
+
+test("retry delay is 30 days, or the staleness window if that is longer", () => {
+    assert.equal(STALE_THRESHOLD_HOURS, 168);
+    assert.equal(INCOMPLETE_RETRY_HOURS, 720);
+    assert.equal(retryHoursFor(168), 720);
+    assert.equal(retryHoursFor(24 * 45), 24 * 45);   // a longer staleness window wins
+});
+
+test("skipUpdateData: incomplete_scores is marked enriched and stores the confidence; invalid output is not", () => {
+    const inc = skipUpdateData({ reason: "incomplete_scores", confidence: 6 }, { yelpId: null, osmFacilities: null });
+    assert.equal(inc.enrichmentConfidence, 6);
+    assert.ok(inc.lastEnrichedAt instanceof Date);
+    const invalid = skipUpdateData({ reason: "invalid_scores", confidence: 6 }, { yelpId: null, osmFacilities: null });
+    assert.equal("lastEnrichedAt" in invalid, false);
+});
+
+for (const [name, run] of [["nightly cron", viaCron], ["POST /enrichment/location", viaRoute]]) {
+    test(`${name}: incomplete scores -> no estimates, enrichmentConfidence stored, marked enriched, logged as incomplete_scores`, async () => {
+        const r = await run({ ...good, noise_score: null, confidence: 7 });
+        assert.equal(wroteScores(r.updates), false);
+        assert.equal(r.updates.length, 1);
+        assert.equal(r.updates[0].enrichmentConfidence, 7);
+        assert.ok(r.updates[0].lastEnrichedAt instanceof Date);
+        assert.equal(logs.length, 1);
+        assert.equal(logs[0].locationId, "loc1");
+        assert.equal(logs[0].scores.outcome, "incomplete_scores");
+        assert.equal(logs[0].scores.confidence, 7);
+        if (r.body) { assert.equal(r.body.reason, "incomplete_scores"); assert.equal(r.body.updated, false); }
+    });
+
+    test(`${name}: incomplete scores still save OSM facility tags`, async () => {
+        osmFacilities = { seating: ["Plenty of seating"] };
+        const r = await run({ ...good, crowd_score: null });
+        assert.equal(wroteScores(r.updates), false);
+        assert.deepEqual(r.updates[0].estimatedFacilities, osmFacilities);
+        assert.equal(logs[0].scores.outcome, "incomplete_scores");
+    });
+
+    test(`${name}: other skip reasons are not logged as incomplete_scores`, async () => {
+        await run({ ...good, confidence: 2 });                                       // low_confidence
+        await run({ ...good, noise_score: null, lighting_score: null, crowd_score: null }); // no_sensory_signal
+        await run({ ...good, noise_score: "x" });                                    // invalid_scores
+        assert.equal(logs.length, 0);
+    });
+}
+
+test("the backoff query looks back 30 days for incomplete_scores log rows", async () => {
+    backoffRows = [{ locationId: "a" }, { locationId: "b" }, { locationId: "a" }];
+    const now = Date.now();
+    const ids = await idsInIncompleteBackoff(prismaMock, now);
+    assert.deepEqual(ids.sort(), ["a", "b"]);
+    const { where } = logFindManyArgs[0];
+    assert.deepEqual(where.scores, { path: ["outcome"], equals: "incomplete_scores" });
+    assert.equal(where.updatedAt.gt.getTime(), now - 30 * 24 * 3600 * 1000);
+});
+
+test("staleWhere: unchanged without backoff ids, excludes them otherwise", () => {
+    const cutoff = new Date(0);
+    assert.deepEqual(staleWhere(cutoff, []), { OR: [{ lastEnrichedAt: null }, { lastEnrichedAt: { lt: cutoff } }] });
+    assert.deepEqual(staleWhere(cutoff, ["a"]).AND[1], { id: { notIn: ["a"] } });
+});
+
+test("nightly run skips places in backoff; a forced run ignores the backoff", async () => {
+    backoffRows = [{ locationId: "loc1" }];
+    geminiResponse = good;
+    await runEnrichment({ force: false });
+    assert.deepEqual(findManyArgs.at(-1).where.AND[1], { id: { notIn: ["loc1"] } });
+    findManyArgs.length = 0; logFindManyArgs.length = 0;
+    await runEnrichment({ force: true });
+    assert.deepEqual(findManyArgs.at(-1).where, {});
+    assert.equal(logFindManyArgs.length, 0);       // forced runs don't even look at the backoff
+});
+
+test("GET /enrichment/stale excludes places in backoff", async () => {
+    backoffRows = [{ locationId: "loc1" }, { locationId: "loc2" }];
+    const res = await fetch(base + "/enrichment/stale", { headers: { "x-n8n-secret": "test-secret" } });
+    assert.equal(res.status, 200);
+    assert.deepEqual(findManyArgs.at(-1).where.AND[1], { id: { notIn: ["loc1", "loc2"] } });
+    backoffRows = [];
+    await fetch(base + "/enrichment/stale", { headers: { "x-n8n-secret": "test-secret" } });
+    assert.equal("AND" in findManyArgs.at(-1).where, false);
+});
