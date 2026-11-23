@@ -124,6 +124,16 @@ AutisticAI/
 
 ---
 
+## Enrichment schedule and health
+
+- **Nightly run:** `0 4 * * *` America/Toronto, capped by `ENRICHMENT_MAX_PER_RUN` (default 50).
+- **Missed-run check:** hourly at :37. If no `EnrichmentRun` started in the last 26h and none is running, it starts a `catchup` run. It follows the same rule as the boot catch-up: on only when `RAILWAY_ENVIRONMENT` is set or `ENRICHMENT_CATCHUP=true`; always off when `ENRICHMENT_CATCHUP=false` or `NODE_ENV=test`. Leave it unset locally so a dev server never starts paid runs.
+- **Health:** `GET /enrichment/freshness` reports `hoursSinceLastUpdate` (last run that finished `success` with `updated > 0`). `healthy` means that is within 36h. The hourly watchdog emails once per 24h when it is not.
+- **Skip reasons:** each run records why places were skipped (and Google Places denials) in `EnrichmentRun.errors`; `lastRun` in `/enrichment/freshness` shows them.
+- The legacy n8n workflow writes no `EnrichmentRun` rows, so it does not count toward these checks.
+
+---
+
 ## Deploying for beta
 
 | Service | What to deploy |
