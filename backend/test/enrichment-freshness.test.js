@@ -34,7 +34,7 @@ mock.module("../src/lib/gemini.js", { namedExports: { model: { generateContent: 
 const { default: prisma } = await import("../src/lib/prisma.js");
 const { acquireRun, finishRun } = await import("../src/lib/enrichmentRuns.js");
 const { runEnrichment } = await import("../src/lib/enrichmentCron.js");
-const { catchUpEnrichment, checkEnrichmentFreshness } = await import("../src/lib/scheduler.js");
+const { catchUpEnrichment, checkEnrichmentFreshness, checkMissedRun } = await import("../src/lib/scheduler.js");
 const { default: enrichmentRouter } = await import("../src/routes/enrichment.js");
 const { default: express } = await import("express");
 
@@ -235,4 +235,36 @@ test("6b. a recent success that updated nothing still alerts, and the email says
     assert.match(sentEmails[0].text, /finished successfully \(even if it updated nothing\): 2(\.\d)?h ago/);
     await fresh();
     assert.equal(sentEmails.length, 1, "deduped: at most one email per 24h while unhealthy");
+});
+
+test("7. hourly missed-run check against real Postgres: starts a 'catchup' run when none started in 26h, honours the lock and recent runs", async () => {
+    const catchups = () => prisma.enrichmentRun.count({ where: { trigger: "catchup" } });
+    // a failed run that STARTED 3h ago counts: nothing to do
+    await run({ status: "failed", startedAt: ago(3), finishedAt: ago(3), planned: 1, failed: 1 });
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 0);
+
+    // nothing started for 30h: a catchup run is recorded through the normal path and finishes
+    await prisma.enrichmentRun.deleteMany();
+    await run({ status: "success", startedAt: ago(30), finishedAt: ago(30), planned: 2, updated: 2 });
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 1);
+    assert.equal(await prisma.enrichmentRun.count({ where: { status: "running" } }), 0, "run finished, lock released");
+
+    // that run is now the latest start: a second check does nothing
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 1);
+
+    // a live running row blocks even when the last start is old
+    await prisma.enrichmentRun.deleteMany();
+    await run({ status: "running", startedAt: ago(40) });
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 0);
+
+    // empty table: starts one; disabled: never
+    await prisma.enrichmentRun.deleteMany();
+    await checkMissedRun({ enabled: false });
+    assert.equal(await catchups(), 0);
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 1);
 });
