@@ -34,19 +34,19 @@ export async function notifyNewSubscriber({ email, source }) {
     }
 }
 
-export async function notifyEnrichmentStale({ hoursSinceLastSuccess, lastRun }) {
+export async function notifyEnrichmentStale({ hoursSinceLastSuccess, hoursSinceLastUpdate, lastRun }) {
     if (!resend || !process.env.ADMIN_NOTIFY_EMAIL) return;
 
     try {
-        const since = hoursSinceLastSuccess == null ? "never" : `${hoursSinceLastSuccess}h ago`;
+        const ago = (h) => (h == null ? "never" : `${h}h ago`);
         const last = lastRun
             ? `${lastRun.status} (trigger: ${lastRun.trigger}, started ${new Date(lastRun.startedAt).toISOString()}, failed: ${lastRun.failed}/${lastRun.planned})${lastRun.errorMessage ? `\nError: ${lastRun.errorMessage}` : ""}`
             : "none recorded";
         const { error } = await resend.emails.send({
             from: FROM,
             to: process.env.ADMIN_NOTIFY_EMAIL,
-            subject: "SenseMap: nightly enrichment has not succeeded in 36h",
-            text: `No successful enrichment run since: ${since}\nMost recent run: ${last}\n\nCheck GET /enrichment/freshness (x-n8n-secret header) and the Railway logs.`,
+            subject: "SenseMap: no places updated by enrichment in 36h",
+            text: `Last time any place was updated: ${ago(hoursSinceLastUpdate)}\nLast run that finished successfully (even if it updated nothing): ${ago(hoursSinceLastSuccess)}\nMost recent run: ${last}\n\nCheck GET /enrichment/freshness (x-n8n-secret header) and the Railway logs.`,
         });
         if (error) console.error("Resend rejected enrichment-stale email:", error);
     } catch (error) {

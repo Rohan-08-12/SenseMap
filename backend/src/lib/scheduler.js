@@ -14,7 +14,7 @@ export async function checkEnrichmentFreshness() {
     if (report.healthy || !report.lastRun) return;
     if (Date.now() - lastAlertAt < ALERT_REPEAT_MS) return;
     lastAlertAt = Date.now();
-    console.error(`[Enrichment] STALE — no successful run in ${report.hoursSinceLastSuccess ?? "?"}h`);
+    console.error(`[Enrichment] STALE — no place updated in ${report.hoursSinceLastUpdate ?? "never"}h (last successful run ${report.hoursSinceLastSuccess ?? "never"}h ago)`);
     await notifyEnrichmentStale(report);
 }
 
