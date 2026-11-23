@@ -49,9 +49,14 @@ export const MISSED_RUN_AFTER_HOURS = 26;
 export const MISSED_RUN_CRON = "37 * * * *";           // hourly, not at :00 (the freshness watchdog uses :15)
 const HEARTBEAT_EVERY_MS = 24 * 60 * 60 * 1000;
 
-/** On unless ENRICHMENT_CATCHUP=false; always off under NODE_ENV=test. */
+/**
+ * Same rule as the boot catch-up: only on Railway (RAILWAY_ENVIRONMENT set) or with ENRICHMENT_CATCHUP=true,
+ * so a local server pointed at the real database never starts paid runs. Always off with
+ * ENRICHMENT_CATCHUP=false or NODE_ENV=test.
+ */
 export function missedRunCheckEnabled(env = process.env) {
-    return env.ENRICHMENT_CATCHUP !== "false" && env.NODE_ENV !== "test";
+    if (env.ENRICHMENT_CATCHUP === "false" || env.NODE_ENV === "test") return false;
+    return env.ENRICHMENT_CATCHUP === "true" || !!env.RAILWAY_ENVIRONMENT;
 }
 
 /**
@@ -118,7 +123,7 @@ export function startScheduler() {
         lastHeartbeatLogAt = Date.now();
         console.log(`[Enrichment] Missed-run check scheduled hourly at :37 — starts a catchup run if none started in ${MISSED_RUN_AFTER_HOURS}h`);
     } else {
-        console.log("[Enrichment] Missed-run check disabled (ENRICHMENT_CATCHUP=false or NODE_ENV=test)");
+        console.log("[Enrichment] Missed-run check not scheduled (needs RAILWAY_ENVIRONMENT or ENRICHMENT_CATCHUP=true; off with ENRICHMENT_CATCHUP=false or NODE_ENV=test)");
     }
 
     if (catchupEnabled()) {

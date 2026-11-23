@@ -48,12 +48,14 @@ test("decision: disabled => skip quietly even when overdue", () => {
     assert.deepEqual([d.action, d.reason, d.quiet], ["skip", "disabled", true]);
 });
 
-test("enabled flag: on by default; off for ENRICHMENT_CATCHUP=false and for NODE_ENV=test", () => {
-    assert.equal(missedRunCheckEnabled({}), true);
+test("enabled flag: same rule as the boot catch-up (Railway or ENRICHMENT_CATCHUP=true); false and NODE_ENV=test always win", () => {
+    assert.equal(missedRunCheckEnabled({}), false, "local dev, nothing set");
+    assert.equal(missedRunCheckEnabled({ NODE_ENV: "production" }), false, "production alone is not enough");
+    assert.equal(missedRunCheckEnabled({ RAILWAY_ENVIRONMENT: "production" }), true);
     assert.equal(missedRunCheckEnabled({ ENRICHMENT_CATCHUP: "true" }), true);
-    assert.equal(missedRunCheckEnabled({ NODE_ENV: "production" }), true);
-    assert.equal(missedRunCheckEnabled({ ENRICHMENT_CATCHUP: "false" }), false);
-    assert.equal(missedRunCheckEnabled({ NODE_ENV: "test" }), false);
+    assert.equal(missedRunCheckEnabled({ ENRICHMENT_CATCHUP: "false", RAILWAY_ENVIRONMENT: "production" }), false);
+    assert.equal(missedRunCheckEnabled({ NODE_ENV: "test", RAILWAY_ENVIRONMENT: "production" }), false);
+    assert.equal(missedRunCheckEnabled({ NODE_ENV: "test", ENRICHMENT_CATCHUP: "true" }), false);
     assert.equal(missedRunCheckEnabled({ ENRICHMENT_CATCHUP: "false", NODE_ENV: "test" }), false);
 });
 
