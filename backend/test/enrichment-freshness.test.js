@@ -34,7 +34,7 @@ mock.module("../src/lib/gemini.js", { namedExports: { model: { generateContent: 
 const { default: prisma } = await import("../src/lib/prisma.js");
 const { acquireRun, finishRun } = await import("../src/lib/enrichmentRuns.js");
 const { runEnrichment } = await import("../src/lib/enrichmentCron.js");
-const { catchUpEnrichment, checkEnrichmentFreshness } = await import("../src/lib/scheduler.js");
+const { catchUpEnrichment, checkEnrichmentFreshness, checkMissedRun } = await import("../src/lib/scheduler.js");
 const { default: enrichmentRouter } = await import("../src/routes/enrichment.js");
 const { default: express } = await import("express");
 
@@ -155,6 +155,27 @@ test("4b. /enrichment/freshness lastRun shows skip reasons and Google issues (an
     assert.equal(old.skipReasons, null); assert.equal(old.googleIssues, null);
 });
 
+test("4c. health rule against real Postgres: success with updated 0 is unhealthy (strict 503), updated>0 is healthy", async () => {
+    const get = (path) => fetch(base + path, { headers: { "x-n8n-secret": "test-secret" } });
+    await run({ status: "success", startedAt: ago(2.1), finishedAt: ago(2), planned: 5, updated: 0, skipped: 5 });
+    await run({ status: "success", startedAt: ago(1.1), finishedAt: ago(1), planned: 0 });
+    let r = await get("/enrichment/freshness?strict=true");
+    assert.equal(r.status, 503);
+    let j = await r.json();
+    assert.equal(j.healthy, false); assert.equal(j.hoursSinceLastUpdate, null); assert.equal(j.lastUpdatingRun, null);
+    assert.ok(Math.abs(j.hoursSinceLastSuccess - 1) < 0.2, "hoursSinceLastSuccess kept");
+
+    const upd = await run({ status: "success", startedAt: ago(30.1), finishedAt: ago(30), planned: 4, updated: 1, skipped: 3 });
+    r = await get("/enrichment/freshness?strict=true");
+    assert.equal(r.status, 200);
+    j = await r.json();
+    assert.equal(j.healthy, true); assert.equal(j.lastUpdatingRun.id, upd.id);
+    assert.ok(Math.abs(j.hoursSinceLastUpdate - 30) < 0.2);
+
+    await prisma.enrichmentRun.update({ where: { id: upd.id }, data: { finishedAt: ago(37) } });
+    assert.equal((await get("/enrichment/freshness?strict=true")).status, 503);
+});
+
 test("5. catch-up skips when a run is active or last run started <1h ago; starts when due", async () => {
     await prisma.location.create({ data: loc("fresh", ago(1)) }); // nothing stale => catch-up run finishes instantly
     const catchups = () => prisma.enrichmentRun.count({ where: { trigger: "catchup" } });
@@ -188,7 +209,7 @@ test("5. catch-up skips when a run is active or last run started <1h ago; starts
 });
 
 test("6. stale alert: emails once (mocked Resend), not again within 24h, not when healthy", async () => {
-    await run({ status: "success", startedAt: ago(5), finishedAt: ago(5) });
+    await run({ status: "success", startedAt: ago(5), finishedAt: ago(5), planned: 3, updated: 2 });
     await checkEnrichmentFreshness();
     assert.equal(sentEmails.length, 0);
 
@@ -199,4 +220,51 @@ test("6. stale alert: emails once (mocked Resend), not again within 24h, not whe
     assert.match(sentEmails[0].subject, /36h/);
     await checkEnrichmentFreshness();
     assert.equal(sentEmails.length, 1);
+});
+
+test("6b. a recent success that updated nothing still alerts, and the email says how long since any place was updated", async () => {
+    sentEmails.length = 0;
+    // module-level dedupe from test 6 is per process, so run this check by clearing it with a fresh import
+    const { checkEnrichmentFreshness: fresh } = await import("../src/lib/scheduler.js?second");
+    await prisma.enrichmentRun.deleteMany();
+    await run({ status: "success", startedAt: ago(50.1), finishedAt: ago(50), planned: 4, updated: 2 });
+    await run({ status: "success", startedAt: ago(2.1), finishedAt: ago(2), planned: 5, updated: 0, skipped: 5 });
+    await fresh();
+    assert.equal(sentEmails.length, 1);
+    assert.match(sentEmails[0].text, /Last time any place was updated: 50(\.\d)?h ago/);
+    assert.match(sentEmails[0].text, /finished successfully \(even if it updated nothing\): 2(\.\d)?h ago/);
+    await fresh();
+    assert.equal(sentEmails.length, 1, "deduped: at most one email per 24h while unhealthy");
+});
+
+test("7. hourly missed-run check against real Postgres: starts a 'catchup' run when none started in 26h, honours the lock and recent runs", async () => {
+    const catchups = () => prisma.enrichmentRun.count({ where: { trigger: "catchup" } });
+    // a failed run that STARTED 3h ago counts: nothing to do
+    await run({ status: "failed", startedAt: ago(3), finishedAt: ago(3), planned: 1, failed: 1 });
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 0);
+
+    // nothing started for 30h: a catchup run is recorded through the normal path and finishes
+    await prisma.enrichmentRun.deleteMany();
+    await run({ status: "success", startedAt: ago(30), finishedAt: ago(30), planned: 2, updated: 2 });
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 1);
+    assert.equal(await prisma.enrichmentRun.count({ where: { status: "running" } }), 0, "run finished, lock released");
+
+    // that run is now the latest start: a second check does nothing
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 1);
+
+    // a live running row blocks even when the last start is old
+    await prisma.enrichmentRun.deleteMany();
+    await run({ status: "running", startedAt: ago(40) });
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 0);
+
+    // empty table: starts one; disabled: never
+    await prisma.enrichmentRun.deleteMany();
+    await checkMissedRun({ enabled: false });
+    assert.equal(await catchups(), 0);
+    await checkMissedRun({ enabled: true });
+    assert.equal(await catchups(), 1);
 });

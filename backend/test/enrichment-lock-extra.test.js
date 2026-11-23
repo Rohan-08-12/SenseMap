@@ -112,7 +112,7 @@ test("abandoned recovery: exactly at the 15 minute boundary; counts and trigger 
 
 test("freshness: 36h boundary, currentlyRunning, and strict mode with no runs / only failures", async () => {
     const get = (p) => fetch(base + p, { headers: { "x-n8n-secret": "test-secret" } });
-    const success = await prisma.enrichmentRun.create({ data: { trigger: "cron", status: "success", startedAt: ago(35.5), finishedAt: ago(35.5) } });
+    const success = await prisma.enrichmentRun.create({ data: { trigger: "cron", status: "success", startedAt: ago(35.5), finishedAt: ago(35.5), planned: 3, updated: 2 } });
 
     let r = await get("/enrichment/freshness?strict=true");
     assert.equal(r.status, 200);
