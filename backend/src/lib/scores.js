@@ -1,4 +1,5 @@
 import prisma from "./prisma.js";
+import { hasTrustworthyScores } from "./trustworthyScores.js";
 
 // Review weight halves every 180 days — a visit from 6 months ago counts
 // at 50%, 12 months = 25%, etc. Old reviews never fully disappear but
@@ -111,4 +112,9 @@ export function isLowConfidence(display) {
     const vals = [display.noise, display.lighting, display.crowd];
     if (vals.some((v) => !Number.isFinite(v))) return false;
     return vals.every((v) => v <= 0.5);
+}
+
+/** The single "can we show numbers for this place?" check for a Location loaded with `sensoryScores`. */
+export function locationHasTrustworthyScores(location) {
+    return hasTrustworthyScores(displayScoreForLocation(location), location.enrichmentConfidence ?? null);
 }
