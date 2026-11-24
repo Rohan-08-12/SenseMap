@@ -2,6 +2,7 @@ import express from "express";
 import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
+import { displayScoreForLocation, locationHasTrustworthyScores } from "../lib/scores.js";
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.get("/", requireAuth, syncUser, async (req, res) => {
                     select: {
                         id: true, name: true, category: true, address: true,
                         description: true, imageUrl: true, latitude: true, longitude: true,
-                        estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true,
+                        estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true, enrichmentConfidence: true,
                         sensoryScores: true,
                     }
                 }
@@ -27,7 +28,20 @@ router.get("/", requireAuth, syncUser, async (req, res) => {
             orderBy: { createdAt: "desc" }
         });
 
-        res.json(saved);
+        // Same rule as the rest of the app: numbers only when the scores are trustworthy (otherwise null, never 0).
+        res.json(saved.map((sp) => {
+            const trustworthy = sp.location ? locationHasTrustworthyScores(sp.location) : false;
+            const d = trustworthy ? displayScoreForLocation(sp.location) : null;
+            const { enrichmentConfidence, ...location } = sp.location ?? {};
+            return {
+                ...sp,
+                location: {
+                    ...location,
+                    trustworthy,
+                    displayScores: d && { noise: d.noise, lighting: d.lighting, crowd: d.crowd, comfort: d.comfort ?? Math.max(1, 6 - (d.noise + d.lighting + d.crowd) / 3) },
+                },
+            };
+        }));
     } catch (error) {
         console.error("Error fetching saved places:", error);
         res.status(500).json({ error: "Internal server error" });
