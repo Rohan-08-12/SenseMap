@@ -14,7 +14,9 @@
  * RULES
  *  - Refuses to run unless DATABASE_URL's host is localhost / 127.0.0.1, unless --allow-remote-db is given.
  *    (The database is read even in a dry run, to skip places that already exist.)
- *  - A row whose resolved googlePlaceId already exists is skipped.
+ *  - Existing-place check shared with /discover (src/lib/findExistingPlace.js): a row whose googlePlaceId already exists is
+ *    skipped; a stored place with the same exact normalised name within 100 m is not duplicated: an OSM row (osm_*) gets the
+ *    Google id attached (--apply), a row with a different real Google id is skipped and left alone.
  *  - If more than one plausible match comes back, the candidates are printed and the row is skipped. To resolve
  *    it, put the chosen candidate's place_id in the row as "pick": "<place_id>" and re-run.
  *  - API: Places API (New) Text Search, POST places.googleapis.com/v1/places:searchText, key in the X-Goog-Api-Key
@@ -29,6 +31,7 @@ import "dotenv/config";
 import fs from "node:fs";
 import { haversineMetres } from "../src/lib/geo.js";
 import { searchTextNew } from "../src/lib/googlePlacesNew.js";
+import { findExistingPlace, attachGoogleId } from "../src/lib/findExistingPlace.js";
 
 const MAPS_HOSTS = /^(maps\.app\.goo\.gl|goo\.gl|www\.google\.com|google\.com|maps\.google\.com|consent\.google\.com)$/;
 const MAX_DISTANCE_M = 10_000;     // a plausible match is within 10 km of the Maps URL's coordinates
@@ -147,8 +150,24 @@ export async function processRows(rows, { key, prisma, apply = false, fetchImpl 
 
         const p = plausible[0];
         log(`  Found: ${describe(p)}`);
-        const existing = await prisma.location.findUnique({ where: { googlePlaceId: p.place_id }, select: { id: true } });
-        if (existing) { out.reason = "googlePlaceId already exists"; log(`  SKIP: ${out.reason}`); continue; }
+        // Same check as /discover: by Google id, then by exact normalised name within 100 m (no containment matching).
+        const found = await findExistingPlace(prisma, { googlePlaceId: p.place_id, name: p.name, lat: p.geometry.location.lat, lng: p.geometry.location.lng });
+        if (found?.matchedBy === "googlePlaceId") { out.reason = "googlePlaceId already exists"; log(`  SKIP: ${out.reason}`); continue; }
+        if (found) {
+            const ex = found.location;
+            const where = `"${ex.name}" (${ex.id}, ${Math.round(found.distanceMetres)} m away, googlePlaceId ${ex.googlePlaceId ?? "none"})`;
+            if (ex.googlePlaceId && !ex.googlePlaceId.startsWith("osm_")) {
+                out.reason = "same-name place with a different Google id already stored";
+                log(`  SKIP: ${out.reason}: ${where}. Not overwritten.`);
+                continue;
+            }
+            if (!apply) { out.action = "would-attach"; log(`  Dry run: would attach this Google id to existing ${where}; no new row, its scores and reviews stay.`); continue; }
+            const r = await attachGoogleId(prisma, ex, { googlePlaceId: p.place_id });
+            out.action = r.attached ? "attached" : "skip";
+            if (!r.attached) out.reason = r.reason;
+            log(r.attached ? `  Attached Google id to existing ${where}. No new row.` : `  SKIP: ${r.reason}`);
+            continue;
+        }
 
         if (!apply) { out.action = "would-insert"; log("  Dry run: would insert (no scores, no description)."); continue; }
         await prisma.location.create({
@@ -165,8 +184,8 @@ export async function processRows(rows, { key, prisma, apply = false, fetchImpl 
         log("  Inserted.");
     }
     const count = (a) => outcomes.filter((o) => o.action === a).length;
-    const summary = { inserted: count("inserted"), wouldInsert: count("would-insert"), skipped: count("skip") };
-    log(`\nDone${apply ? "" : " (dry run, nothing written)"}: inserted ${summary.inserted}, would insert ${summary.wouldInsert}, skipped ${summary.skipped}`);
+    const summary = { inserted: count("inserted"), wouldInsert: count("would-insert"), attached: count("attached"), wouldAttach: count("would-attach"), skipped: count("skip") };
+    log(`\nDone${apply ? "" : " (dry run, nothing written)"}: inserted ${summary.inserted}, would insert ${summary.wouldInsert}, attached ${summary.attached}, would attach ${summary.wouldAttach}, skipped ${summary.skipped}`);
     return { summary, outcomes };
 }
 
