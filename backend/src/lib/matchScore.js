@@ -1,4 +1,5 @@
-import { getDisplayScore, isLowConfidence } from "./scores.js";
+import { getDisplayScore } from "./scores.js";
+import { hasTrustworthyScores } from "./trustworthyScores.js";
 
 const MISSING_FACTOR_DEFAULT = 3;
 
@@ -42,7 +43,8 @@ export function computeMatch(loc, { noiseTolerance = 3, lightingTolerance = 3, c
     );
     // Low-confidence estimates get no percentage: with the one-sided formula an all-0.5 placeholder
     // would otherwise score 100% and top every user's best-match list.
-    const lowConfidence = isLowConfidence({ ...display, noise, lighting, crowd });
+    // "Low confidence" is now exactly "not trustworthy" (shared rule): no percentage for placeholders, category defaults or all-floor estimates.
+    const lowConfidence = !hasTrustworthyScores({ ...display, noise, lighting, crowd }, loc.enrichmentConfidence ?? null);
     return { matchScore: lowConfidence ? null : matchScore, lowConfidence, noise, lighting, crowd, comfort: display.comfort ?? null, source: display.source };
 }
 
