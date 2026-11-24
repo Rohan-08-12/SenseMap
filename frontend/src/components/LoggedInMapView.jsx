@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel, haversineDistance } from '../utils.js';
+import { hasTrustworthyScores } from '../trustworthyScores.js';
 import { describeDataSources, joinList, clampComfort, factorShares, describeEvidence, radarValues } from '../panelLabels.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import MapView from './MapView';
@@ -70,6 +71,31 @@ function optimizeCloudinaryUrl(url) {
 
 function SkeletonBlock({ width = '100%', height = 16 }) {
   return <div className="animate-pulse" style={{ width, height, background: '#e5e7eb', borderRadius: 6 }} />;
+}
+
+const NOT_ENOUGH_DATA = 'Not enough data yet';
+
+// One search-result feature -> card. Numbers only when the server marked the place trustworthy AND the values
+// pass the same shared rule here; otherwise score is null and the card says so (never "0.0").
+function searchFeatureToCard(f) {
+  const p = f.properties ?? {};
+  const trusted = p.trustworthy === true
+    && hasTrustworthyScores({ noise: p.noiseScore, lighting: p.lightingScore, crowd: p.crowdScore, source: 'community' });
+  const comfort = trusted ? (p.comfortScore ?? null) : null;
+  return {
+    id: p.id, name: p.name, address: p.address ?? null,
+    score: comfort,
+    tier: comfort == null ? 'none' : comfort >= 3.5 ? 'high' : 'medium',
+    featured: false,
+    tags: p.category || 'Place',
+    desc: trusted ? `Noise: ${p.noiseScore.toFixed(1)} · Lighting: ${p.lightingScore.toFixed(1)} · Crowd: ${p.crowdScore.toFixed(1)}` : NOT_ENOUGH_DATA,
+    trustworthy: trusted,
+    comfort_score: comfort,
+    noise_score: trusted ? p.noiseScore : null,
+    lighting_score: trusted ? p.lightingScore : null,
+    crowd_score: trusted ? p.crowdScore : null,
+    latitude: f.geometry?.coordinates?.[1], longitude: f.geometry?.coordinates?.[0], category: p.category,
+  };
 }
 
 function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideControls }) {
@@ -193,6 +219,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
         if (Array.isArray(data) && data.length > 0) {
           const mapped = data.slice(0, 6).map((loc) => ({
             name: loc.name,
+            address: loc.address ?? null,
             score: loc.comfortScore ?? 0,
             tags: loc.category || 'Sensory-friendly',
             desc: `Noise: ${(loc.noiseScore || 0).toFixed(1)} · Lighting: ${(loc.lightingScore || 0).toFixed(1)} · Crowd: ${(loc.crowdScore || 0).toFixed(1)}`,
@@ -254,18 +281,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
         setSearchResults(res.data);
         const features = res.data?.features ?? [];
         if (features.length > 0) {
-          setNearbyPlaces(features.slice(0, 6).map((f) => {
-            const p = f.properties ?? {};
-            const comfort = p.comfortScore ?? 0;
-            return {
-              id: p.id, name: p.name, score: comfort,
-              tier: comfort >= 3.5 ? 'high' : 'medium', featured: false,
-              tags: p.category || 'Place',
-              desc: `Noise: ${(p.noiseScore ?? 0).toFixed(1)} · Lighting: ${(p.lightingScore ?? 0).toFixed(1)} · Crowd: ${(p.crowdScore ?? 0).toFixed(1)}`,
-              comfort_score: comfort, noise_score: p.noiseScore, lighting_score: p.lightingScore, crowd_score: p.crowdScore,
-              latitude: f.geometry?.coordinates?.[1], longitude: f.geometry?.coordinates?.[0], category: p.category,
-            };
-          }));
+          setNearbyPlaces(features.slice(0, 6).map(searchFeatureToCard));
         }
       })
       .catch(() => setSearchResults({ features: [] }))
@@ -371,26 +387,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
       setSearchResults(res.data);
       const features = res.data?.features ?? [];
       if (features.length > 0) {
-        setNearbyPlaces(features.slice(0, 6).map((f) => {
-          const p = f.properties ?? {};
-          const comfort = p.comfortScore ?? p.comfort_score ?? 0;
-          return {
-            id: p.id,
-            name: p.name,
-            score: comfort,
-            tier: comfort >= 3.5 ? 'high' : 'medium',
-            featured: false,
-            tags: p.category || 'Place',
-            desc: `Noise: ${(p.noiseScore ?? p.noise_score ?? 0).toFixed(1)} · Lighting: ${(p.lightingScore ?? p.lighting_score ?? 0).toFixed(1)} · Crowd: ${(p.crowdScore ?? p.crowd_score ?? 0).toFixed(1)}`,
-            comfort_score: comfort,
-            noise_score: p.noiseScore ?? p.noise_score,
-            lighting_score: p.lightingScore ?? p.lighting_score,
-            crowd_score: p.crowdScore ?? p.crowd_score,
-            latitude: f.geometry?.coordinates?.[1],
-            longitude: f.geometry?.coordinates?.[0],
-            category: p.category,
-          };
-        }));
+        setNearbyPlaces(features.slice(0, 6).map(searchFeatureToCard));
       } else {
         setNearbyPlaces([]);
       }
@@ -556,7 +553,9 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
   const dataSource = _ds?.source ?? 'category';
   // AI estimate with no real signal (all-floor or near-identical scores, no community reviews): don't
   // present it as 'highly comfortable' or give it a match percentage.
-  const lowConfidence = _ds?.lowConfidence === true;
+  // "Low confidence" now means: not trustworthy under the shared rule (server: displayScores.trustworthy). Before the detail
+  // loads, fall back to the flag the search/list result carried.
+  const lowConfidence = _ds ? (_ds.trustworthy === false || _ds.lowConfidence === true) : selectedLocation?.trustworthy === false;
   const locName = selectedLocation?.name || 'Select a location';
   // Clamped for display only (the "X / 5" label and % bars below assume a 5-point
   // ceiling) — ranking/sort order elsewhere uses the true uncapped backend value.
@@ -588,7 +587,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
 
   // Location tags from AI or sensory scores
   const locationTags = (() => {
-    if (lowConfidence) return ['Low confidence, limited data'];
+    if (lowConfidence) return [NOT_ENOUGH_DATA];
     if (aiInsights?.tags?.length > 0) return aiInsights.tags;
     const tags = [];
     const ns = sensory.noiseScore ?? sensory.noise_score ?? 3;
@@ -983,7 +982,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                         }}
                       >
                         <div className="lmv-nearby-card-header">
-                          <span className={`lmv-nearby-score ${place.tier}`}>{place.score.toFixed(1)}</span>
+                          <span className={`lmv-nearby-score ${place.tier}`}>{place.score == null ? '—' : place.score.toFixed(1)}</span>
                           {getDistance(place) && <span className="lmv-nearby-distance">{getDistance(place)}</span>}
                         </div>
                         <div className="lmv-nearby-card-info">
@@ -1003,6 +1002,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                               Directions
                             </button>
                           </div>
+                          {place.address && <p className="card-address">{place.address}</p>}
                           <p className="card-tags">{place.tags}</p>
                           <p className="card-desc">{place.desc}</p>
                         </div>
@@ -1786,7 +1786,7 @@ function LoggedInMapView({ initialSearchQuery, initialFilter, onLogout, hideCont
                         <div style={{ fontSize: 12, color: 'var(--theme-text-muted)', marginTop: 2 }}>{loc.category || '—'} · {loc.similarity}% similar</div>
                       </div>
                       <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--theme-accent)', flexShrink: 0, marginLeft: 8 }}>
-                        {(loc.sensoryScores?.comfortScore ?? 0).toFixed(1)}
+                        {loc.trustworthy && loc.comfortScore != null ? loc.comfortScore.toFixed(1) : '—'}
                       </span>
                     </div>
                   ))}
