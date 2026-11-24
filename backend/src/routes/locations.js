@@ -8,6 +8,7 @@ import { cosineSimilarity } from "../lib/embeddings.js";
 import { getDisplayScore, displayScoreForLocation, locationHasTrustworthyScores } from "../lib/scores.js";
 import { computeMatch, compareMatches } from "../lib/matchScore.js";
 import { isBotReview, summarizeReviewSources } from "../lib/systemBot.js";
+import { logGoogleDenial } from "../lib/googleIssue.js";
 
 
 const router = express.Router()
@@ -375,6 +376,7 @@ router.get("/:id/hours", async (req, res) => {
         const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${location.googlePlaceId}&fields=opening_hours,utc_offset_minutes&key=${key}`;
         const response = await fetch(url);
         const data = await response.json();
+        logGoogleDenial("details(hours)", data, location.googlePlaceId);
 
         const hours = data.result?.opening_hours;
         if (!hours) return res.json({ available: false });
