@@ -1,3 +1,4 @@
+import { hasTrustworthyScores } from '../trustworthyScores.js';
 import { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { getAIInsights, getRecentCheckIns } from '../services/api';
@@ -83,24 +84,27 @@ function Dashboard({
   // Normalize saved places for list (backend: { location: { name, address, sensoryScores, estimatedScores }, locationId } )
   const savedPlaces = savedPlacesList.map((s) => {
     const loc = s.location || {};
-    const cs = loc.sensoryScores || {};
-    const comfort = cs.comfortScore ?? (6 - ((loc.estimatedNoiseScore ?? 3) + (loc.estimatedLightingScore ?? 3) + (loc.estimatedCrowdScore ?? 3)) / 3);
-    const noise = cs.noiseScore ?? loc.estimatedNoiseScore ?? 0;
-    const light = cs.lightingScore ?? loc.estimatedLightingScore ?? 0;
+    // Shared rule: numbers only when the server marked the place trustworthy; otherwise "Not enough data yet".
+    const ds = loc.displayScores || {};
+    const trusted = loc.trustworthy === true && hasTrustworthyScores({ noise: ds.noise, lighting: ds.lighting, crowd: ds.crowd, source: 'community' });
 
     const parts = [];
     if (userCoords && loc.latitude != null && loc.longitude != null) {
       parts.push(haversineDistance(userCoords.lat, userCoords.lng, loc.latitude, loc.longitude));
     }
-    parts.push(`Noise ${toleranceToLabel(noise)}`);
-    parts.push(`Lighting ${toleranceToLabel(light)}`);
+    if (trusted) {
+      parts.push(`Noise ${toleranceToLabel(ds.noise)}`);
+      parts.push(`Lighting ${toleranceToLabel(ds.lighting)}`);
+    } else {
+      parts.push('Not enough data yet');
+    }
 
     return {
       id: loc.id || s.locationId,
       name: loc.name || 'Unknown',
       meta: parts.join(' • ') || (loc.address || '—'),
-      score: (comfort || 0).toFixed(1),
-      tier: (comfort ?? 0) >= 3.5 ? 'high' : 'medium',
+      score: trusted ? ds.comfort.toFixed(1) : '—',
+      tier: trusted && ds.comfort >= 3.5 ? 'high' : 'medium',
     };
   });
 

@@ -1,5 +1,6 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
+import { displayScoreForLocation, locationHasTrustworthyScores } from "../lib/scores.js";
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.get("/", async (req, res) => {
                 estimatedNoiseScore: true,
                 estimatedLightingScore: true,
                 estimatedCrowdScore: true,
+                enrichmentConfidence: true,
                 sensoryScores: {
                     select: {
                         noiseScore: true,
@@ -38,27 +40,14 @@ router.get("/", async (req, res) => {
             }
         });
 
+        // Same rule and same numbers as the place panel: displayScoreForLocation + hasTrustworthyScores. Places with no
+        // trustworthy scores (no data, category placeholders, all-floor AI estimates) are left out, never ranked.
         const result = locations
+            .filter(locationHasTrustworthyScores)
             .map((loc) => {
-                const s = loc.sensoryScores;
-                // Community scores when real reviews exist; AI-estimated next; OSM defaults last
-                // Use || null to treat 0 as invalid (Gemini occasionally returns 0 outside valid range)
-                const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) || loc.estimatedNoiseScore || s?.noiseScore;
-                const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) || loc.estimatedLightingScore || s?.lightingScore;
-                const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) || loc.estimatedCrowdScore || s?.crowdScore;
-                if (noise == null) return null;
-
-                // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
-                // Guard nulls explicitly — JS coerces null to 0 in arithmetic, producing out-of-range values
-                const communityComfort = s?.reviewCount > 0 ? s?.comfortScore : null;
-                // No upper clamp: an all-minimum sensory profile (e.g. no-data placeholders
-                // at 0.5/0.5/0.5) would otherwise tie every such location at a flat 5 and
-                // outrank places with real, lower-intensity community reviews.
-                const estimatedComfort = (noise != null && lighting != null && crowd != null)
-                    ? Math.max(1, 6 - (noise + lighting + crowd) / 3)
-                    : null;
-                const comfort = communityComfort ?? estimatedComfort;
-
+                const d = displayScoreForLocation(loc);
+                // No upper clamp: see getDisplayScore. d.comfort is the community rating when there is one.
+                const comfort = d.comfort ?? Math.max(1, 6 - (d.noise + d.lighting + d.crowd) / 3);
                 return {
                     locationId: loc.id,
                     name: loc.name,
@@ -67,13 +56,12 @@ router.get("/", async (req, res) => {
                     longitude: loc.longitude,
                     latitude: loc.latitude,
                     comfortScore: +comfort.toFixed(2),
-                    noiseScore: noise,
-                    lightingScore: lighting,
-                    crowdScore: crowd,
-                    reviewCount: s?.reviewCount ?? 0,
+                    noiseScore: d.noise,
+                    lightingScore: d.lighting,
+                    crowdScore: d.crowd,
+                    reviewCount: loc.sensoryScores?.reviewCount ?? 0,
                 };
             })
-            .filter(Boolean)
             .sort((a, b) => b.comfortScore - a.comfortScore)
             .map((loc, index) => ({ rank: index + 1, ...loc }));
 

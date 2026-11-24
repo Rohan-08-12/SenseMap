@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { scoreToLabel } from '../utils.js';
+import { hasTrustworthyScores } from '../trustworthyScores.js';
 import { describeEvidence } from '../panelLabels.js';
 import MapView from './MapView';
 import EmailCaptureBanner from './EmailCaptureBanner';
@@ -265,6 +266,8 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
     ? { noiseScore: _ds.noise, lightingScore: _ds.lighting, crowdScore: _ds.crowd, comfortScore: _ds.comfort ?? (_ds.noise + _ds.lighting + _ds.crowd) / 3 }
     : (locationDetail?.sensoryScores || selectedLocation || {});
   const dataSource = _ds?.source ?? 'category';
+  // Shared rule (server: displayScores.trustworthy). Not trustworthy => no numbers, just the message.
+  const notEnoughData = dataSource === 'category' || (_ds ? _ds.trustworthy === false : selectedLocation?.trustworthy === false);
   const locationName = selectedLocation?.name || 'Select a location';
   const reviewCount = locationDetail?.sensoryScores?.reviewCount ?? locationDetail?.reviews?.length ?? 0;
   const evidence = describeEvidence({ dataSource, reviewSources: locationDetail?.reviewSources, reviews: locationDetail?.reviews, dataSourceField: locationDetail?.dataSource });
@@ -279,6 +282,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
 
   // Rating tags
   const ratingTags = (() => {
+    if (notEnoughData) return ['Not enough data yet'];
     if (reviewCount === 0 && dataSource === 'category') return ['No visits yet — be the first'];
     if (reviewCount === 0 && dataSource === 'estimated') return ['AI-estimated profile'];
     const tags = [];
@@ -525,9 +529,11 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                   const p = feat.properties;
                   const lat = feat.geometry.coordinates[1];
                   const lng = feat.geometry.coordinates[0];
-                  const score = p.comfortScore ?? 0;
-                  const tier = score >= 4 ? 'high' : score >= 2.5 ? 'medium' : 'low';
-                  const place = { id: p.id, name: p.name, category: p.category, latitude: lat, longitude: lng, score, tier, noise_score: p.noiseScore, lighting_score: p.lightingScore, crowd_score: p.crowdScore, comfort_score: p.comfortScore };
+                  const trusted = p.trustworthy === true
+                    && hasTrustworthyScores({ noise: p.noiseScore, lighting: p.lightingScore, crowd: p.crowdScore, source: 'community' });
+                  const score = trusted ? (p.comfortScore ?? null) : null;
+                  const tier = score == null ? 'low' : score >= 4 ? 'high' : score >= 2.5 ? 'medium' : 'low';
+                  const place = { id: p.id, name: p.name, category: p.category, address: p.address ?? null, latitude: lat, longitude: lng, score, tier, trustworthy: trusted, noise_score: trusted ? p.noiseScore : null, lighting_score: trusted ? p.lightingScore : null, crowd_score: trusted ? p.crowdScore : null, comfort_score: score };
                   return (
                     <div
                       key={p.id ?? p.name}
@@ -548,10 +554,11 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                             Directions
                           </button>
                         </div>
-                        <p>{p.category || 'Place'}</p>
+                        {p.address && <p className="nlm-card-address">{p.address}</p>}
+                        <p>{trusted ? (p.category || 'Place') : `${p.category || 'Place'} · Not enough data yet`}</p>
                       </div>
                       <div className={`nlm-ranked-score ${tier}`}>
-                        {score > 0 ? score.toFixed(1) : '—'}
+                        {score != null ? score.toFixed(1) : '—'}
                       </div>
                     </div>
                   );
@@ -595,6 +602,7 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                           Directions
                         </button>
                       </div>
+                      {place.address && <p className="nlm-card-address">{place.address}</p>}
                       <p>{place.tags}</p>
                     </div>
                     <div className={`nlm-ranked-score ${place.tier}`}>
@@ -713,9 +721,9 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
                 </div>
 
                 {/* Score Bars */}
-                {dataSource === 'category' ? (
+                {notEnoughData ? (
                   <div style={{ padding: 12, background: 'var(--theme-tag-soft)', borderRadius: 8, color: 'var(--theme-text-muted)', fontSize: 13, marginTop: 8 }}>
-                    No data yet — be the first to visit and review.
+                    Not enough data yet — be the first to visit and review.
                   </div>
                 ) : (
                   <div className="nlm-score-bars">
@@ -970,9 +978,9 @@ function NonLoginMapView({ onBackToHome, initialSearchQuery, initialFilter, onLo
               </div>
 
               {/* Score bars */}
-              {dataSource === 'category' ? (
+              {notEnoughData ? (
                 <div style={{ padding: '10px 12px', background: 'var(--theme-tag-soft)', borderRadius: 8, color: 'var(--theme-text-muted)', fontSize: 13 }}>
-                  No data yet — be the first to visit and review.
+                  Not enough data yet — be the first to visit and review.
                 </div>
               ) : (
                 <div className="nlm-score-bars">

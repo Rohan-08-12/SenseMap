@@ -1,10 +1,11 @@
 import express from "express";
 import { toGeoJSON } from "../lib/geojson.js";
+import { hasTrustworthyScores } from "../lib/trustworthyScores.js";
 import prisma from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncUser } from "../middleware/syncUser.js";
 import { cosineSimilarity } from "../lib/embeddings.js";
-import { getDisplayScore, displayScoreForLocation, isLowConfidence } from "../lib/scores.js";
+import { getDisplayScore, displayScoreForLocation, locationHasTrustworthyScores } from "../lib/scores.js";
 import { computeMatch, compareMatches } from "../lib/matchScore.js";
 import { isBotReview, summarizeReviewSources } from "../lib/systemBot.js";
 import { logGoogleDenial } from "../lib/googleIssue.js";
@@ -132,6 +133,7 @@ router.get("/heatmap", async (req, res) => {
                 estimatedNoiseScore: true,
                 estimatedLightingScore: true,
                 estimatedCrowdScore: true,
+                enrichmentConfidence: true,
                 sensoryScores: {
                     select: {
                         noiseScore: true,
@@ -144,35 +146,21 @@ router.get("/heatmap", async (req, res) => {
             }
         });
 
-        const heatMapData = locations.map((loc) => {
-            const s = loc.sensoryScores;
-            // Community scores when real reviews exist; AI-estimated next; OSM defaults last
-            // Use || null to treat 0 as invalid (Gemini occasionally returns 0 outside valid range)
-            const noise    = (s?.reviewCount > 0 ? s?.noiseScore    : null) || loc.estimatedNoiseScore || s?.noiseScore;
-            const lighting = (s?.reviewCount > 0 ? s?.lightingScore : null) || loc.estimatedLightingScore || s?.lightingScore;
-            const crowd    = (s?.reviewCount > 0 ? s?.crowdScore    : null) || loc.estimatedCrowdScore || s?.crowdScore;
-            // Only use community comfortScore when real reviews exist; otherwise derive from sensory intensity
-            // Guard nulls — JS coerces null to 0 in arithmetic, producing out-of-range scores
-            const communityComfort = s?.reviewCount > 0 ? s?.comfortScore : null;
-            // No upper clamp: an all-minimum sensory profile (e.g. no-data placeholders
-            // at 0.5/0.5/0.5) would otherwise tie every such location at a flat 5 and
-            // outrank places with real, lower-intensity community reviews.
-            const estimatedComfort = (noise != null && lighting != null && crowd != null)
-                ? Math.max(1, 6 - (noise + lighting + crowd) / 3)
-                : null;
-            const comfort = communityComfort ?? estimatedComfort;
-
+        // Only places that pass the shared "trustworthy scores" rule (same numbers as the panel) are drawn.
+        const heatMapData = locations.filter(locationHasTrustworthyScores).map((loc) => {
+            const d = displayScoreForLocation(loc);
+            const comfort = d.comfort ?? Math.max(1, 6 - (d.noise + d.lighting + d.crowd) / 3);
             return {
                 locationId: loc.id,
                 longitude: loc.longitude,
                 latitude: loc.latitude,
                 name: loc.name,
                 category: loc.category,
-                noiseScore:    clamp(noise),
-                lightingScore: clamp(lighting),
-                crowdScore:    clamp(crowd),
+                noiseScore:    clamp(d.noise),
+                lightingScore: clamp(d.lighting),
+                crowdScore:    clamp(d.crowd),
                 comfortScore:  clamp(comfort),
-                reviewCount:   s?.reviewCount ?? 0,
+                reviewCount:   loc.sensoryScores?.reviewCount ?? 0,
             };
         });
 
@@ -337,6 +325,7 @@ router.get("/similar/:id", async (req, res) => {
                 id: true, name: true, category: true, address: true,
                 latitude: true, longitude: true, imageUrl: true,
                 embedding: true, sensoryScores: true,
+                estimatedNoiseScore: true, estimatedLightingScore: true, estimatedCrowdScore: true, enrichmentConfidence: true,
             },
         });
 
@@ -351,6 +340,9 @@ router.get("/similar/:id", async (req, res) => {
                 longitude: loc.longitude,
                 imageUrl: loc.imageUrl,
                 sensoryScores: loc.sensoryScores,
+                // Same rule as everywhere else: numbers only when the scores are trustworthy.
+                trustworthy: locationHasTrustworthyScores(loc),
+                comfortScore: locationHasTrustworthyScores(loc) ? (displayScoreForLocation(loc).comfort ?? null) : null,
                 similarity: Math.round(cosineSimilarity(target.embedding, loc.embedding) * 100),
             }))
             .sort((a, b) => b.similarity - a.similarity)
@@ -438,7 +430,9 @@ router.get("/:id", async (req, res) => {
         });
         const reviewSources = summarizeReviewSources(allReviews);
 
-        res.json({ ...location, reviews, reviewSources, displayScores: { ...displayScores, lowConfidence: isLowConfidence(displayScores) }, facilities });
+        const trustworthy = hasTrustworthyScores(displayScores, location.enrichmentConfidence ?? null);
+        // lowConfidence is kept for existing clients; it now means "not trustworthy" (a superset of the old all-floor check).
+        res.json({ ...location, reviews, reviewSources, displayScores: { ...displayScores, trustworthy, lowConfidence: !trustworthy }, facilities });
     } catch (error) {
         console.error("Error fetching location:", error);
         res.status(500).json({ error: "Internal server error" });

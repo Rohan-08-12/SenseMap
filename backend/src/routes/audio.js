@@ -4,7 +4,8 @@ import prisma from "../lib/prisma.js";
 import cloudinary from "../lib/cloudinary.js";
 import { generateAudioSummary } from "../lib/elevenlabs.js";
 import { buildAudioScript, audioAvailability, audioPublicId, isAudioCacheValid, NO_AUDIO_MESSAGE } from "../lib/audioScript.js";
-import { displayScoreForLocation, isLowConfidence } from "../lib/scores.js";
+import { displayScoreForLocation } from "../lib/scores.js";
+import { hasTrustworthyScores } from "../lib/trustworthyScores.js";
 import { summarizeReviewSources } from "../lib/systemBot.js";
 
 const router = express.Router();
@@ -36,7 +37,7 @@ router.get("/:locationId", async (req, res) => {
     // Same scores the place panel shows. Nothing usable (or an AI guess with no signal) -> no audio at all,
     // decided BEFORE the cache so a stale file made from the old hardcoded fallback is never served.
     const display = displayScoreForLocation(location);
-    const availability = audioAvailability(display, isLowConfidence(display));
+    const availability = audioAvailability(display, !hasTrustworthyScores(display, location.enrichmentConfidence ?? null));
     if (!availability.available) {
       return res.json({ available: false, reason: availability.reason, audioUrl: null, message: NO_AUDIO_MESSAGE });
     }

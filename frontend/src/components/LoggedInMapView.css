@@ -614,6 +614,18 @@
   color: var(--theme-warning-text);
 }
 
+.lmv-nearby-score.none {
+  background: var(--theme-tag-soft);
+  color: var(--theme-text-muted);
+}
+
+.lmv-nearby-card-info .card-address {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--theme-text-muted);
+}
+
 .lmv-nearby-distance {
   font-size: 12px;
   font-weight: 400;

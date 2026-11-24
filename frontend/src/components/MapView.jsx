@@ -80,6 +80,8 @@ export default function MapView({ onLocationSelect, filters, searchResultsGeoJSO
                 crowd_score: f.properties.crowdScore ?? null,
                 comfort_score: f.properties.comfortScore ?? null,
                 review_count: f.properties.reviewCount ?? 0,
+                // Server's trustworthy-scores rule; absent (older response) counts as having data.
+                has_data: f.properties.trustworthy !== false,
             }));
         }
         return normalizedHeatmap;
@@ -107,6 +109,7 @@ export default function MapView({ onLocationSelect, filters, searchResultsGeoJSO
                 name: d.name,
                 category: d.category,
                 comfort_score: Math.min(5, Math.max(1, d.comfort_score || 2.5)),
+                has_data: d.has_data !== false,
                 noise_score: d.noise_score,
                 lighting_score: d.lighting_score,
                 crowd_score: d.crowd_score,
@@ -174,12 +177,12 @@ export default function MapView({ onLocationSelect, filters, searchResultsGeoJSO
                         id="comfort-heatmap"
                         type="heatmap"
                         paint={{
-                            'heatmap-weight': [
+                            'heatmap-weight': ['case', ['==', ['get', 'has_data'], false], 0, [
                                 'interpolate', ['linear'], ['get', 'comfort_score'],
                                 1, 0.1,
                                 3, 0.5,
                                 5, 1.0,
-                            ],
+                            ]],
                             'heatmap-intensity': [
                                 'interpolate', ['linear'], ['zoom'],
                                 10, 1,
@@ -216,14 +219,15 @@ export default function MapView({ onLocationSelect, filters, searchResultsGeoJSO
                             13, 7,
                             16, 11,
                         ],
-                        'circle-color': [
+                        // Places without trustworthy scores are drawn neutral grey, never coloured as if they had a score.
+                        'circle-color': ['case', ['==', ['get', 'has_data'], false], '#9ca3af', [
                             'interpolate', ['linear'], ['get', 'comfort_score'],
                             1, '#dc3c50',
                             2, '#f59e0b',
                             3, '#facc15',
                             4, '#4ade80',
                             5, '#22c55e',
-                        ],
+                        ]],
                         'circle-stroke-width': 2,
                         'circle-stroke-color': '#ffffff',
                         'circle-opacity': 0.92,
