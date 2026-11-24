@@ -6,18 +6,25 @@ import { assertLocalDb, parseMapsCoords, resolveMapsUrl, nameOverlap, processRow
 const KEY = "AIza-test-key-123";
 const place = (place_id, name, lat, lng, addr = "1 Main St, Oakville, ON") => ({ place_id, name, formatted_address: addr, geometry: { location: { lat, lng } } });
 
+// Fixtures are written in the legacy shape (place_id, name, formatted_address, geometry); the fake Google below
+// answers in the Places API (New) shape (id, displayName, formattedAddress, location), as the real one does.
+const toNew = (p) => ({ id: p.place_id, displayName: { text: p.name }, formattedAddress: p.formatted_address, location: { latitude: p.geometry.location.lat, longitude: p.geometry.location.lng } });
 function setup({ results = [], status = "OK", errorMessage, existing = new Set(), finalUrl = "https://www.google.com/maps/place/X/@43.4675,-79.6877,17z/data=!3d43.4675!4d-79.6877" } = {}) {
-    const calls = [], creates = [], logs = [];
+    const calls = [], reqs = [], creates = [], logs = [];
     const fetchImpl = async (url, opts) => {
         calls.push(String(url));
-        if (String(url).includes("maps.googleapis.com")) return { ok: true, status: 200, json: async () => ({ status, results, ...(errorMessage ? { error_message: errorMessage } : {}) }) };
+        if (String(url).includes("places.googleapis.com")) {
+            reqs.push({ url: String(url), ...opts });
+            if (status === "OK" || status === "ZERO_RESULTS") return { ok: true, status: 200, json: async () => (results.length ? { places: results.map(toNew) } : {}) };
+            return { ok: false, status: 403, json: async () => ({ error: { code: 403, status, ...(errorMessage ? { message: errorMessage } : {}) } }) };
+        }
         return { ok: true, status: 200, url: finalUrl };   // a Maps short link redirect
     };
     const prisma = { location: {
         findUnique: async ({ where }) => (existing.has(where.googlePlaceId) ? { id: "x" } : null),
         create: async (a) => { creates.push(a.data); return a.data; },
     } };
-    return { calls, creates, logs, fetchImpl, prisma, log: (...a) => logs.push(a.join(" ")) };
+    return { calls, reqs, creates, logs, fetchImpl, prisma, log: (...a) => logs.push(a.join(" ")) };
 }
 const row = { name: "We Rock the Spectrum Kids Gym - Oakville", category: "fitness", mapsUrl: "https://maps.app.goo.gl/abc" };
 const run = (s, rows, apply = false) => processRows(rows, { key: KEY, prisma: s.prisma, apply, fetchImpl: s.fetchImpl, log: s.log });
@@ -60,9 +67,10 @@ test("dry run (default): one text search per row, location-biased, nothing writt
     const { summary } = await run(s, [row]);
     assert.equal(s.creates.length, 0);
     assert.deepEqual(summary, { inserted: 0, wouldInsert: 1, skipped: 0 });
-    const searches = s.calls.filter((c) => c.includes("textsearch"));
-    assert.equal(searches.length, 1, "exactly one Places lookup per row");
-    assert.match(searches[0], /location=43\.4675,-79\.6877/);
+    assert.equal(s.reqs.length, 1, "exactly one Places lookup per row");
+    const sent = JSON.parse(s.reqs[0].body);
+    assert.equal(sent.textQuery, row.name);
+    assert.deepEqual(sent.locationBias.circle.center, { latitude: 43.4675, longitude: -79.6877 });
     assert.match(s.logs.join("\n"), /Dry run: would insert/);
     assert.ok(!s.logs.join("\n").includes(KEY), "the API key is never printed");
 });
@@ -117,7 +125,7 @@ test("no plausible match (wrong name or too far from the URL's coordinates): ski
 });
 
 test("lookup errors (ZERO_RESULTS, REQUEST_DENIED, bad row) skip the row and never leak the key", async () => {
-    for (const status of ["ZERO_RESULTS", "REQUEST_DENIED"]) {
+    for (const status of ["ZERO_RESULTS", "PERMISSION_DENIED"]) {
         const s = setup({ status });
         const r = await run(s, [row], true);
         assert.equal(s.creates.length, 0);
@@ -137,22 +145,46 @@ test("a network error never prints the key", async () => {
     assert.ok(!s.logs.join("\n").includes(KEY) && !JSON.stringify(r).includes(KEY));
 });
 
-test("a denied lookup prints Google's error_message (and never the key, even if Google echoes it)", async () => {
-    const msg = "This IP, site or mobile application is not authorized to use this API key. Request received from IP address 203.0.113.9";
-    const s = setup({ status: "REQUEST_DENIED", errorMessage: msg });
-    const r = await run(s, [row], true);
-    assert.equal(s.creates.length, 0);
-    assert.equal(r.outcomes[0].reason, `Places lookup returned REQUEST_DENIED: ${msg}`);
-    assert.match(s.logs.join("\n"), /REQUEST_DENIED: This IP, site or mobile application is not authorized/);
-
-    const s2 = setup({ status: "REQUEST_DENIED", errorMessage: `The provided API key is invalid. key=${KEY}` });
-    const r2 = await run(s2, [row], true);
-    assert.ok(!s2.logs.join("\n").includes(KEY) && !JSON.stringify(r2).includes(KEY));
-    assert.match(r2.outcomes[0].reason, /key=\*\*\*/);
+test("Places API (New): POST to places:searchText, key only in the X-Goog-Api-Key header, minimal field mask", async () => {
+    const s = setup({ results: [place("pid1", "We Rock the Spectrum - Oakville", 43.4675, -79.6877)] });
+    await run(s, [row]);
+    const r = s.reqs[0];
+    assert.equal(r.url, "https://places.googleapis.com/v1/places:searchText");
+    assert.equal(r.method, "POST");
+    assert.equal(r.headers["X-Goog-Api-Key"], KEY);
+    assert.equal(r.headers["X-Goog-FieldMask"], "places.id,places.displayName,places.formattedAddress,places.location");
+    assert.ok(!r.url.includes(KEY) && !r.url.includes("key="), "the key is not in the URL");
+    assert.ok(!r.body.includes(KEY));
 });
 
-test("a denied lookup without an error_message still names the status", async () => {
-    const s = setup({ status: "OVER_QUERY_LIMIT" });
+test("the new response is mapped to the same fields the legacy one gave (place_id, name, address, lat/lng)", async () => {
+    const s = setup({ results: [place("pid1", "We Rock the Spectrum - Oakville", 43.4675, -79.6877, "1 Main St, Oakville, ON")] });
+    await run(s, [row], true);
+    assert.deepEqual(s.creates[0], { googlePlaceId: "pid1", name: "We Rock the Spectrum - Oakville", category: "fitness", address: "1 Main St, Oakville, ON", latitude: 43.4675, longitude: -79.6877 });
+});
+
+test("a denied lookup prints Google's error message, and never the key even if Google echoes it", async () => {
+    const msg = "Places API (New) has not been used in project 123 before or it is disabled.";
+    const s = setup({ status: "PERMISSION_DENIED", errorMessage: msg });
+    const r = await run(s, [row], true);
+    assert.equal(s.creates.length, 0);
+    assert.equal(r.outcomes[0].reason, `Places lookup returned PERMISSION_DENIED: ${msg}`);
+    assert.match(s.logs.join("\n"), /PERMISSION_DENIED: Places API \(New\) has not been used/);
+
+    const s2 = setup({ status: "PERMISSION_DENIED", errorMessage: `API key ${KEY} not valid; key=${KEY}` });
+    const r2 = await run(s2, [row], true);
+    assert.ok(!s2.logs.join("\n").includes(KEY) && !JSON.stringify(r2).includes(KEY));
+    assert.match(r2.outcomes[0].reason, /key=\[redacted\]/);
+});
+
+test("dry run is still the default with the new API: no insert without --apply", async () => {
+    const s = setup({ results: [place("pid1", "We Rock the Spectrum - Oakville", 43.4675, -79.6877)] });
+    await run(s, [row], false);
+    assert.equal(s.creates.length, 0);
+});
+
+test("a denied lookup without an error message still names the status", async () => {
+    const s = setup({ status: "RESOURCE_EXHAUSTED" });
     const r = await run(s, [row]);
-    assert.equal(r.outcomes[0].reason, "Places lookup returned OVER_QUERY_LIMIT");
+    assert.equal(r.outcomes[0].reason, "Places lookup returned RESOURCE_EXHAUSTED");
 });

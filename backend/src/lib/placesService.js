@@ -1,5 +1,7 @@
 import prisma from "./prisma.js";
 import cloudinary from "./cloudinary.js";
+import { logGoogleDenial } from "./googleIssue.js";
+import { redactSecrets } from "./googlePlacesNew.js";
 import { textSearchPlaces } from "./placesSearch.js";
 
 const CATEGORY_MAP = {
@@ -42,7 +44,8 @@ function inToronto(lat, lng) {
 }
 
 export async function searchGooglePlaces(query, lat, lng) {
-    const { results } = await textSearchPlaces(query, { lat: lat ?? TORONTO_LAT, lng: lng ?? TORONTO_LNG, radius: 30000 });
+    const { status, errorMessage, results } = await textSearchPlaces(query, { lat: lat ?? TORONTO_LAT, lng: lng ?? TORONTO_LNG, radius: 30000 });
+    logGoogleDenial("textsearch", { status, error_message: errorMessage }, query);
     return results.filter(p =>
         inToronto(p.geometry?.location?.lat, p.geometry?.location?.lng)
     );
@@ -53,6 +56,7 @@ export async function getGooglePlaceDetails(placeId) {
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,geometry,types,reviews,rating,editorial_summary,photos,place_id&key=${key}`;
     const res = await fetch(url);
     const data = await res.json();
+    logGoogleDenial("details", data, placeId);
     return data.result || null;
 }
 
@@ -65,7 +69,7 @@ export async function uploadPlacePhoto(photoReference) {
         });
         return result.secure_url;
     } catch (err) {
-        console.error(`Photo upload failed: ${err.message}`);
+        console.error(`Photo upload failed: ${redactSecrets(err.message)}`);   // the failing URL can contain the key
         return null;
     }
 }

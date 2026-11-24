@@ -17,13 +17,18 @@
  *  - A row whose resolved googlePlaceId already exists is skipped.
  *  - If more than one plausible match comes back, the candidates are printed and the row is skipped. To resolve
  *    it, put the chosen candidate's place_id in the row as "pick": "<place_id>" and re-run.
- *  - COST: one Google Places Text Search request per row (Maps short links are followed with a plain HTTP GET,
- *    which is not a Places API call). No Details, photo, Gemini or Cloudinary calls.
+ *  - API: Places API (New) Text Search, POST places.googleapis.com/v1/places:searchText, key in the X-Goog-Api-Key
+ *    header, field mask places.id,places.displayName,places.formattedAddress,places.location. (The legacy
+ *    maps.googleapis.com Text Search is not used: Google no longer lets new projects enable it.)
+ *  - COST: one Text Search request per row, billed at Google's Text Search "Pro" rate because the mask includes
+ *    displayName/formattedAddress/location (check the current price on Google's Places pricing page; the first few
+ *    thousand calls a month are free). Maps short links are followed with a plain HTTP GET, which is not a Places
+ *    call. No Details, photo, Gemini or Cloudinary calls.
  */
 import "dotenv/config";
 import fs from "node:fs";
 import { haversineMetres } from "../src/lib/geo.js";
-import { textSearchPlaces } from "../src/lib/placesSearch.js";
+import { searchTextNew } from "../src/lib/googlePlacesNew.js";
 
 const MAPS_HOSTS = /^(maps\.app\.goo\.gl|goo\.gl|www\.google\.com|google\.com|maps\.google\.com|consent\.google\.com)$/;
 const MAX_DISTANCE_M = 10_000;     // a plausible match is within 10 km of the Maps URL's coordinates
@@ -90,17 +95,13 @@ export function plausibleCandidates(row, results, coords) {
 }
 
 /**
- * The single Places lookup for a row, through the same helper and request as the app's search
- * (src/lib/placesSearch.js). Returns { status, errorMessage, results }; never throws and never includes the key.
+ * The single Places lookup for a row: Places API (New) Text Search with the smallest field mask
+ * (id, displayName, formattedAddress, location), biased to the Maps URL's coordinates when there are any.
+ * Returns { status, errorMessage, results } with results in the legacy field names; never throws, never includes the key.
  */
 export async function textSearch(row, coords, { key, fetchImpl = fetch }) {
-    const redact = (v) => (v == null ? v : String(v).split(key).join("***"));
-    try {
-        const r = await textSearchPlaces(row.name, { lat: coords?.lat, lng: coords?.lng, radius: 2000, key, fetchImpl });
-        return { status: r.status || "UNKNOWN", errorMessage: redact(r.errorMessage), results: r.results };
-    } catch (err) {
-        return { status: "NETWORK_ERROR", errorMessage: redact(err.message), results: [] };
-    }
+    const r = await searchTextNew(row.name, { lat: coords?.lat, lng: coords?.lng, radius: 2000, key, fetchImpl });
+    return { status: r.status, errorMessage: r.errorMessage, results: r.places };
 }
 
 const describe = (p) => `${p.name} | ${p.formatted_address} | ${p.geometry?.location?.lat},${p.geometry?.location?.lng} | ${p.place_id}`;
@@ -119,7 +120,7 @@ export async function processRows(rows, { key, prisma, apply = false, fetchImpl 
 
         const { status, errorMessage, results } = await textSearch(row, coords, { key, fetchImpl });
         if (status !== "OK") {
-            // Google's own explanation (e.g. REQUEST_DENIED: "This IP, site or mobile application is not authorized...").
+            // Google's own explanation, e.g. PERMISSION_DENIED: "Places API (New) has not been used in project ... or it is disabled".
             out.reason = `Places lookup returned ${status}${errorMessage ? `: ${errorMessage}` : ""}`;
             log(`  SKIP: ${out.reason}`);
             continue;
