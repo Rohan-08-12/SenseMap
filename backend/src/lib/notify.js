@@ -34,8 +34,23 @@ export async function notifyNewSubscriber({ email, source }) {
     }
 }
 
+/**
+ * The only address the stale-watchdog email may go to: ADMIN_NOTIFY_EMAIL, as one plain address.
+ * Never a subscriber, audience or any address from the database. Unset/empty (or a list of addresses) = no send.
+ */
+export function adminRecipient(env = process.env) {
+    const to = (env.ADMIN_NOTIFY_EMAIL || "").trim();
+    if (!to || /[,;\s]/.test(to)) return null;
+    return to;
+}
+
 export async function notifyEnrichmentStale({ hoursSinceLastSuccess, hoursSinceLastUpdate, lastRun }) {
-    if (!resend || !process.env.ADMIN_NOTIFY_EMAIL) return;
+    if (!resend) return;
+    const to = adminRecipient();
+    if (!to) {
+        console.warn("[Enrichment] Stale alert not sent: ADMIN_NOTIFY_EMAIL is not set to a single address");
+        return;
+    }
 
     try {
         const ago = (h) => (h == null ? "never" : `${h}h ago`);
@@ -44,7 +59,7 @@ export async function notifyEnrichmentStale({ hoursSinceLastSuccess, hoursSinceL
             : "none recorded";
         const { error } = await resend.emails.send({
             from: FROM,
-            to: process.env.ADMIN_NOTIFY_EMAIL,
+            to,
             subject: "SenseMap: no places updated by enrichment in 36h",
             text: `Last time any place was updated: ${ago(hoursSinceLastUpdate)}\nLast run that finished successfully (even if it updated nothing): ${ago(hoursSinceLastSuccess)}\nMost recent run: ${last}\n\nCheck GET /enrichment/freshness (x-n8n-secret header) and the Railway logs.`,
         });

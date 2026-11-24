@@ -1,6 +1,6 @@
 // !!! INTEGRATION TEST: NEEDS A THROWAWAY LOCAL POSTGRES !!!
 //  - Refuses to run unless DATABASE_URL's host is localhost / 127.0.0.1.
-//  - It DELETES ALL ROWS in the "EnrichmentRun" and "Location" tables before EVERY test. Never point it at a
+//  - It DELETES ALL ROWS in the "EnrichmentRun", "Location" and "AlertState" tables before EVERY test. Never point it at a
 //    database whose data you want to keep.
 //  - It must NOT run in parallel with the other lock test file (enrichment-freshness.test.js and
 //    enrichment-lock-extra.test.js share one database and wipe each other's rows, giving false failures).
@@ -55,6 +55,7 @@ after(async () => { server.close(); await prisma.$disconnect(); });
 beforeEach(async () => {
     await prisma.enrichmentRun.deleteMany();
     await prisma.location.deleteMany();
+    await prisma.alertState.deleteMany();
     sentEmails.length = 0;
     scrapeImpl = async () => ({ combinedText: "", sources: [], yelpId: null, osmFacilities: null });
 });
@@ -235,6 +236,49 @@ test("6b. a recent success that updated nothing still alerts, and the email says
     assert.match(sentEmails[0].text, /finished successfully \(even if it updated nothing\): 2(\.\d)?h ago/);
     await fresh();
     assert.equal(sentEmails.length, 1, "deduped: at most one email per 24h while unhealthy");
+});
+
+test("6c. the alert time is stored in Postgres: a 'restart' (fresh module, empty memory) does not re-send; recovery clears it", async () => {
+    await run({ status: "failed", startedAt: ago(40), finishedAt: ago(40) });
+    const { checkEnrichmentFreshness: before } = await import("../src/lib/scheduler.js?before-restart");
+    await before();
+    assert.equal(sentEmails.length, 1);
+    const row = await prisma.alertState.findUnique({ where: { key: "enrichment-stale" } });
+    assert.ok(row && Date.now() - row.lastSentAt.getTime() < 60_000);
+
+    const { checkEnrichmentFreshness: afterRestart } = await import("../src/lib/scheduler.js?after-restart");
+    await afterRestart();
+    assert.equal(sentEmails.length, 1, "no repeat after restart");
+
+    await run({ status: "success", startedAt: ago(1), finishedAt: ago(1), planned: 2, updated: 2 }); // healthy again
+    await afterRestart();
+    assert.equal(await prisma.alertState.count(), 0, "stored time cleared on recovery");
+
+    await prisma.enrichmentRun.deleteMany();
+    await run({ status: "failed", startedAt: ago(40), finishedAt: ago(40) }); // new outage
+    const { checkEnrichmentFreshness: later } = await import("../src/lib/scheduler.js?new-outage");
+    await later();
+    assert.equal(sentEmails.length, 2, "new outage alerts immediately");
+    assert.equal(sentEmails[1].to, "admin@example.test");
+    assert.equal(sentEmails[1].cc, undefined); assert.equal(sentEmails[1].bcc, undefined);
+});
+
+test("6d. /enrichment/freshness: placesUpdatedLast7d sums 'updated' of runs started in the last 7 days; enrichedLast7d is unchanged", async () => {
+    await run({ status: "success", startedAt: ago(1), finishedAt: ago(0.9), planned: 9, updated: 4, skipped: 5 });
+    await run({ status: "success", startedAt: ago(24 * 6), finishedAt: ago(24 * 6 - 0.1), planned: 3, updated: 2 });
+    await run({ status: "failed", startedAt: ago(24 * 3), finishedAt: ago(24 * 3 - 0.1), planned: 2, updated: 1, failed: 1 });
+    await run({ status: "success", startedAt: ago(24 * 8), finishedAt: ago(24 * 8 - 0.1), planned: 50, updated: 40 }); // outside the window
+    await prisma.location.createMany({ data: [loc("A", ago(1)), loc("B", ago(1)), loc("C", ago(24 * 20)), loc("D")] });
+    const res = await fetch(`${base}/enrichment/freshness`, { headers: { "x-n8n-secret": "test-secret" } });
+    const body = await res.json();
+    assert.equal(body.locations.placesUpdatedLast7d, 7);
+    assert.equal(body.locations.enrichedLast7d, 2, "existing field still counts any place whose lastEnrichedAt moved");
+    assert.equal(body.hoursSinceLastUpdateText.endsWith("h"), true);
+
+    await prisma.enrichmentRun.deleteMany();
+    const empty = await (await fetch(`${base}/enrichment/freshness`, { headers: { "x-n8n-secret": "test-secret" } })).json();
+    assert.equal(empty.locations.placesUpdatedLast7d, 0);
+    assert.equal(empty.hoursSinceLastUpdateText, "never");
 });
 
 test("7. hourly missed-run check against real Postgres: starts a 'catchup' run when none started in 26h, honours the lock and recent runs", async () => {
