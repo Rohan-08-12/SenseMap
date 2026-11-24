@@ -1,6 +1,7 @@
 // Run: node --experimental-test-module-mocks --test test/add-extra-places.test.js  (no DB, no network: everything is injected)
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { fakeLocationDb } from "./helpers/fakeLocationDb.js";
 import { assertLocalDb, parseMapsCoords, resolveMapsUrl, nameOverlap, processRows } from "../scripts/add_extra_places.js";
 
 const KEY = "AIza-test-key-123";
@@ -9,7 +10,7 @@ const place = (place_id, name, lat, lng, addr = "1 Main St, Oakville, ON") => ({
 // Fixtures are written in the legacy shape (place_id, name, formatted_address, geometry); the fake Google below
 // answers in the Places API (New) shape (id, displayName, formattedAddress, location), as the real one does.
 const toNew = (p) => ({ id: p.place_id, displayName: { text: p.name }, formattedAddress: p.formatted_address, location: { latitude: p.geometry.location.lat, longitude: p.geometry.location.lng } });
-function setup({ results = [], status = "OK", errorMessage, existing = new Set(), finalUrl = "https://www.google.com/maps/place/X/@43.4675,-79.6877,17z/data=!3d43.4675!4d-79.6877" } = {}) {
+function setup({ results = [], status = "OK", errorMessage, existing = new Set(), stored = [], finalUrl = "https://www.google.com/maps/place/X/@43.4675,-79.6877,17z/data=!3d43.4675!4d-79.6877" } = {}) {
     const calls = [], reqs = [], creates = [], logs = [];
     const fetchImpl = async (url, opts) => {
         calls.push(String(url));
@@ -20,11 +21,9 @@ function setup({ results = [], status = "OK", errorMessage, existing = new Set()
         }
         return { ok: true, status: 200, url: finalUrl };   // a Maps short link redirect
     };
-    const prisma = { location: {
-        findUnique: async ({ where }) => (existing.has(where.googlePlaceId) ? { id: "x" } : null),
-        create: async (a) => { creates.push(a.data); return a.data; },
-    } };
-    return { calls, reqs, creates, logs, fetchImpl, prisma, log: (...a) => logs.push(a.join(" ")) };
+    const db = fakeLocationDb([...[...existing].map((id) => ({ id: "x", googlePlaceId: id, name: "Stored", latitude: 0, longitude: 0 })), ...stored]);
+    const prisma = { location: { ...db.prisma.location, create: async (a) => { creates.push(a.data); return a.data; } } };
+    return { calls, reqs, creates, logs, fetchImpl, prisma, db, log: (...a) => logs.push(a.join(" ")) };
 }
 const row = { name: "We Rock the Spectrum Kids Gym - Oakville", category: "fitness", mapsUrl: "https://maps.app.goo.gl/abc" };
 const run = (s, rows, apply = false) => processRows(rows, { key: KEY, prisma: s.prisma, apply, fetchImpl: s.fetchImpl, log: s.log });
@@ -66,7 +65,7 @@ test("dry run (default): one text search per row, location-biased, nothing writt
     const s = setup({ results: [place("pid1", "We Rock the Spectrum - Oakville", 43.4675, -79.6877)] });
     const { summary } = await run(s, [row]);
     assert.equal(s.creates.length, 0);
-    assert.deepEqual(summary, { inserted: 0, wouldInsert: 1, skipped: 0 });
+    assert.deepEqual(summary, { inserted: 0, wouldInsert: 1, attached: 0, wouldAttach: 0, skipped: 0 });
     assert.equal(s.reqs.length, 1, "exactly one Places lookup per row");
     const sent = JSON.parse(s.reqs[0].body);
     assert.equal(sent.textQuery, row.name);
@@ -187,4 +186,37 @@ test("a denied lookup without an error message still names the status", async ()
     const s = setup({ status: "RESOURCE_EXHAUSTED" });
     const r = await run(s, [row]);
     assert.equal(r.outcomes[0].reason, "Places lookup returned RESOURCE_EXHAUSTED");
+});
+
+// ── shared "find existing place" check (same rules as /discover) ─────────────────────────────────────────────────────
+test("a stored OSM row with the same exact name within 100 m gets the Google id attached: no second row, category kept", async () => {
+    const osm = { id: "osm1", googlePlaceId: "osm_node_1", name: "We Rock the Spectrum - Oakville", category: "Fitness", latitude: 43.4675, longitude: -79.6877 };
+    const s = setup({ results: [place("pid1", "We Rock the Spectrum - Oakville", 43.4676, -79.6877)], stored: [osm] });
+    const dry = await run(s, [row]);
+    assert.equal(dry.outcomes[0].action, "would-attach");
+    assert.equal(s.db.log.updates.length, 0);
+    const r = await run(s, [row], true);
+    assert.equal(r.outcomes[0].action, "attached");
+    assert.equal(s.creates.length, 0, "no new row");
+    assert.deepEqual(s.db.log.updates, [{ id: "osm1", data: { googlePlaceId: "pid1" } }]);
+    assert.equal(s.db.rows[0].category, "Fitness", "the OSM category spelling is not rewritten to the row's \"fitness\"");
+});
+
+test("a stored row with a different REAL Google id and the same name is never overwritten", async () => {
+    const other = { id: "g1", googlePlaceId: "ChIJother", name: "We Rock the Spectrum - Oakville", latitude: 43.4675, longitude: -79.6877 };
+    const s = setup({ results: [place("pid1", "We Rock the Spectrum - Oakville", 43.4675, -79.6877)], stored: [other] });
+    const r = await run(s, [row], true);
+    assert.equal(r.outcomes[0].action, "skip");
+    assert.match(r.outcomes[0].reason, /different Google id/);
+    assert.equal(s.db.log.updates.length, 0);
+    assert.equal(s.creates.length, 0);
+});
+
+test("a name that only CONTAINS the stored name is a different place and is inserted", async () => {
+    const mall = { id: "m1", googlePlaceId: "osm_node_2", name: "Woodside Square", latitude: 43.4675, longitude: -79.6877 };
+    const r2 = { name: "Toronto Public Library - Woodside Square", category: "library", mapsUrl: "https://maps.app.goo.gl/abc" };
+    const s = setup({ results: [place("pid2", "Toronto Public Library - Woodside Square", 43.4675, -79.6877)], stored: [mall] });
+    const r = await run(s, [r2], true);
+    assert.equal(r.outcomes[0].action, "inserted");
+    assert.equal(s.db.log.updates.length, 0);
 });
