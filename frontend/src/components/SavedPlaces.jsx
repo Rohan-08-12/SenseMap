@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getAIInsights, getLocationById } from '../services/api';
 import { scoreToLabel } from '../utils.js';
+import { hasTrustworthyScores } from '../trustworthyScores.js';
 import './SavedPlaces.css';
 
 function haversineKm(lat1, lon1, lat2, lon2) {
@@ -72,10 +73,13 @@ function SavedPlaces({ savedPlacesList = [], userCoords, userProfile, matchScore
     const matchPct = ms?.matchScore ?? null;
     const score10 = sensoryMatch10(matchPct);
 
-    const noise    = cs.noiseScore    ?? loc.estimatedNoiseScore    ?? 0;
-    const lighting = cs.lightingScore ?? loc.estimatedLightingScore ?? 0;
-    const crowd    = cs.crowdScore    ?? loc.estimatedCrowdScore    ?? 0;
-    const comfort  = cs.comfortScore  ?? (noise > 0 ? 6 - (noise + lighting + crowd) / 3 : 0);
+    // Numbers only when the server marked the place trustworthy (shared rule); otherwise "Not enough data yet".
+    const ds = loc.displayScores || {};
+    const trustworthy = loc.trustworthy === true && hasTrustworthyScores({ noise: ds.noise, lighting: ds.lighting, crowd: ds.crowd, source: 'community' });
+    const noise    = trustworthy ? ds.noise    : 0;
+    const lighting = trustworthy ? ds.lighting : 0;
+    const crowd    = trustworthy ? ds.crowd    : 0;
+    const comfort  = trustworthy ? ds.comfort  : 0;
 
     let km = null;
     if (userCoords && loc.latitude != null && loc.longitude != null) {
@@ -91,7 +95,7 @@ function SavedPlaces({ savedPlacesList = [], userCoords, userProfile, matchScore
       imageUrl: loc.imageUrl || null,
       latitude: loc.latitude,
       longitude: loc.longitude,
-      comfort, noise, lighting, crowd,
+      comfort, noise, lighting, crowd, trustworthy,
       reviewCount: cs.reviewCount ?? 0,
       matchPct,
       score10: score10 != null ? parseFloat(score10) : null,
@@ -237,16 +241,16 @@ function SavedPlaces({ savedPlacesList = [], userCoords, userProfile, matchScore
                   )}
                 </div>
                 <p className="sp-place-meta">
-                  {distLabel(place.km) || '—'} • {place.category || 'Location'} • {scoreToLabel(place.crowd)} crowding
+                  {distLabel(place.km) || '—'} • {place.category || 'Location'}{place.trustworthy ? ` • ${scoreToLabel(place.crowd)} crowding` : ' • Not enough data yet'}
                 </p>
                 <p className="sp-place-desc">
-                  {place.description || `A ${place.category?.toLowerCase() || 'location'} with noise level ${scoreToLabel(place.noise).toLowerCase()}, ${scoreToLabel(place.lighting).toLowerCase()} lighting, and ${scoreToLabel(place.crowd).toLowerCase()} crowd levels.`}
+                  {place.description || (!place.trustworthy ? 'Not enough data yet to describe this place.' : `A ${place.category?.toLowerCase() || 'location'} with noise level ${scoreToLabel(place.noise).toLowerCase()}, ${scoreToLabel(place.lighting).toLowerCase()} lighting, and ${scoreToLabel(place.crowd).toLowerCase()} crowd levels.`)}
                 </p>
                 <div className="sp-place-tags">
-                  {place.noise < 2 && <span className="sp-tag">Quiet environment</span>}
-                  {place.lighting < 2.5 && <span className="sp-tag">Soft lighting</span>}
-                  {place.crowd < 2 && <span className="sp-tag">Low crowds</span>}
-                  {place.comfort >= 3.5 && <span className="sp-tag">Comfortable</span>}
+                  {place.trustworthy && place.noise < 2 && <span className="sp-tag">Quiet environment</span>}
+                  {place.trustworthy && place.lighting < 2.5 && <span className="sp-tag">Soft lighting</span>}
+                  {place.trustworthy && place.crowd < 2 && <span className="sp-tag">Low crowds</span>}
+                  {place.trustworthy && place.comfort >= 3.5 && <span className="sp-tag">Comfortable</span>}
                   {place.category && <span className="sp-tag">{place.category}</span>}
                 </div>
               </div>
@@ -357,8 +361,8 @@ function SavedPlaceDetail({ place, onBack, onRemove }) {
               </div>
             )}
             <div className="spd-hero-tags">
-              {place.crowd < 2.5 && <span className="spd-hero-tag">Lower crowding</span>}
-              {place.noise < 2.5 && <span className="spd-hero-tag">Quiet area</span>}
+              {place.trustworthy && place.crowd < 2.5 && <span className="spd-hero-tag">Lower crowding</span>}
+              {place.trustworthy && place.noise < 2.5 && <span className="spd-hero-tag">Quiet area</span>}
               {place.category && <span className="spd-hero-tag">{place.category}</span>}
             </div>
           </div>
@@ -368,9 +372,9 @@ function SavedPlaceDetail({ place, onBack, onRemove }) {
             <div className="spd-title-left">
               <span className="spd-profile-badge">Location sensory profile</span>
               <h1>{place.name}</h1>
-              <p className="spd-title-meta">{dist || '—'} • {place.category || 'Location'} • {scoreToLabel(place.crowd)} crowding</p>
+              <p className="spd-title-meta">{dist || '—'} • {place.category || 'Location'}{place.trustworthy ? ` • ${scoreToLabel(place.crowd)} crowding` : ' • Not enough data yet'}</p>
               <p className="spd-title-desc">
-                {place.description || (detail?.description) || `Visitors with sensory sensitivities describe ${place.name} as ${scoreToLabel(noiseScore).toLowerCase()} noise, ${scoreToLabel(lightScore).toLowerCase()} lighting, and comfortable for shorter visits.`}
+                {place.description || (detail?.description) || (!place.trustworthy ? 'Not enough data yet to describe this place.' : `Visitors with sensory sensitivities describe ${place.name} as ${scoreToLabel(noiseScore).toLowerCase()} noise, ${scoreToLabel(lightScore).toLowerCase()} lighting, and comfortable for shorter visits.`)}
               </p>
             </div>
             <div className="spd-match-box">
@@ -453,10 +457,14 @@ function SavedPlaceDetail({ place, onBack, onRemove }) {
                   <p className="spd-rating-hint">Most visitors describe it as comfortable and easy to plan around.</p>
                 </div>
                 <div className="spd-community-right">
+                  {!place.trustworthy ? (
+                    <p className="spd-rating-hint">Not enough data yet</p>
+                  ) : (<>
                   <div className="spd-bar-row"><span className="spd-bar-label">Quietness</span><div className="spd-bar-track"><div className="spd-bar-fill blue" style={{ width: `${((5 - noiseScore) / 5) * 100}%` }} /></div><span className="spd-bar-val">{(10 - noiseScore * 2).toFixed(1)} / 10</span></div>
                   <div className="spd-bar-row"><span className="spd-bar-label">Crowding comfort</span><div className="spd-bar-track"><div className="spd-bar-fill teal" style={{ width: `${((5 - crowdScore) / 5) * 100}%` }} /></div><span className="spd-bar-val">{(10 - crowdScore * 2).toFixed(1)} / 10</span></div>
                   <div className="spd-bar-row"><span className="spd-bar-label">Lighting comfort</span><div className="spd-bar-track"><div className="spd-bar-fill purple" style={{ width: `${((5 - lightScore) / 5) * 100}%` }} /></div><span className="spd-bar-val">{(10 - lightScore * 2).toFixed(1)} / 10</span></div>
                   <div className="spd-bar-row"><span className="spd-bar-label">Predictability</span><div className="spd-bar-track"><div className="spd-bar-fill green" style={{ width: `${(comfortScore / 5) * 100}%` }} /></div><span className="spd-bar-val">{(comfortScore * 2).toFixed(1)} / 10</span></div>
+                  </>)}
                 </div>
               </div>
             ) : (
@@ -527,7 +535,7 @@ function SavedPlaceDetail({ place, onBack, onRemove }) {
         )}
 
         {/* Sensory Radar Chart (simplified visual) */}
-        {reviews.length > 0 && (
+        {reviews.length > 0 && place.trustworthy && (
           <div className="spd-sidebar-card">
             <h4>Sensory Radar Chart</h4>
             <p className="spd-sidebar-desc">Environmental profile overview</p>
@@ -556,7 +564,7 @@ function SavedPlaceDetail({ place, onBack, onRemove }) {
         )}
 
         {/* Comfort Score Breakdown */}
-        {reviews.length > 0 && (
+        {reviews.length > 0 && place.trustworthy && (
           <div className="spd-sidebar-card">
             <h4>Comfort Score Breakdown</h4>
             <p className="spd-sidebar-desc">How we calculated your {(place.score10 ?? comfortScore).toFixed?.(1) || '—'} score</p>
@@ -578,7 +586,7 @@ function SavedPlaceDetail({ place, onBack, onRemove }) {
         )}
 
         {/* Sensory Time Pattern */}
-        {reviews.length > 0 && (
+        {reviews.length > 0 && place.trustworthy && (
           <div className="spd-sidebar-card">
             <h4>Sensory Time Pattern</h4>
             <p className="spd-sidebar-desc">Activity levels throughout the day</p>
