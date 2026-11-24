@@ -174,10 +174,17 @@ test("a denied lookup prints Google's error message, and never the key even if G
     const s2 = setup({ status: "PERMISSION_DENIED", errorMessage: `API key ${KEY} not valid; key=${KEY}` });
     const r2 = await run(s2, [row], true);
     assert.ok(!s2.logs.join("\n").includes(KEY) && !JSON.stringify(r2).includes(KEY));
+    assert.match(r2.outcomes[0].reason, /key=\[redacted\]/);
 });
 
 test("dry run is still the default with the new API: no insert without --apply", async () => {
     const s = setup({ results: [place("pid1", "We Rock the Spectrum - Oakville", 43.4675, -79.6877)] });
     await run(s, [row], false);
     assert.equal(s.creates.length, 0);
+});
+
+test("a denied lookup without an error message still names the status", async () => {
+    const s = setup({ status: "RESOURCE_EXHAUSTED" });
+    const r = await run(s, [row]);
+    assert.equal(r.outcomes[0].reason, "Places lookup returned RESOURCE_EXHAUSTED");
 });

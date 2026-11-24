@@ -2,6 +2,7 @@ import prisma from "./prisma.js";
 import cloudinary from "./cloudinary.js";
 import { logGoogleDenial } from "./googleIssue.js";
 import { redactSecrets } from "./googlePlacesNew.js";
+import { textSearchPlaces } from "./placesSearch.js";
 
 const CATEGORY_MAP = {
     library: "library",
@@ -43,14 +44,9 @@ function inToronto(lat, lng) {
 }
 
 export async function searchGooglePlaces(query, lat, lng) {
-    const key = process.env.GOOGLE_PLACES_KEY;
-    const searchLat = lat ?? TORONTO_LAT;
-    const searchLng = lng ?? TORONTO_LNG;
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${searchLat},${searchLng}&radius=30000&key=${key}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    logGoogleDenial("textsearch", data, query);
-    return (data.results || []).filter(p =>
+    const { status, errorMessage, results } = await textSearchPlaces(query, { lat: lat ?? TORONTO_LAT, lng: lng ?? TORONTO_LNG, radius: 30000 });
+    logGoogleDenial("textsearch", { status, error_message: errorMessage }, query);
+    return results.filter(p =>
         inToronto(p.geometry?.location?.lat, p.geometry?.location?.lng)
     );
 }
