@@ -194,3 +194,75 @@ test("recipient: the watchdog never reads the subscriber table", async () => {
     assert.equal(sent.length, 1);
     assert.equal(sent[0].to, "admin@example.test");
 });
+
+// ─── Dedupe depends only on the stored alert time ───────────────────────────
+// Regression for two stale emails an hour apart whose bodies differed ("last successful run 4.9h ago" vs "5.9h ago").
+const T0 = Date.parse("2026-11-24T06:15:00Z");
+const at = (h) => new Date(T0 + h * H);
+test("dedupe: 4 checks one simulated hour apart with changing hours and run status send exactly once", async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: T0 });
+    // Last update 40h before T0; a success that updated nothing 4.9h before T0 (so "last successful run 4.9h ago", then 5.9h, ...).
+    run({ updated: 3, startedAt: at(-40), finishedAt: at(-40) });
+    run({ updated: 0, startedAt: at(-5), finishedAt: at(-4.9) });
+    const statuses = ["failed", "success", "abandoned", "failed"]; // lastRun status changes every hour
+    const seenBodies = new Set();
+    for (let i = 0; i < 4; i++) {
+        if (i > 0) {
+            t.mock.timers.tick(H);
+            run({ status: statuses[i], updated: 0, startedAt: at(i - 0.2), finishedAt: at(i - 0.1) });
+        }
+        await checkEnrichmentFreshness();
+        if (sent[sent.length - 1]) seenBodies.add(sent[sent.length - 1].text);
+    }
+    assert.equal(sent.length, 1, "exactly one email over four hourly checks");
+    assert.equal(seenBodies.size, 1);
+    // Prove the report itself really changed between checks, so the dedupe is not passing by accident.
+    const { getFreshness } = await import("../src/lib/enrichmentRuns.js");
+    const now = await getFreshness();
+    assert.notEqual(now.hoursSinceLastSuccess, 4.9);
+    assert.equal(now.lastRun.status, "failed");
+});
+
+test("dedupe: a second send happens only after 24h", async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: T0 });
+    run({ updated: 3, startedAt: at(-40), finishedAt: at(-40) });
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 1);
+    t.mock.timers.tick(23 * H + 59 * 60_000);
+    run({ status: "failed", startedAt: at(23.9), finishedAt: at(23.9) });
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 1, "23h59m later: still deduped");
+    t.mock.timers.tick(2 * 60_000);
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 2, "just past 24h: sends again");
+    t.mock.timers.tick(H);
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 2, "and the 24h window restarts");
+});
+
+test("dedupe: after a restart too, only the stored time decides (bodies differ, still one send until 24h)", async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: T0 });
+    run({ updated: 3, startedAt: at(-40), finishedAt: at(-40) });
+    run({ updated: 0, startedAt: at(-5), finishedAt: at(-4.9) });
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 1);
+    t.mock.timers.tick(H); _resetAlertMemory();   // redeploy an hour later: memory gone, DB row remains
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 1, "the 4.9h-vs-5.9h body difference does not cause a second send");
+});
+
+test("dedupe: recovery then a new failure sends again, even inside the 24h window", async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: T0 });
+    run({ updated: 3, startedAt: at(-40), finishedAt: at(-40) });
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 1);
+    t.mock.timers.tick(H);
+    run({ updated: 5, startedAt: at(0.9), finishedAt: at(0.95) });       // a run updated places: healthy
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 1);
+    runs.length = 0;
+    run({ updated: 3, startedAt: at(-50), finishedAt: at(-50) });          // fails again (36h+ since an update)
+    t.mock.timers.tick(H);
+    await checkEnrichmentFreshness();
+    assert.equal(sent.length, 2, "new outage after recovery alerts immediately");
+});
