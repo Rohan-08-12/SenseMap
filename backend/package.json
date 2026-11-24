@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "test:db": "node --experimental-test-module-mocks --test --test-concurrency=1 test/enrichment-freshness.test.js test/enrichment-lock-extra.test.js test/enrichment-run-integration.test.js test/enrichment-limits-db.test.js",
-    "test": "node --experimental-test-module-mocks --test --test-concurrency=1 test/match-score.test.js test/enrichment-validation.test.js test/enrichment-limits.test.js test/insight-confidence.test.js test/curated-labels-radar.test.js test/audio-and-insights-routes.test.js test/google-places-issues.test.js test/enrichment-skip-reasons.test.js test/enrichment-health.test.js test/enrichment-alert-persist.test.js test/missed-run-check.test.js test/dry-run-stats.test.js test/add-extra-places.test.js test/cleanup-non-toronto.test.js",
+    "test": "node --experimental-test-module-mocks --test --test-concurrency=1 test/match-score.test.js test/enrichment-validation.test.js test/enrichment-limits.test.js test/insight-confidence.test.js test/curated-labels-radar.test.js test/audio-and-insights-routes.test.js test/google-places-issues.test.js test/enrichment-skip-reasons.test.js test/enrichment-health.test.js test/enrichment-alert-persist.test.js test/missed-run-check.test.js test/dry-run-stats.test.js test/add-extra-places.test.js test/cleanup-non-toronto.test.js test/google-places-new.test.js",
     "start": "prisma migrate deploy && node src/server.js",
     "osm-import": "node osm-import.js",
     "postinstall": "prisma generate"
