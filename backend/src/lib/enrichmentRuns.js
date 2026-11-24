@@ -70,6 +70,11 @@ export function hoursSince(date, now = Date.now()) {
  * alert window. A "success" that updated nothing (everything skipped, or nothing planned) does not count:
  * that is how a silently useless pipeline used to look fine. Pure, so it is unit-tested without a database.
  */
+/** "never" (no unit) when there is no value; otherwise e.g. "36.2h". */
+export function formatHours(h) {
+    return h == null ? "never" : `${h}h`;
+}
+
 export function isHealthy(hoursSinceLastUpdate, thresholdHours = FRESHNESS_ALERT_HOURS) {
     return hoursSinceLastUpdate !== null && hoursSinceLastUpdate <= thresholdHours;
 }
@@ -127,6 +132,8 @@ export async function getFreshness() {
         hoursSinceLastSuccess: hoursSinceSuccess === null ? null : Math.round(hoursSinceSuccess * 10) / 10,
         // Hours since the last run that finished "success" AND updated > 0 places; healthy depends on this one.
         hoursSinceLastUpdate: hoursSinceUpdate === null ? null : Math.round(hoursSinceUpdate * 10) / 10,
+        // Same value as text: "never" (no unit) or e.g. "36.2h".
+        hoursSinceLastUpdateText: formatHours(hoursSinceUpdate === null ? null : Math.round(hoursSinceUpdate * 10) / 10),
         lastUpdatingRun: summarize(lastUpdatingRun),
         lastSuccessfulRun: summarize(lastSuccess),
         lastRun: summarize(lastRun),

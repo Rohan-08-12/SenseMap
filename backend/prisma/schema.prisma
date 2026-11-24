@@ -184,3 +184,10 @@ model EmailSubscriber {
   active    Boolean  @default(true)
   source    String?
 }
+
+// Last-sent time per alert key; makes the stale-enrichment email dedupe survive restarts
+// (migration 20261124000000_add_alert_state).
+model AlertState {
+  key        String   @id
+  lastSentAt DateTime
+}
