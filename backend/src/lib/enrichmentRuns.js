@@ -93,7 +93,7 @@ export async function getFreshness() {
     const now = Date.now();
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
 
-    const [lastSuccess, lastUpdatingRun, lastRun, running, recentFailures, total, enrichedLast7d, neverEnriched, oldest, newest] =
+    const [lastSuccess, lastUpdatingRun, lastRun, running, recentFailures, total, enrichedLast7d, neverEnriched, oldest, newest, updatedSum] =
         await Promise.all([
             prisma.enrichmentRun.findFirst({ where: { status: "success" }, orderBy: { finishedAt: "desc" } }),
             prisma.enrichmentRun.findFirst({ where: { status: "success", updated: { gt: 0 } }, orderBy: { finishedAt: "desc" } }),
@@ -109,6 +109,7 @@ export async function getFreshness() {
             prisma.location.count({ where: { lastEnrichedAt: null } }),
             prisma.location.findFirst({ where: { lastEnrichedAt: { not: null } }, orderBy: { lastEnrichedAt: "asc" }, select: { lastEnrichedAt: true } }),
             prisma.location.findFirst({ where: { lastEnrichedAt: { not: null } }, orderBy: { lastEnrichedAt: "desc" }, select: { lastEnrichedAt: true } }),
+            prisma.enrichmentRun.aggregate({ where: { startedAt: { gte: sevenDaysAgo } }, _sum: { updated: true } }),
         ]);
 
     const lastSuccessAt = lastSuccess?.finishedAt ?? null;
@@ -141,7 +142,10 @@ export async function getFreshness() {
         recentFailures: recentFailures.map(summarize),
         locations: {
             total,
+            // Misleading as a measure of work done: skipped places also move lastEnrichedAt, so this counts
+            // places that were merely looked at. Use placesUpdatedLast7d for places whose scores were updated.
             enrichedLast7d,
+            placesUpdatedLast7d: updatedSum._sum.updated ?? 0, // sum of "updated" over runs started in the last 7 days
             staleOver7d: total - enrichedLast7d - neverEnriched,
             neverEnriched,
             oldestEnrichedAt: oldest?.lastEnrichedAt ?? null,
