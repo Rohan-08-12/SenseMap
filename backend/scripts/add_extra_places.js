@@ -23,6 +23,7 @@
 import "dotenv/config";
 import fs from "node:fs";
 import { haversineMetres } from "../src/lib/geo.js";
+import { textSearchPlaces } from "../src/lib/placesSearch.js";
 
 const MAPS_HOSTS = /^(maps\.app\.goo\.gl|goo\.gl|www\.google\.com|google\.com|maps\.google\.com|consent\.google\.com)$/;
 const MAX_DISTANCE_M = 10_000;     // a plausible match is within 10 km of the Maps URL's coordinates
@@ -88,17 +89,17 @@ export function plausibleCandidates(row, results, coords) {
     });
 }
 
-/** The single Places lookup for a row. Returns { status, results } (never throws, never includes the key). */
+/**
+ * The single Places lookup for a row, through the same helper and request as the app's search
+ * (src/lib/placesSearch.js). Returns { status, errorMessage, results }; never throws and never includes the key.
+ */
 export async function textSearch(row, coords, { key, fetchImpl = fetch }) {
-    const params = new URLSearchParams({ query: row.name, key });
-    if (coords) { params.set("location", `${coords.lat},${coords.lng}`); params.set("radius", "2000"); }
+    const redact = (v) => (v == null ? v : String(v).split(key).join("***"));
     try {
-        const res = await fetchImpl(`https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`);
-        if (!res.ok) return { status: `HTTP_${res.status}`, results: [] };
-        const data = await res.json();
-        return { status: data.status || "UNKNOWN", results: data.results || [] };
+        const r = await textSearchPlaces(row.name, { lat: coords?.lat, lng: coords?.lng, radius: 2000, key, fetchImpl });
+        return { status: r.status || "UNKNOWN", errorMessage: redact(r.errorMessage), results: r.results };
     } catch (err) {
-        return { status: `NETWORK_ERROR (${String(err.message).replace(key, "***")})`, results: [] };
+        return { status: "NETWORK_ERROR", errorMessage: redact(err.message), results: [] };
     }
 }
 
@@ -116,8 +117,13 @@ export async function processRows(rows, { key, prisma, apply = false, fetchImpl 
         const coords = await resolveMapsUrl(row.mapsUrl, fetchImpl);
         log(coords ? `  Maps URL coordinates: ${coords.lat}, ${coords.lng}` : "  No coordinates found in the Maps URL; searching by name only");
 
-        const { status, results } = await textSearch(row, coords, { key, fetchImpl });
-        if (status !== "OK") { out.reason = `Places lookup returned ${status}`; log(`  SKIP: ${out.reason}`); continue; }
+        const { status, errorMessage, results } = await textSearch(row, coords, { key, fetchImpl });
+        if (status !== "OK") {
+            // Google's own explanation (e.g. REQUEST_DENIED: "This IP, site or mobile application is not authorized...").
+            out.reason = `Places lookup returned ${status}${errorMessage ? `: ${errorMessage}` : ""}`;
+            log(`  SKIP: ${out.reason}`);
+            continue;
+        }
 
         let plausible = plausibleCandidates(row, results, coords);
         if (row.pick) {

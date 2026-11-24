@@ -6,11 +6,11 @@ import { assertLocalDb, parseMapsCoords, resolveMapsUrl, nameOverlap, processRow
 const KEY = "AIza-test-key-123";
 const place = (place_id, name, lat, lng, addr = "1 Main St, Oakville, ON") => ({ place_id, name, formatted_address: addr, geometry: { location: { lat, lng } } });
 
-function setup({ results = [], status = "OK", existing = new Set(), finalUrl = "https://www.google.com/maps/place/X/@43.4675,-79.6877,17z/data=!3d43.4675!4d-79.6877" } = {}) {
+function setup({ results = [], status = "OK", errorMessage, existing = new Set(), finalUrl = "https://www.google.com/maps/place/X/@43.4675,-79.6877,17z/data=!3d43.4675!4d-79.6877" } = {}) {
     const calls = [], creates = [], logs = [];
     const fetchImpl = async (url, opts) => {
         calls.push(String(url));
-        if (String(url).includes("maps.googleapis.com")) return { ok: true, status: 200, json: async () => ({ status, results }) };
+        if (String(url).includes("maps.googleapis.com")) return { ok: true, status: 200, json: async () => ({ status, results, ...(errorMessage ? { error_message: errorMessage } : {}) }) };
         return { ok: true, status: 200, url: finalUrl };   // a Maps short link redirect
     };
     const prisma = { location: {
@@ -62,7 +62,7 @@ test("dry run (default): one text search per row, location-biased, nothing writt
     assert.deepEqual(summary, { inserted: 0, wouldInsert: 1, skipped: 0 });
     const searches = s.calls.filter((c) => c.includes("textsearch"));
     assert.equal(searches.length, 1, "exactly one Places lookup per row");
-    assert.match(searches[0], /location=43\.4675%2C-79\.6877/);
+    assert.match(searches[0], /location=43\.4675,-79\.6877/);
     assert.match(s.logs.join("\n"), /Dry run: would insert/);
     assert.ok(!s.logs.join("\n").includes(KEY), "the API key is never printed");
 });
@@ -135,4 +135,24 @@ test("a network error never prints the key", async () => {
     const r = await processRows([row], { key: KEY, prisma: s.prisma, apply: true, fetchImpl: s.fetchImpl, log: s.log });
     assert.equal(s.creates.length, 0);
     assert.ok(!s.logs.join("\n").includes(KEY) && !JSON.stringify(r).includes(KEY));
+});
+
+test("a denied lookup prints Google's error_message (and never the key, even if Google echoes it)", async () => {
+    const msg = "This IP, site or mobile application is not authorized to use this API key. Request received from IP address 203.0.113.9";
+    const s = setup({ status: "REQUEST_DENIED", errorMessage: msg });
+    const r = await run(s, [row], true);
+    assert.equal(s.creates.length, 0);
+    assert.equal(r.outcomes[0].reason, `Places lookup returned REQUEST_DENIED: ${msg}`);
+    assert.match(s.logs.join("\n"), /REQUEST_DENIED: This IP, site or mobile application is not authorized/);
+
+    const s2 = setup({ status: "REQUEST_DENIED", errorMessage: `The provided API key is invalid. key=${KEY}` });
+    const r2 = await run(s2, [row], true);
+    assert.ok(!s2.logs.join("\n").includes(KEY) && !JSON.stringify(r2).includes(KEY));
+    assert.match(r2.outcomes[0].reason, /key=\*\*\*/);
+});
+
+test("a denied lookup without an error_message still names the status", async () => {
+    const s = setup({ status: "OVER_QUERY_LIMIT" });
+    const r = await run(s, [row]);
+    assert.equal(r.outcomes[0].reason, "Places lookup returned OVER_QUERY_LIMIT");
 });
