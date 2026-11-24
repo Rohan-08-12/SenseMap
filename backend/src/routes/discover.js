@@ -1,13 +1,13 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
 import { toGeoJSON } from "../lib/geojson.js";
-import { haversineMetres } from "../lib/geo.js";
+import { createTtlPromiseCache } from "../lib/ttlPromiseCache.js";
+import { resolveGoogleResults } from "../lib/discoverResolve.js";
 import {
     searchGooglePlaces,
     getGooglePlaceDetails,
     uploadPlacePhoto,
     classifyCategory,
-    discoverAndCachePlace,
 } from "../lib/placesService.js";
 
 const router = express.Router();
@@ -26,87 +26,37 @@ function isInToronto(lat, lng) {
            lng >= TORONTO_BOUNDS.minLng && lng <= TORONTO_BOUNDS.maxLng;
 }
 
-const DEDUP_RADIUS_METRES = 150;
+// Existing-place matching (Google id, then exact normalised name within 100 m) and the per-search cap on newly stored
+// places live in lib/findExistingPlace.js and lib/discoverResolve.js.
 
-function normalizeName(name) {
-    return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const searchCache = createTtlPromiseCache({ ttlMs: 60 * 60 * 1000, max: 500 });
+
+// Same search (text + position rounded to ~1 km) within an hour reuses the first search's Google work. Only the
+// stored location ids are cached; the rows are re-read each time so scores stay fresh.
+export function searchCacheKey(q, lat, lng) {
+    const r = (n) => (Number.isFinite(n) ? n.toFixed(2) : "-");
+    return `${String(q).trim().toLowerCase().replace(/\s+/g, " ")}|${r(lat)}|${r(lng)}`;
 }
 
-function namesLikelyMatch(a, b) {
-    const na = normalizeName(a), nb = normalizeName(b);
-    if (!na || !nb) return false;
-    return na === nb || na.includes(nb) || nb.includes(na);
-}
-
-// Finds an existing Location for the same physical place even when it wasn't cached via this
-// endpoint originally — e.g. seeded by osm-import.js, whose synthetic "osm_{type}_{id}"
-// googlePlaceId never matches a real Google Place ID, so the exact-id lookup above always
-// misses it. Without this, searching by name for an OSM-imported place (which already has
-// real community reviews / enrichment data) would silently create a zero-data duplicate row.
-async function findDuplicateByProximity(name, lat, lng) {
-    const delta = 0.002; // ~150-220m bounding box in Toronto's latitude, refined below by exact distance
-    const candidates = await prisma.location.findMany({
-        where: {
-            latitude: { gte: lat - delta, lte: lat + delta },
-            longitude: { gte: lng - delta, lte: lng + delta },
-        },
-        include: { sensoryScores: true },
-    });
-    return candidates.find((c) =>
-        haversineMetres(lat, lng, c.latitude, c.longitude) <= DEDUP_RADIUS_METRES &&
-        namesLikelyMatch(name, c.name)
-    ) ?? null;
-}
-
-async function quickCachePlace(googlePlace) {
-    const gpid = googlePlace.place_id;
-
-    const existing = await prisma.location.findUnique({
-        where: { googlePlaceId: gpid },
-        include: { sensoryScores: true },
-    });
-    if (existing) return existing;
-
-    const lat = googlePlace.geometry?.location?.lat;
-    const lng = googlePlace.geometry?.location?.lng;
-    if (!isInToronto(lat, lng)) return null;
-
-    // Reuse a same-place record seeded under a different id scheme instead of duplicating it —
-    // and backfill its real Google Place ID so it (a) gets one for future photo/detail lookups
-    // and (b) is found directly by the exact-id check above next time, self-healing this path.
-    const duplicate = await findDuplicateByProximity(googlePlace.name, lat, lng);
-    if (duplicate) {
-        if (duplicate.googlePlaceId === gpid) return duplicate;
-        return prisma.location.update({
-            where: { id: duplicate.id },
-            data: { googlePlaceId: gpid },
-            include: { sensoryScores: true },
+function resolveSearch(q, lat, lng) {
+    const key = searchCacheKey(q, lat, lng);
+    const hit = searchCache.get(key);
+    if (hit) return hit;
+    const work = (async () => {
+        const results = await searchGooglePlaces(q, lat, lng);
+        const locations = await resolveGoogleResults(results, {
+            prisma,
+            getDetails: getGooglePlaceDetails,
+            classifyCategory,
+            inBounds: isInToronto,
+            onCreated: (location, details) => {
+                const photoRef = details.photos?.[0]?.photo_reference;
+                if (photoRef) queueEnrichment(() => enrichLocationInBackground(location.id, photoRef, details.name));
+            },
         });
-    }
-
-    const details = await getGooglePlaceDetails(gpid);
-    if (!details) return null;
-
-    const category = classifyCategory(details.types);
-
-    const location = await prisma.location.create({
-        data: {
-            googlePlaceId: gpid,
-            name: details.name,
-            description: details.editorial_summary?.overview || null,
-            category,
-            address: details.formatted_address,
-            latitude: details.geometry.location.lat,
-            longitude: details.geometry.location.lng,
-        },
-    });
-
-    const photoRef = details.photos?.[0]?.photo_reference;
-    if (photoRef) {
-        queueEnrichment(() => enrichLocationInBackground(location.id, photoRef, details.name));
-    }
-
-    return { ...location, sensoryScores: null };
+        return locations.map((l) => l.id);
+    })();
+    return searchCache.set(key, work);
 }
 
 async function enrichLocationInBackground(locationId, photoRef, name) {
@@ -148,16 +98,8 @@ router.get("/", async (req, res) => {
 
     const GOOGLE_TIMEOUT_MS = 12000;
     const googlePromise = (async () => {
-        const results = await searchGooglePlaces(q, parsedLat, parsedLng);
-        const top5 = results.slice(0, 10);
-
-        const settled = await Promise.allSettled(
-            top5.map((place) => quickCachePlace(place))
-        );
-
-        return settled
-            .filter((r) => r.status === "fulfilled" && r.value != null)
-            .map((r) => r.value);
+        const ids = await resolveSearch(q, parsedLat, parsedLng);
+        return ids.length ? prisma.location.findMany({ where: { id: { in: ids } }, include: { sensoryScores: true } }) : [];
     })();
 
     const timeoutPromise = new Promise((resolve) =>
