@@ -14,6 +14,7 @@ mock.module("../src/lib/prisma.js", { defaultExport: {
             return (orderBy?.startedAt ? list.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt)) : list.sort(byFinished))[0] ?? null;
         },
         findMany: async () => [],
+        aggregate: async () => ({ _sum: { updated: 0 } }),
     },
     location: { count: async () => 0, findFirst: async () => null },
 } });
