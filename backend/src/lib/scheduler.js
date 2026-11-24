@@ -1,20 +1,56 @@
 import cron from "node-cron";
 import { startEnrichmentCron } from "./enrichmentCron.js";
 import { sendWeeklyDigest } from "../jobs/sendWeeklyDigest.js";
-import { getFreshness, getRunActivity, RUN_STALE_AFTER_MS } from "./enrichmentRuns.js";
+import prisma from "./prisma.js";
+import { getFreshness, getRunActivity, RUN_STALE_AFTER_MS, formatHours } from "./enrichmentRuns.js";
 import { runEnrichment } from "./enrichmentCron.js";
 import { notifyEnrichmentStale } from "./notify.js";
 
 const ALERT_REPEAT_MS = 24 * 60 * 60 * 1000; // re-send at most once a day while still stale
-let lastAlertAt = 0;
+const ALERT_KEY = "enrichment-stale";
+let lastAlertAt = 0; // fast path; the AlertState row is what survives restarts/deploys
+
+export function _resetAlertMemory() { lastAlertAt = 0; }
 
 export async function checkEnrichmentFreshness() {
     const report = await getFreshness();
+    if (report.healthy) {
+        // Back to healthy: forget the last alert so a new outage alerts immediately.
+        lastAlertAt = 0;
+        try { await prisma.alertState.deleteMany({ where: { key: ALERT_KEY } }); }
+        catch (err) { console.error(`[Enrichment] Could not reset stored alert time (${err.message})`); }
+        return;
+    }
     // No runs recorded at all = freshly deployed, table empty; the first cron run will populate it.
-    if (report.healthy || !report.lastRun) return;
+    if (!report.lastRun) return;
     if (Date.now() - lastAlertAt < ALERT_REPEAT_MS) return;
+
+    let dbOk = true;
+    try {
+        const row = await prisma.alertState.findUnique({ where: { key: ALERT_KEY } });
+        if (row && Date.now() - row.lastSentAt.getTime() < ALERT_REPEAT_MS) {
+            lastAlertAt = row.lastSentAt.getTime(); // alerted before a restart; don't repeat
+            return;
+        }
+    } catch (err) {
+        dbOk = false;
+        console.error(`[Enrichment] Could not read stored alert time, using in-memory dedupe only (${err.message})`);
+    }
+
     lastAlertAt = Date.now();
-    console.error(`[Enrichment] STALE — no place updated in ${report.hoursSinceLastUpdate ?? "never"}h (last successful run ${report.hoursSinceLastSuccess ?? "never"}h ago)`);
+    // Record before sending so a crash mid-send errs towards one missed email, not a repeat.
+    if (dbOk) {
+        try {
+            await prisma.alertState.upsert({
+                where: { key: ALERT_KEY },
+                create: { key: ALERT_KEY, lastSentAt: new Date(lastAlertAt) },
+                update: { lastSentAt: new Date(lastAlertAt) },
+            });
+        } catch (err) {
+            console.error(`[Enrichment] Could not store alert time, using in-memory dedupe only (${err.message})`);
+        }
+    }
+    console.error(`[Enrichment] STALE — no place updated in ${formatHours(report.hoursSinceLastUpdate)} (last successful run ${formatHours(report.hoursSinceLastSuccess)}${report.hoursSinceLastSuccess == null ? "" : " ago"})`);
     await notifyEnrichmentStale(report);
 }
 
@@ -35,7 +71,7 @@ export async function catchUpEnrichment() {
     const stale = report.hoursSinceLastSuccess === null || report.hoursSinceLastSuccess > CATCHUP_AFTER_HOURS;
     if (!stale) return;
     if (report.lastRun && Date.now() - new Date(report.lastRun.startedAt).getTime() < CATCHUP_MIN_GAP_MS) return;
-    console.log(`[Enrichment] Catch-up — last success ${report.hoursSinceLastSuccess ?? "never"}h ago, starting a run`);
+    console.log(`[Enrichment] Catch-up — last success ${report.hoursSinceLastSuccess == null ? "never" : `${report.hoursSinceLastSuccess}h ago`}, starting a run`);
     // runEnrichment takes the DB lock itself, so losing a race with the cron is harmless.
     await runEnrichment({ trigger: "catchup" });
 }

@@ -70,6 +70,11 @@ export function hoursSince(date, now = Date.now()) {
  * alert window. A "success" that updated nothing (everything skipped, or nothing planned) does not count:
  * that is how a silently useless pipeline used to look fine. Pure, so it is unit-tested without a database.
  */
+/** "never" (no unit) when there is no value; otherwise e.g. "36.2h". */
+export function formatHours(h) {
+    return h == null ? "never" : `${h}h`;
+}
+
 export function isHealthy(hoursSinceLastUpdate, thresholdHours = FRESHNESS_ALERT_HOURS) {
     return hoursSinceLastUpdate !== null && hoursSinceLastUpdate <= thresholdHours;
 }
@@ -88,7 +93,7 @@ export async function getFreshness() {
     const now = Date.now();
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
 
-    const [lastSuccess, lastUpdatingRun, lastRun, running, recentFailures, total, enrichedLast7d, neverEnriched, oldest, newest] =
+    const [lastSuccess, lastUpdatingRun, lastRun, running, recentFailures, total, enrichedLast7d, neverEnriched, oldest, newest, updatedSum] =
         await Promise.all([
             prisma.enrichmentRun.findFirst({ where: { status: "success" }, orderBy: { finishedAt: "desc" } }),
             prisma.enrichmentRun.findFirst({ where: { status: "success", updated: { gt: 0 } }, orderBy: { finishedAt: "desc" } }),
@@ -104,6 +109,7 @@ export async function getFreshness() {
             prisma.location.count({ where: { lastEnrichedAt: null } }),
             prisma.location.findFirst({ where: { lastEnrichedAt: { not: null } }, orderBy: { lastEnrichedAt: "asc" }, select: { lastEnrichedAt: true } }),
             prisma.location.findFirst({ where: { lastEnrichedAt: { not: null } }, orderBy: { lastEnrichedAt: "desc" }, select: { lastEnrichedAt: true } }),
+            prisma.enrichmentRun.aggregate({ where: { startedAt: { gte: sevenDaysAgo } }, _sum: { updated: true } }),
         ]);
 
     const lastSuccessAt = lastSuccess?.finishedAt ?? null;
@@ -127,6 +133,8 @@ export async function getFreshness() {
         hoursSinceLastSuccess: hoursSinceSuccess === null ? null : Math.round(hoursSinceSuccess * 10) / 10,
         // Hours since the last run that finished "success" AND updated > 0 places; healthy depends on this one.
         hoursSinceLastUpdate: hoursSinceUpdate === null ? null : Math.round(hoursSinceUpdate * 10) / 10,
+        // Same value as text: "never" (no unit) or e.g. "36.2h".
+        hoursSinceLastUpdateText: formatHours(hoursSinceUpdate === null ? null : Math.round(hoursSinceUpdate * 10) / 10),
         lastUpdatingRun: summarize(lastUpdatingRun),
         lastSuccessfulRun: summarize(lastSuccess),
         lastRun: summarize(lastRun),
@@ -134,7 +142,10 @@ export async function getFreshness() {
         recentFailures: recentFailures.map(summarize),
         locations: {
             total,
+            // Misleading as a measure of work done: skipped places also move lastEnrichedAt, so this counts
+            // places that were merely looked at. Use placesUpdatedLast7d for places whose scores were updated.
             enrichedLast7d,
+            placesUpdatedLast7d: updatedSum._sum.updated ?? 0, // sum of "updated" over runs started in the last 7 days
             staleOver7d: total - enrichedLast7d - neverEnriched,
             neverEnriched,
             oldestEnrichedAt: oldest?.lastEnrichedAt ?? null,
