@@ -2,7 +2,7 @@
 
 **Find places that feel right for you.**
 
-SenseMap is a community-powered sensory map helping autistic and sensory-sensitive individuals discover comfortable public spaces. Every location shows real community ratings for noise, lighting, and crowd density — plus AI-generated insights from Google Gemini.
+SenseMap is a community-powered sensory map helping autistic and sensory-sensitive individuals discover comfortable public spaces. Places show noise, lighting, and crowd scores from visitor reviews or, until there are reviews, from AI estimates (Google Gemini) built from public text about the place. SenseMap is honest by design: every score says where it comes from, most scores are AI estimates until visitors add reviews, and a place without enough evidence shows **"Not enough data yet"** instead of an invented number.
 
 Currently in beta, covering **Toronto**.
 
@@ -11,8 +11,8 @@ Currently in beta, covering **Toronto**.
 ## What it does
 
 - **Interactive map** — color-coded pins and heatmap showing sensory comfort at a glance
-- **Sensory scores for every location** — noise, lighting, and crowd ratings on a 1–5 scale. Every location has scores from day one via the AI enrichment pipeline (Yelp + Foursquare + Reddit → Gemini 2.5-flash). Community reviews layer on top and progressively take over as the primary source.
-- **Data transparency** — every location clearly labels its data source: community reviews, AI-estimated, mixed, or default
+- **Sensory scores where there is evidence** — noise, lighting, and crowd on a 0.5–5 scale. Scores come from visitor reviews, or from AI estimates when there are none (Yelp + Foursquare + Google Places + City of Toronto text → Gemini 2.5-flash, run nightly). Community reviews progressively take over. Places with neither show "Not enough data yet" and are left off rankings and the heatmap.
+- **Data transparency** — every score is labelled with its source: community reviews or AI estimate
 - **AI insights** — Gemini 2.5-flash analyzes reviews and surfaces noise patterns, best visit times, and sensory tags
 - **Personalized matching** — set your own noise/lighting/crowd tolerance and get a % match for every location
 - **Review list** — see individual reviews with author, date, and slider ratings; AI-seeded reviews labeled with a badge
@@ -35,8 +35,8 @@ Currently in beta, covering **Toronto**.
 | Backend | Node.js, Express 5 |
 | Database | PostgreSQL via Supabase, Prisma ORM |
 | Auth | Auth0 |
-| AI | Google Gemini 2.5-flash (paid tier) |
-| Enrichment | node-cron + Yelp + Foursquare + Reddit + Google Places + City of Toronto → Gemini |
+| AI | Google Gemini 2.5-flash |
+| Enrichment | node-cron + Yelp + Foursquare + Google Places + City of Toronto → Gemini |
 | Images | Cloudinary |
 | Security | helmet, express-rate-limit, CORS |
 
@@ -63,9 +63,11 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-**Backend** (`backend/.env`) requires: `DATABASE_URL`, `AUTH0_AUDIENCE`, `AUTH0_ISSUER_BASE_URL`, `GEMINI_API_KEY`, `GOOGLE_PLACES_KEY`, `CLOUDINARY_*`, `YELP_API_KEY`, `FOURSQUARE_API_KEY`, `N8N_WEBHOOK_SECRET`
+**Backend** (`backend/.env`) requires: `DATABASE_URL`, `AUTH0_AUDIENCE`, `AUTH0_ISSUER_BASE_URL`, `GEMINI_API_KEY`, `GOOGLE_PLACES_KEY`, `CLOUDINARY_*`, `YELP_API_KEY`, `FOURSQUARE_API_KEY`, `N8N_WEBHOOK_SECRET`. Optional: `ALLOWED_ORIGINS`, `RESEND_API_KEY`, `RESEND_FROM`, `ADMIN_NOTIFY_EMAIL`, `API_BASE_URL`, `ENRICHMENT_MAX_PER_RUN`, `ENRICHMENT_DELAY_MS`, `ENRICHMENT_CATCHUP` (see `backend/.env.example`)
 
-**Frontend** (`frontend/.env`) requires: `VITE_MAPBOX_TOKEN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_AUDIENCE`, `VITE_API_URL`
+**Frontend** (`frontend/.env`) requires: `VITE_MAPBOX_TOKEN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_AUDIENCE`, `VITE_API_URL` (and `VITE_POSTHOG_KEY` for analytics)
+
+Never commit `.env` files or paste key values into issues or pull requests.
 
 ### 3. Run
 
@@ -86,15 +88,15 @@ npm run dev:all           # OSM seed import, then both servers
 # Option A — 15 handpicked Toronto showcase locations with human-written reviews
 node seed_demo.js
 
-# Option B — bulk seed via Google Places + Gemini (requires backend running)
-# Fires 35 Toronto search queries through the /discover pipeline
+# Option B — bulk seed via Google Places (requires backend running)
+# Fires 35 Toronto search queries through /discover, which stores at most 3 new places per search, without scores
 node seed_bulk.js
 
-# Option C — OpenStreetMap import (Toronto locations, default scores; the live DB was later trimmed to ~1,300)
+# Option C — OpenStreetMap import (Toronto locations; stores placeholder category defaults, not data)
 npm run osm-import
 ```
 
-Run all three for the fullest map. `seed_demo.js` and `seed_bulk.js` require a valid `GOOGLE_PLACES_KEY`.
+`seed_bulk.js` needs a valid `GOOGLE_PLACES_KEY`. Places from options B and C have no trustworthy scores until visitors review them or the nightly enrichment estimates them, so they show "Not enough data yet". Only run these scripts against a local database.
 
 ---
 
@@ -113,8 +115,7 @@ AutisticAI/
 │   │   ├── routes/         # Express route handlers
 │   │   ├── middleware/      # Auth, syncUser, optionalAuth, n8nAuth
 │   │   └── lib/            # Prisma, Gemini, scores, systemBot, enrichmentCron
-│   ├── scripts/
-│   │   └── trim_locations.js  # One-time DB trim utility
+│   ├── scripts/            # Maintenance scripts (dry-run by default; local DB only unless --allow-remote-db)
 │   ├── prisma/
 │   │   └── schema.prisma
 │   ├── seed_demo.js        # 15 showcase locations with human reviews
@@ -126,9 +127,9 @@ AutisticAI/
 
 ## Enrichment schedule and health
 
-- **Nightly run:** `0 4 * * *` America/Toronto, capped by `ENRICHMENT_MAX_PER_RUN` (default 50).
+- **Nightly run:** `0 4 * * *` America/Toronto, capped by `ENRICHMENT_MAX_PER_RUN` (default 50, clamped 1–1000).
 - **Missed-run check:** hourly at :37. If no `EnrichmentRun` started in the last 26h and none is running, it starts a `catchup` run. It follows the same rule as the boot catch-up: on only when `RAILWAY_ENVIRONMENT` is set or `ENRICHMENT_CATCHUP=true`; always off when `ENRICHMENT_CATCHUP=false` or `NODE_ENV=test`. Leave it unset locally so a dev server never starts paid runs.
-- **Health:** `GET /enrichment/freshness` reports `hoursSinceLastUpdate` (last run that finished `success` with `updated > 0`). `healthy` means that is within 36h. The hourly watchdog emails once per 24h when it is not.
+- **Health:** `GET /enrichment/freshness` reports `hoursSinceLastUpdate` (last run that finished `success` with `updated > 0`). `healthy` means that is within 36h. The hourly watchdog emails `ADMIN_NOTIFY_EMAIL` at most once per 24h when it is not (the last-alert time is stored in the database, so restarts do not repeat it).
 - **Skip reasons:** each run records why places were skipped (and Google Places denials) in `EnrichmentRun.errors`; `lastRun` in `/enrichment/freshness` shows them.
 - The legacy n8n workflow writes no `EnrichmentRun` rows, so it does not count toward these checks.
 
@@ -138,12 +139,24 @@ AutisticAI/
 
 | Service | What to deploy |
 |---|---|
-| [Railway](https://railway.app) | Backend (`AutisticAI/backend`) |
-| [Vercel](https://vercel.com) | Frontend (`AutisticAI/frontend`) |
+| [Railway](https://railway.app) | Backend (`AutisticAI/backend`) and frontend (`AutisticAI/frontend`); both auto-deploy on push to `main` |
 
-Live at **[sensemap.app](https://sensemap.app)**.
+Live at **[sensemap.app](https://sensemap.app)**. Production deploys, database changes and secrets are handled by the maintainer, not by contributors.
 
 Set `ALLOWED_ORIGINS` on Railway to `https://sensemap.app`. Add `https://sensemap.app` to Auth0's Allowed Callback URLs, Logout URLs, and Web Origins.
+
+---
+
+## Tests
+
+From `backend/`:
+
+```bash
+npm test          # unit tests, no database
+npm run test:db   # integration tests: needs a THROWAWAY local Postgres (DATABASE_URL on localhost / 127.0.0.1); they delete rows
+```
+
+Never point `DATABASE_URL` at a database you want to keep when running `test:db`.
 
 ---
 
